@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int      @id @default(autoincrement())
+  name            String   @db.VarChar(255)
+  email           String   @unique @db.VarChar(255)
+  password        String   @db.VarChar(255)
+  roleId          Int      @default(2) @map("role_id")
+  googleId        String?  @unique @db.VarChar(255) @map("google_id")
+  avatar          String?  @db.VarChar(500)
+  referralCode    String?  @unique @db.VarChar(32) @map("referral_code")
+  referredById    Int?     @map("referred_by_id")
+  referredBy      User?    @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals       User[]   @relation("UserReferrals")
+  referralBalance Int      @default(0) @map("referral_balance")
+  orders          Order[]
+  testimonials    Testimonial[] @relation("TestimonialCreatedBy")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model ProductSection {
+  id        String    @id @db.VarChar(100)
+  title     String    @db.VarChar(255)
+  subtitle  String    @db.Text
+  order     Int       @default(0) @map("order_index")
+  products  Product[]
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@map("product_sections")
+}
+
+model Product {
+  id           Int             @id @default(autoincrement())
+  orders       Order[]
+  stocks       Stock[]
+  testimonials Testimonial[]
+  title        String          @db.Text
+  description  String          @db.Text
+  inStock      Int             @default(0) @map("in_stock")
+  price        Float           @default(0)
+  rating       Float           @default(0)
+  isVerified   Boolean         @default(false) @map("is_verified")
+  tags         String          @default("[]") @db.VarChar(1000)
+  sectionId    String?         @db.VarChar(100) @map("section_id")
+  section      ProductSection? @relation(fields: [sectionId], references: [id])
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  @@map("products")
+}
+
+model Order {
+  id             Int          @id @default(autoincrement())
+  userId         Int          @map("user_id")
+  productId      Int          @map("product_id")
+  quantity       Int          @default(1)
+  totalPrice     Float        @map("total_price")
+  status         String       @default("pending") @db.VarChar(50)
+  groupId        String?      @db.VarChar(255) @map("group_id")
+  paymentProof   String?      @db.VarChar(500) @map("payment_proof")
+  proofUploadedAt DateTime?   @map("proof_uploaded_at")
+  confirmedAt    DateTime?    @map("confirmed_at")
+  adminNote      String?      @db.Text @map("admin_note")
+  bankAccountId  Int?         @map("bank_account_id")
+  user           User         @relation(fields: [userId], references: [id])
+  product        Product      @relation(fields: [productId], references: [id])
+  bankAccount    BankAccount? @relation(fields: [bankAccountId], references: [id])
+  stocks         Stock[]
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([status])
+  @@index([groupId])
+  @@map("orders")
+}
+
+model BankAccount {
+  id            Int      @id @default(autoincrement())
+  bankName      String   @db.VarChar(100) @map("bank_name")
+  accountHolder String   @db.VarChar(255) @map("account_holder")
+  accountNumber String   @db.VarChar(50) @map("account_number")
+  logo          String?  @db.VarChar(500)
+  isActive      Boolean  @default(true) @map("is_active")
+  orders        Order[]
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("bank_accounts")
+}
+
+model Stock {
+  id            Int      @id @default(autoincrement())
+  productId     Int      @map("product_id")
+  product       Product  @relation(fields: [productId], references: [id])
+  email         String?  @db.VarChar(255)
+  passwordEmail String?  @db.VarChar(255) @map("password_email")
+  username      String   @db.VarChar(255)
+  password      String   @db.VarChar(255)
+  twoFactorCode String?  @db.VarChar(255) @map("two_factor_code")
+  orderId       Int?     @map("order_id")
+  order         Order?   @relation(fields: [orderId], references: [id])
+  status        String   @default("available") @db.VarChar(50)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("stocks")
+}
+
+model Channel {
+  id                         Int      @id @default(autoincrement())
+  name                       String   @db.VarChar(255)
+  username                   String   @db.VarChar(255)
+  profilePhotoPath           String   @default("") @db.VarChar(500) @map("profile_photo_path")
+  socialbuId                 String?  @db.VarChar(255) @map("socialbu_id")
+  instagramBusinessAccountId String?  @db.VarChar(255) @map("instagram_business_account_id")
+  createdAt                  DateTime @default(now()) @map("created_at")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
+
+  @@map("channels")
+}
+
+model Testimonial {
+  id           Int      @id @default(autoincrement())
+  productId    Int      @map("product_id")
+  createdById  Int      @map("created_by_id")
+  customerName String   @db.VarChar(255) @map("customer_name")
+  message      String   @db.Text
+  rating       Int      @default(5)
+  avatar       String?  @db.VarChar(500)
+  isPublished  Boolean  @default(true) @map("is_published")
+  createdAt    DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt    DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("TestimonialCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([isPublished])
+  @@map("testimonials")
+}

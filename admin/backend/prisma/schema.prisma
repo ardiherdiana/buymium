@@ -1,0 +1,424 @@
+// This schema is shared with user backend - same database
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Role model
+model Role {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique @db.VarChar(50)
+  displayName String  @db.VarChar(255) @map("display_name")
+  description String? @db.Text
+  permissions String  @db.LongText
+  createdAt   DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt   DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@index([name])
+  @@map("roles")
+}
+
+// User model - shared with actual database
+model User {
+  id        Int     @id @default(autoincrement())
+  name      String  @db.VarChar(255)
+  email     String  @unique @db.VarChar(255)
+  password  String  @db.VarChar(255)
+  roleId    Int     @default(3) @map("role_id")
+  sourceId  Int?    @map("source_id")
+  googleId  String? @unique @db.VarChar(255) @map("google_id")
+  avatar    String? @db.VarChar(500)
+  referralCode    String? @unique @db.VarChar(32) @map("referral_code")
+  referredById    Int?    @map("referred_by_id")
+  referralBalance Int     @default(0) @map("referral_balance")
+  createdAt DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  role      Role                  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  referredBy User?                @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals  User[]                @relation("UserReferrals")
+  orders       Order[]
+  channels     Channel[]
+  posts        AutopostingPost[]
+  schedules    AutopostingSchedule[]
+  customers    Customer[]
+  testimonials Testimonial[] @relation("TestimonialCreatedBy")
+
+  @@index([email])
+  @@index([googleId])
+  @@index([roleId])
+  @@index([sourceId])
+  @@map("users")
+}
+
+// Product Section
+model ProductSection {
+  id        String   @id @db.VarChar(100)
+  title     String   @db.VarChar(255)
+  subtitle  String   @db.Text
+  order     Int      @default(0) @map("order_index")
+  createdAt DateTime @db.DateTime(3) @default(now()) @map("created_at")
+
+  products Product[]
+
+  @@index([order])
+  @@map("product_sections")
+}
+
+// Product model - shared
+model Product {
+  id          Int     @id @default(autoincrement())
+  title       String  @db.Text
+  description String  @db.Text
+  inStock     Int     @default(0) @map("in_stock")
+  price       Float   @default(0)
+  rating      Float   @default(0)
+  isVerified  Boolean @default(false) @map("is_verified")
+  tags        String  @default("[]") @db.VarChar(1000)
+  sectionId   String? @db.VarChar(100) @map("section_id")
+  createdAt   DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt   DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  section      ProductSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  orders       Order[]
+  stocks       Stock[]
+  testimonials Testimonial[]
+
+  @@index([inStock])
+  @@index([sectionId])
+  @@map("products")
+}
+
+// Order model - shared
+model Order {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @map("user_id")
+  productId       Int       @map("product_id")
+  quantity        Int
+  totalPrice      Float     @map("total_price")
+  status          String    @default("pending") @db.VarChar(50)
+  groupId         String?   @db.VarChar(255) @map("group_id")
+  paymentProof    String?   @db.VarChar(500) @map("payment_proof")
+  proofUploadedAt DateTime? @db.DateTime(3) @map("proof_uploaded_at")
+  confirmedAt     DateTime? @db.DateTime(3) @map("confirmed_at")
+  adminNote       String?   @db.Text @map("admin_note")
+  bankAccountId   Int?      @map("bank_account_id")
+  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  stocks      Stock[]
+
+  @@index([userId])
+  @@index([productId])
+  @@index([status])
+  @@index([groupId])
+  @@index([bankAccountId])
+  @@map("orders")
+}
+
+// Bank Account model - for manual bank transfer
+model BankAccount {
+  id            Int      @id @default(autoincrement())
+  bankName      String   @db.VarChar(100) @map("bank_name")
+  accountHolder String   @db.VarChar(255) @map("account_holder")
+  accountNumber String   @db.VarChar(50) @map("account_number")
+  logo          String?  @db.VarChar(500)
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt     DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  orders Order[]
+
+  @@index([isActive])
+  @@map("bank_accounts")
+}
+
+// Stock model - for tracking account credentials
+model Stock {
+  id             Int     @id @default(autoincrement())
+  productId      Int     @map("product_id")
+  email          String? @db.VarChar(255)
+  passwordEmail  String? @db.Text          @map("password_email")
+  username       String  @db.VarChar(255)
+  password       String  @db.Text
+  twoFactorCode  String? @db.Text          @map("two_factor_code")
+  orderId        Int?    @map("order_id")
+  status         String  @default("available") @db.VarChar(50)
+  createdAt      DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt      DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order   Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+  @@index([status])
+  @@index([orderId])
+  @@map("stocks")
+}
+
+// Autoposting Module Models
+model Channel {
+  id               Int       @id @default(autoincrement())
+  userId           Int       @map("user_id")
+  username         String    @db.VarChar(255)
+  type             String?   @db.VarChar(50)
+  profilePhotoPath String?   @db.VarChar(500) @map("profile_photo_path")
+  socialBuId       String?   @unique @db.VarChar(255) @map("social_bu_id")
+  createdAt        DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt        DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts     AutopostingPost[]
+  schedules AutopostingSchedule[]
+
+  @@index([userId])
+  @@index([socialBuId])
+  @@map("channels")
+}
+
+model AutopostingPost {
+  id            Int        @id @default(autoincrement())
+  userId        Int        @map("user_id")
+  channelId     Int        @map("channel_id")
+  caption       String     @db.Text
+  source        String?    @db.VarChar(255)
+  imageUrl      String?    @db.VarChar(500) @map("image_url")
+  scheduledTime DateTime?  @map("scheduled_time") @db.DateTime(3)
+  status        String     @default("drafted") @db.VarChar(50)
+  socialBuId    String?    @unique @db.VarChar(255) @map("social_bu_id")
+  postedAt      DateTime?  @map("posted_at") @db.DateTime(3)
+  createdAt     DateTime   @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt     DateTime   @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([channelId])
+  @@index([status])
+  @@index([scheduledTime])
+  @@index([createdAt])
+  @@map("posts")
+}
+
+model AutopostingSchedule {
+  id        Int     @id @default(autoincrement())
+  userId    Int     @map("user_id")
+  channelId Int     @map("channel_id")
+  day       String  @db.VarChar(20)
+  isActive  Boolean @default(true) @map("is_active")
+  slots     String  @db.LongText
+  createdAt DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([channelId])
+  @@map("schedules")
+}
+
+// Management Module Models
+model Source {
+  id                      Int       @id @default(autoincrement())
+  name                    String    @db.VarChar(255)
+  index                   Int       @default(0)
+  spreadsheetId           String?   @db.VarChar(500) @map("spreadsheet_id")
+  image                   String?   @db.VarChar(500)
+  color                   String?   @db.VarChar(50)
+  prefix                  String?   @db.VarChar(10)
+  isAccsmarket            Boolean   @default(false) @map("is_accsmarket")
+  createdAt               DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt               DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  accounts Account[]
+  customers Customer[]
+  accsmarkets Accsmarket[]
+  sales Sale[]
+  expenses Expense[]
+
+  @@index([index])
+  @@map("sources")
+}
+
+model Account {
+  id              Int       @id @default(autoincrement())
+  orderIndex      Int?      @map("order_index")
+  email           String?   @db.VarChar(255)
+  username        String?   @db.VarChar(255)
+  password        String?   @db.VarChar(255)
+  targetFollowers Int?      @map("target_followers")
+  currentFollowers Int?     @map("current_followers")
+  accountStatus   String?   @db.VarChar(50) @map("account_status")
+  loginApp        String?   @db.VarChar(255) @map("login_app")
+  capital         Float?
+  phoneModel      String?   @db.VarChar(255) @map("phone_model")
+  sourceId        Int?      @map("source_id")
+  isSold          Boolean   @default(false) @map("is_sold")
+  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  source    Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  saleLines SaleLine[]
+
+  @@index([email])
+  @@index([username])
+  @@index([isSold])
+  @@index([sourceId])
+  @@index([orderIndex])
+  @@index([accountStatus])
+  @@unique([email])
+  @@unique([username])
+  @@map("accounts")
+}
+
+model Customer {
+  id              Int       @id @default(autoincrement())
+  usernameSh      String?   @db.VarChar(255) @map("username_shopee")
+  nomorHp         String?   @db.VarChar(20) @map("nomor_hp")
+  sourceId        Int?      @map("source_id")
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  sourceRel Source? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  creator   User?   @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  sales     Sale[]
+
+  @@index([sourceId])
+  @@index([createdAt])
+  @@index([usernameSh])
+  @@map("customers")
+}
+
+model Accsmarket {
+  id              Int       @id @default(autoincrement())
+  orderIndex      Int?      @map("order_index")
+  email           String?   @db.VarChar(255)
+  passwordEmail   String?   @db.VarChar(255) @map("password_email")
+  username        String?   @db.VarChar(255)
+  password        String?   @db.VarChar(255)
+  twoFactorAuth   String?   @db.VarChar(255) @map("two_factor_auth")
+  targetFollowers Int?      @map("target_followers")
+  currentFollowers Int?     @map("current_followers")
+  accountStatus   String?   @db.VarChar(50) @map("account_status")
+  capital         Float?
+  year            String?   @db.VarChar(255)
+  sourceId        Int?      @map("source_id")
+  isSold          Boolean   @default(false) @map("is_sold")
+  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  source    Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  saleLines SaleLine[]
+
+  @@index([email])
+  @@index([username])
+  @@index([isSold])
+  @@index([sourceId])
+  @@index([orderIndex])
+  @@index([accountStatus])
+  @@unique([email])
+  @@unique([username])
+  @@map("accsmarkets")
+}
+
+model Sale {
+  id              Int       @id @default(autoincrement())
+  salesNumber     String    @db.VarChar(255) @map("sales_number")
+  customerId      Int?      @map("customer_id")
+  totalSalePrice  Float     @map("total_sale_price")
+  totalProfit     Float     @map("total_profit")
+  isShopee        Boolean   @default(false) @map("is_shopee")
+  sourceId        Int?      @map("source_id")
+  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  source   Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  saleLines SaleLine[]
+
+  @@index([customerId])
+  @@index([sourceId])
+  @@index([createdAt])
+  @@index([isShopee])
+  @@map("sales")
+}
+
+model SaleLine {
+  id              Int       @id @default(autoincrement())
+  saleId          Int       @map("sale_id")
+  accountId       Int?      @map("account_id")
+  accsmarketId    Int?      @map("accsmarket_id")
+  unitSalePrice   Float?    @map("unit_sale_price")
+  price           Float     @default(0)
+  profit          Float     @default(0)
+  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+
+  sale       Sale       @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  account    Account?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  accsmarket Accsmarket? @relation(fields: [accsmarketId], references: [id], onDelete: SetNull)
+
+  @@index([saleId])
+  @@index([accountId])
+  @@index([accsmarketId])
+  @@map("sale_lines")
+}
+
+model ExpenseCategory {
+  id              Int       @id @default(autoincrement())
+  name            String    @db.VarChar(255)
+  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+
+  expenses Expense[]
+
+  @@map("expense_categories")
+}
+
+model Expense {
+  id              Int       @id @default(autoincrement())
+  categoryId      Int       @map("category_id")
+  amount          Float
+  expenseDate     DateTime  @map("expense_date")
+  sourceId        Int?      @map("source_id")
+  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  source   Source?         @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([categoryId])
+  @@index([sourceId])
+  @@index([expenseDate])
+  @@map("expenses")
+}
+
+model Testimonial {
+  id           Int      @id @default(autoincrement())
+  productId    Int      @map("product_id")
+  createdById  Int      @map("created_by_id")
+  customerName String   @db.VarChar(255) @map("customer_name")
+  message      String   @db.Text
+  rating       Int      @default(5)
+  avatar       String?  @db.VarChar(500)
+  isPublished  Boolean  @default(true) @map("is_published")
+  createdAt    DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt    DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("TestimonialCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([isPublished])
+  @@map("testimonials")
+}

@@ -1,0 +1,96 @@
+# Dependencies
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+dist-ssr/
+**/dist/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Vite cache
+**/.vite/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+**/.env
+**/.env.local
+**/.env.production
+**/.env.staging
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+**/coverage/
+.nyc_output/
+
+# Lint cache
+.eslintcache
+**/.eslintcache
+
+# Local SQLite databases
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Uploads (user-generated content)
+**/uploads/*
+!**/uploads/.gitkeep
+**/autoposting/*
+!**/autoposting/.gitkeep
+
+# Credentials & secrets
+**/credentials/
+*.pem
+*.key
+*.cert
+cookies.txt
+**/cookies.txt
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*.swo
+*~
+
+# Claude (local session files only)
+.claude/
+**/.claude/
+
+# DB dumps — comment out jika ingin commit schema
+db/

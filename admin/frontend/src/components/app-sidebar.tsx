@@ -1,0 +1,115 @@
+import { Link, useLocation, useNavigate } from "react-router-dom"
+import type { LucideIcon } from "lucide-react"
+import { LogOut, EllipsisVertical } from "lucide-react"
+import { useAuthStore } from "@/stores/authStore"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+
+export type NavGroup = {
+  group: string
+  items: { label: string; href: string; icon: LucideIcon }[]
+}
+
+function NavItem({ href, icon: Icon, label }: { href: string; icon: LucideIcon; label: string }) {
+  const { pathname } = useLocation()
+  const active = pathname === href || (href !== "/" && pathname.startsWith(href))
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild isActive={active} tooltip={label}>
+        <Link to={href}>
+          <Icon />
+          <span>{label}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  )
+}
+
+export function AppSidebar({ navGroups }: { navGroups: NavGroup[] }) {
+  const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
+  const navigate = useNavigate()
+
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild tooltip="Pilih Modul">
+              <Link to="/">
+                <div className="flex size-8 items-center justify-center bg-primary text-primary-foreground text-sm font-bold shrink-0">
+                  B
+                </div>
+                <span className="font-semibold">Buymium Admin</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+
+      <SidebarContent>
+        {navGroups.map((group) => (
+          <SidebarGroup key={group.group}>
+            <SidebarGroupLabel>{group.group}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => (
+                  <NavItem key={item.href} {...item} />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
+      </SidebarContent>
+
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+                  <Avatar className="h-7 w-7 rounded-none">
+                    <AvatarFallback className="rounded-none text-xs bg-primary/10 text-primary">
+                      {user?.name?.charAt(0).toUpperCase() ?? "A"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-xs leading-tight">
+                    <span className="truncate font-medium">{user?.name}</span>
+                    <span className="truncate text-xs text-muted-foreground capitalize">{user?.role}</span>
+                  </div>
+                  <EllipsisVertical className="ml-auto size-4" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-(--radix-dropdown-menu-trigger-width) min-w-48" side="top" align="end" sideOffset={4}>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => { logout(); navigate("/login") }}>
+                  <LogOut className="size-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
+  )
+}
