@@ -198,6 +198,7 @@ export const AccsmarketsService = {
                 currentFollowers: null,
                 accountStatus: null,
                 capital: capital,
+                sheets: sheetName,
                 year: sheetName,
                 isSold: false,
               },

@@ -33,7 +33,7 @@ export default function SaleDetailPage() {
 
   const { data: sale, isLoading } = useQuery<SaleDetail>({
     queryKey: ["management-sale", id],
-    queryFn: () => api.get(`/management/sales/${id}`).then((r) => r.data),
+    queryFn: () => api.get(`/management/sales/${id}`).then((r) => r.data.sale),
     enabled: !!id,
   })
 

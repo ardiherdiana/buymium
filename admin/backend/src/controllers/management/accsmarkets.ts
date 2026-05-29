@@ -43,6 +43,22 @@ export const AccsmarketsController = {
         where.sourceId = parseInt(sourceIdFilter)
       }
 
+      // Filter by sheets field
+      const sheetsFilter = req.query.sheets as string
+      if (sheetsFilter && sheetsFilter !== 'all') {
+        where.sheets = sheetsFilter
+      }
+
+      // Only query accsmarket sources
+      const accsmarketSources = await prisma.source.findMany({
+        where: { isAccsmarket: true },
+        orderBy: [{ index: 'asc' }, { id: 'asc' }],
+      })
+      const accsmarketSourceIds = accsmarketSources.map((s) => s.id)
+      if (accsmarketSourceIds.length > 0 && !where.sourceId) {
+        where.sourceId = { in: accsmarketSourceIds }
+      }
+
       const accsmarkets = await prisma.accsmarket.findMany({
         where,
         include: { source: true },
@@ -51,9 +67,14 @@ export const AccsmarketsController = {
         take: limit,
       })
 
-      const sources = await prisma.source.findMany({
-        orderBy: [{ index: 'asc' }, { id: 'asc' }],
+      // Distinct sheets values
+      const sheetsRaw = await prisma.accsmarket.findMany({
+        where: { sheets: { not: null }, isSold: false },
+        select: { sheets: true },
+        distinct: ['sheets'],
+        orderBy: { sheets: 'asc' },
       })
+      const sheetsList = sheetsRaw.map((s) => s.sheets).filter((s): s is string => !!s)
 
       const yearsRaw = await prisma.accsmarket.findMany({
         where: { year: { not: null }, isSold: false },
@@ -67,20 +88,8 @@ export const AccsmarketsController = {
       if (sourceIdVal) {
         years = yearsRaw.filter((y) => y.sourceId === sourceIdVal).map((y) => y.year).filter(Boolean) as string[]
       } else {
-        const yearsGrouped = new Map<number | null, string[]>()
-        yearsRaw.forEach((y) => {
-          if (!yearsGrouped.has(y.sourceId)) yearsGrouped.set(y.sourceId, [])
-          if (y.year) yearsGrouped.get(y.sourceId)!.push(y.year)
-        })
         const added = new Set<string>()
-        sources.forEach((source) => {
-          ;(yearsGrouped.get(source.id) || []).forEach((yr) => {
-            if (!added.has(yr)) { years.push(yr); added.add(yr) }
-          })
-        })
-        ;(yearsGrouped.get(null) || []).forEach((yr) => {
-          if (!added.has(yr)) { years.push(yr); added.add(yr) }
-        })
+        yearsRaw.forEach((y) => { if (y.year && !added.has(y.year)) { years.push(y.year); added.add(y.year) } })
       }
       years = years.filter((y): y is string => typeof y === 'string' && y.length > 0)
       years.sort((a, b) => b.localeCompare(a))
@@ -111,7 +120,8 @@ export const AccsmarketsController = {
 
       res.json({
         accsmarkets,
-        sources,
+        sources: accsmarketSources,
+        sheets: sheetsList,
         targetFollowers,
         years,
         customers,

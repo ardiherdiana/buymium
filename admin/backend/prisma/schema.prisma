@@ -313,6 +313,7 @@ model Accsmarket {
   currentFollowers Int?     @map("current_followers")
   accountStatus   String?   @db.VarChar(50) @map("account_status")
   capital         Float?
+  sheets          String?   @db.VarChar(255)
   year            String?   @db.VarChar(255)
   sourceId        Int?      @map("source_id")
   isSold          Boolean   @default(false) @map("is_sold")

@@ -178,6 +178,7 @@ export const SalesController = {
           saleLines: {
             include: {
               account: true,
+              accsmarket: true,
             },
           },
         },
@@ -201,25 +202,30 @@ export const SalesController = {
         customer: sale.customer ? {
           id: sale.customer.id,
           usernameSh: sale.customer.usernameSh,
+          nomorHp: sale.customer.nomorHp,
         } : undefined,
         source: sale.source ? {
           id: sale.source.id,
           name: sale.source.name,
         } : undefined,
-        saleLines: sale.saleLines?.map(line => ({
-          id: line.id,
-          sale_id: line.saleId,
-          account_id: line.accountId,
-          price: line.price,
-          profit: line.profit,
-          created_at: line.createdAt,
-          account: line.account ? {
-            id: line.account.id,
-            username: line.account.username,
-            email: line.account.email,
-            accountStatus: line.account.accountStatus,
-          } : undefined,
-        })) || [],
+        sale_lines: sale.saleLines?.map(line => {
+          const item = line.account ?? line.accsmarket
+          return {
+            id: line.id,
+            sale_id: line.saleId,
+            account_id: line.accountId,
+            accsmarket_id: line.accsmarketId,
+            unit_sale_price: line.unitSalePrice,
+            profit: line.profit,
+            created_at: line.createdAt,
+            account: item ? {
+              id: item.id,
+              username: item.username,
+              email: item.email,
+              targetFollowers: item.targetFollowers,
+            } : undefined,
+          }
+        }) || [],
       }
 
       res.json({ sale: saleWithMapping })
