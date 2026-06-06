@@ -25,7 +25,7 @@ interface AccsmarketPosProps {
   selectedIds: number[]
   accsmarkets: Accsmarket[]
   customers: Customer[]
-  customerDropdownRef: RefObject<HTMLDivElement>
+  customerDropdownRef: RefObject<HTMLDivElement | null>
   selectedCustomerId: number | null
   selectedCustomerName: string
   customerSearchQuery: string

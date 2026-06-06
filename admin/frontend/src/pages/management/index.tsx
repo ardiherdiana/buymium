@@ -59,14 +59,14 @@ function StatCard({
 }: { title: string; value: string; icon: React.ElementType; loading: boolean }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="size-4 text-muted-foreground" />
+      <CardHeader className="flex flex-row items-center justify-between pb-1 sm:pb-2 pt-3 sm:pt-6 px-3 sm:px-6">
+        <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <Icon className="size-3.5 sm:size-4 text-muted-foreground" />
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
         {loading
-          ? <Skeleton className="h-7 w-32" />
-          : <p className="text-2xl font-bold text-foreground">{value}</p>}
+          ? <Skeleton className="h-6 sm:h-7 w-24 sm:w-32" />
+          : <p className="text-lg sm:text-2xl font-bold text-foreground">{value}</p>}
       </CardContent>
     </Card>
   )
@@ -176,7 +176,7 @@ export default function ManagementDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {statCards.map((s) => (
           <StatCard key={s.title} title={s.title} value={s.value} icon={s.icon} loading={isLoading} />
         ))}
@@ -190,7 +190,7 @@ export default function ManagementDashboard() {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-border">
+        <div className="flex border-b border-border overflow-x-auto">
           {([
             { key: "accounts" as const, label: "Accounts", total: accountsStock?.total_stock },
             { key: "accsmarket" as const, label: "Accsmarket", total: accsmarketStock?.total_stock },

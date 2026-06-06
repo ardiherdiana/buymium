@@ -234,9 +234,6 @@ model Source {
   name                    String    @db.VarChar(255)
   index                   Int       @default(0)
   spreadsheetId           String?   @db.VarChar(500) @map("spreadsheet_id")
-  image                   String?   @db.VarChar(500)
-  color                   String?   @db.VarChar(50)
-  prefix                  String?   @db.VarChar(10)
   isAccsmarket            Boolean   @default(false) @map("is_accsmarket")
   createdAt               DateTime  @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt               DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
@@ -313,7 +310,6 @@ model Accsmarket {
   currentFollowers Int?     @map("current_followers")
   accountStatus   String?   @db.VarChar(50) @map("account_status")
   capital         Float?
-  sheets          String?   @db.VarChar(255)
   year            String?   @db.VarChar(255)
   sourceId        Int?      @map("source_id")
   isSold          Boolean   @default(false) @map("is_sold")

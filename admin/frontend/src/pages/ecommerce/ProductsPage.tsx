@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
-import { Search, Plus, Pencil, Trash2, Layers } from "lucide-react"
+import { Search, Plus, Pencil, Trash2, Eye } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -83,7 +83,8 @@ export default function ProductsPage() {
         />
       </div>
 
-      <Card className="overflow-hidden p-0">
+      {/* Desktop: table */}
+      <Card className="overflow-hidden p-0 hidden sm:block">
         <CardContent className="p-0">
           <Table className="table-fixed">
             <TableHeader>
@@ -105,20 +106,7 @@ export default function ProductsPage() {
                 data.data.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell className="max-w-0">
-                      <div className="flex items-center gap-3 min-w-0">
-                        {product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={product.title}
-                            className="size-8 rounded object-cover shrink-0 border"
-                          />
-                        ) : (
-                          <div className="size-8 rounded bg-muted shrink-0 flex items-center justify-center">
-                            <Layers className="size-4 text-muted-foreground" />
-                          </div>
-                        )}
-                        <span className="font-medium truncate">{product.title}</span>
-                      </div>
+                      <span className="font-medium truncate block">{product.title}</span>
                     </TableCell>
                     <TableCell className="text-muted-foreground truncate max-w-0">{product.section?.title || "-"}</TableCell>
                     <TableCell className="font-medium">{formatIDR(product.price)}</TableCell>
@@ -137,7 +125,7 @@ export default function ProductsPage() {
                           onClick={() => navigate(`/ecommerce/products/${product.id}/stocks`)}
                           title="Kelola Stok"
                         >
-                          <Layers className="size-4" />
+                          <Eye className="size-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -170,6 +158,70 @@ export default function ProductsPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Mobile: cards */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
+        ) : !data?.data?.length ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Tidak ada produk ditemukan</p>
+        ) : (
+          data.data.map((product) => (
+            <Card key={product.id}>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 space-y-1">
+                    <p className="font-medium text-sm leading-tight truncate">{product.title}</p>
+                    <p className="text-xs text-muted-foreground">{product.section?.title || "—"}</p>
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold text-sm">{formatIDR(product.price)}</span>
+                      <span className="text-xs text-muted-foreground">{product.stocks?.length ?? 0} stok</span>
+                    </div>
+                  </div>
+                  <Badge variant={product.isActive ? "completed" : "outline"} className="shrink-0">
+                    {product.isActive ? "Aktif" : "Nonaktif"}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-end gap-1 pt-2 border-t">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={() => navigate(`/ecommerce/products/${product.id}/stocks`)}
+                    title="Kelola Stok"
+                  >
+                    <Eye className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={() => navigate(`/ecommerce/products/${product.id}/edit`)}
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(product)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+        {!!data?.data?.length && (
+          <Pagination
+            page={page}
+            total={data?.meta?.total ?? 0}
+            pageSize={PAGE_SIZE}
+            onChange={setPage}
+          />
+        )}
+      </div>
     </div>
   )
 }

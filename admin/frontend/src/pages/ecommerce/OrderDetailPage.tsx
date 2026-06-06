@@ -206,7 +206,8 @@ export default function OrderDetailPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Akun Terkirim</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
+          {/* Desktop: table */}
+          <CardContent className="p-0 hidden sm:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -226,6 +227,25 @@ export default function OrderDetailPage() {
               </TableBody>
             </Table>
           </CardContent>
+          {/* Mobile: cards */}
+          <CardContent className="sm:hidden p-4 space-y-3">
+            {order.stocks.map((stock) => (
+              <div key={stock.id} className="rounded-md border p-3 space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Username</span>
+                  <span className="font-mono font-medium">{stock.username}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Email</span>
+                  <span className="font-mono">{stock.email || "-"}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Password</span>
+                  <span className="font-mono">{stock.password}</span>
+                </div>
+              </div>
+            ))}
+          </CardContent>
         </Card>
       )}
 
@@ -234,14 +254,15 @@ export default function OrderDetailPage() {
           <CardTitle className="text-sm font-medium">Update Status</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <Dropdown
               options={STATUS_OPTIONS}
               value={activeStatus}
               onChange={setNewStatus}
-              className="w-44"
+              className="w-full sm:w-44"
             />
             <Button
+              className="w-full sm:w-auto"
               disabled={!newStatus || newStatus === order.status || updateMutation.isPending}
               onClick={() => updateMutation.mutate(activeStatus)}
             >

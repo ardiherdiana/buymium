@@ -482,6 +482,13 @@ export const AccountsService = {
 
       if (sourceId && sourceId !== 'all') {
         where.sourceId = parseInt(sourceId)
+      } else {
+        // Only scan accounts from non-accsmarket sources
+        const nonAccsmarketSources = await prisma.source.findMany({
+          where: { isAccsmarket: false },
+          select: { id: true },
+        })
+        where.sourceId = { in: nonAccsmarketSources.map((s) => s.id) }
       }
 
       const accounts = await prisma.account.findMany({

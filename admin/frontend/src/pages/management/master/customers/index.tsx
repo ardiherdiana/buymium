@@ -159,7 +159,8 @@ export default function CustomersPage() {
         />
       </div>
 
-      <Card className="overflow-hidden p-0">
+      {/* Desktop: table */}
+      <Card className="overflow-hidden p-0 hidden sm:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -185,9 +186,7 @@ export default function CustomersPage() {
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           {rank <= 2 ? (
-                            <span className={`inline-flex size-6 items-center justify-center rounded text-xs font-bold text-white ${rank === 1 ? "bg-yellow-400" : "bg-slate-400"}`}>
-                              {rank}
-                            </span>
+                            <span className={`inline-flex size-6 items-center justify-center rounded text-xs font-bold text-white ${rank === 1 ? "bg-yellow-400" : "bg-slate-400"}`}>{rank}</span>
                           ) : (
                             <span className="text-muted-foreground text-sm">{rank}</span>
                           )}
@@ -201,22 +200,11 @@ export default function CustomersPage() {
                       <TableCell className="text-xs text-muted-foreground">
                         {new Date(c.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
                       </TableCell>
-                      <TableCell className={`text-right font-medium ${c.total_profit > 0 ? "text-emerald-600" : ""}`}>
-                        {formatIDR(c.total_profit)}
-                      </TableCell>
+                      <TableCell className={`text-right font-medium ${c.total_profit > 0 ? "text-emerald-600" : ""}`}>{formatIDR(c.total_profit)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="size-8" onClick={() => handleEdit(c)}>
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(c)}
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
+                          <Button variant="ghost" size="icon" className="size-8" onClick={() => handleEdit(c)}><Pencil className="size-4" /></Button>
+                          <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" onClick={() => handleDelete(c)}><Trash2 className="size-4" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -228,6 +216,47 @@ export default function CustomersPage() {
           <Pagination page={page} total={data?.pagination?.total ?? 0} pageSize={PAGE_SIZE} onChange={setPage} />
         </CardContent>
       </Card>
+
+      {/* Mobile: cards */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
+        ) : !customers.length ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Tidak ada pelanggan ditemukan</p>
+        ) : (
+          customers.map((c, idx) => {
+            const rank = (page - 1) * PAGE_SIZE + idx + 1
+            return (
+              <Card key={c.id}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {rank <= 2 ? (
+                        <span className={`inline-flex size-5 items-center justify-center rounded text-xs font-bold text-white shrink-0 ${rank === 1 ? "bg-yellow-400" : "bg-slate-400"}`}>{rank}</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground shrink-0">{rank}</span>
+                      )}
+                      <p className="font-medium text-sm truncate">{c.username_shopee}</p>
+                    </div>
+                    <p className={`text-sm font-semibold shrink-0 ${c.total_profit > 0 ? "text-emerald-600" : ""}`}>{formatIDR(c.total_profit)}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>{c.nomor_hp ?? "-"}</span>
+                    <span>{c.source_name ?? "-"}</span>
+                    <span>{c.creator?.name ?? "-"}</span>
+                    <span>{new Date(c.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                  </div>
+                  <div className="flex justify-end gap-1 pt-2 border-t">
+                    <Button variant="ghost" size="icon" className="size-8" onClick={() => handleEdit(c)}><Pencil className="size-4" /></Button>
+                    <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" onClick={() => handleDelete(c)}><Trash2 className="size-4" /></Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })
+        )}
+        {!!customers.length && <Pagination page={page} total={data?.pagination?.total ?? 0} pageSize={PAGE_SIZE} onChange={setPage} />}
+      </div>
 
       <Fab onClick={handleAdd} title="Tambah Pelanggan" />
 

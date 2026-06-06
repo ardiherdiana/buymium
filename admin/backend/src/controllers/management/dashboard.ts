@@ -81,12 +81,10 @@ export const DashboardController = {
           .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
           .map(([key, count]) => ({ range: formatFollowerRange(key), count }))
 
-        const imageUrl = source?.image ? `/storage/sources/${source.image.split('/').pop()}` : null
-
         accountsStock.push({
           id: source?.id ?? row.sourceId,
           name: source?.name ?? 'Unknown',
-          image: imageUrl,
+          image: null,
           total_stock: accountsCount,
           distribution: formattedAccDistribution,
         })
@@ -102,7 +100,6 @@ export const DashboardController = {
             value: item._count,
             percentage: Math.round(percentage * 100) / 100,
             source_id: item.sourceId,
-            color: source?.color,
           }
         })
         .sort((a, b) => b.value - a.value)
@@ -145,7 +142,7 @@ export const DashboardController = {
           id: `${srcId}-${yearKey}`,
           name: source?.name ?? 'Unknown',
           subtitle: yearKey,
-          image: source?.image ? `/storage/sources/${source.image.split('/').pop()}` : null,
+          image: null,
           total_stock: followers.length,
           distribution,
         })
@@ -179,7 +176,6 @@ export const DashboardController = {
             value: item._count,
             percentage: accsmarketTotal > 0 ? Math.round((item._count / accsmarketTotal) * 10000) / 100 : 0,
             source_id: item.sourceId,
-            color: source?.color ?? null,
           }
         })
         .sort((a, b) => b.value - a.value)

@@ -126,14 +126,14 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Analitik</h1>
           <p className="text-sm text-muted-foreground mt-1">Performa bisnis berdasarkan periode</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Select value={sourceId} onValueChange={setSourceId}>
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="flex-1 sm:w-36 min-w-0">
               <SelectValue placeholder="All Sources" />
             </SelectTrigger>
             <SelectContent>
@@ -144,7 +144,7 @@ export default function AnalyticsPage() {
             </SelectContent>
           </Select>
           <Select value={month} onValueChange={setMonth}>
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="flex-1 sm:w-36 min-w-0">
               <SelectValue placeholder="Month" />
             </SelectTrigger>
             <SelectContent>
@@ -154,7 +154,7 @@ export default function AnalyticsPage() {
             </SelectContent>
           </Select>
           <Select value={year} onValueChange={setYear}>
-            <SelectTrigger className="w-24">
+            <SelectTrigger className="w-20 sm:w-24 shrink-0">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>

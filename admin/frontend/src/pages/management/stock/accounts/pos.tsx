@@ -1,4 +1,4 @@
-import { useRef, type RefObject, type FormEvent } from "react"
+import { type RefObject, type FormEvent } from "react"
 import { X, ShoppingCart, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,7 +25,7 @@ interface AccountsPosProps {
   selectedIds: number[]
   accounts: Account[]
   customers: Customer[]
-  customerDropdownRef: RefObject<HTMLDivElement>
+  customerDropdownRef: RefObject<HTMLDivElement | null>
   selectedCustomerId: number | null
   selectedCustomerName: string
   customerSearchQuery: string

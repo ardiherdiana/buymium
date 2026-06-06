@@ -22,7 +22,6 @@ router.use(requireAuth)
 // Special routes (must be before dynamic :id routes)
 router.get('/', AccountsController.index)
 router.get('/index', AccountsController.index)
-router.get('/history', AccountsController.history)
 router.get('/sales-mobile', AccountsController.salesMobile)
 router.get('/scan/list', async (req: Request, res: Response) => {
   try {
@@ -59,8 +58,9 @@ router.post('/sync', validate(SyncAccountSchema), async (req: Request, res: Resp
         totalSheets: result.totalSheets,
       })
     } else {
-      // Sync all sources if source_id is not provided
+      // Sync all non-accsmarket sources if source_id is not provided
       const sources = await prisma.source.findMany({
+        where: { isAccsmarket: false },
         orderBy: [{ index: 'asc' }, { id: 'asc' }],
       })
 

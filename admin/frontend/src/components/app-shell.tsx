@@ -1,9 +1,10 @@
+import { useState } from "react"
 import { Outlet, useNavigate, useSearchParams } from "react-router-dom"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   ShoppingCart, Package, Users, Layers, Star,
   BarChart3, ShoppingBag, TrendingUp, Receipt, PieChart, UserSquare, Database,
-  LayoutDashboard, RefreshCw,
+  LayoutDashboard, Plus, Trash2,
 } from "lucide-react"
 import { AppSidebar, type NavGroup } from "@/components/app-sidebar"
 import {
@@ -22,6 +23,10 @@ import { useAuthStore } from "@/stores/authStore"
 import { EllipsisVertical, LogOut } from "lucide-react"
 import api from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog"
 import { Link } from "react-router-dom"
 
 // ── nav definitions ────────────────────────────────────────────────
@@ -88,7 +93,7 @@ function Shell({ navGroups }: { navGroups: NavGroup[] }) {
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
           </header>
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
             <Outlet />
           </div>
         </SidebarInset>
@@ -144,10 +149,24 @@ function AutopostingSidebarContent() {
   const selectedId = searchParams.get("channel_id") ? Number(searchParams.get("channel_id")) : null
   const queryClient = useQueryClient()
   const { state } = useSidebar()
+  const [manageOpen, setManageOpen] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ["autoposting-channels"],
     queryFn: () => api.get("/autoposting/channels").then((r) => r.data),
+  })
+
+  const syncMutation = useMutation({
+    mutationFn: () => api.get("/autoposting/channels"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["autoposting-channels"] })
+      setManageOpen(false)
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/autoposting/channels/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["autoposting-channels"] }),
   })
 
   const channels: Channel[] = data?.data ?? []
@@ -177,16 +196,43 @@ function AutopostingSidebarContent() {
         </SidebarGroupContent>
       </SidebarGroup>
 
+      {/* Manage Channels Dialog */}
+      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Kelola Saluran</DialogTitle>
+            <DialogDescription>
+              Kelola akun sosial media kamu melalui SocialBu. Hubungkan akun baru di SocialBu, lalu klik Sinkronisasi di sini.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 pt-2">
+            <Button
+              className="flex-1"
+              onClick={() => window.open("https://socialbu.com/app/accounts/add", "_blank")}
+            >
+              Hubungkan Akun
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+            >
+              {syncMutation.isPending ? "Menyinkron..." : "Sinkronisasi"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Channel list */}
       <SidebarGroup>
         <SidebarGroupLabel className="flex items-center justify-between pr-1">
           <span>Saluran</span>
           <button
-            onClick={() => queryClient.invalidateQueries({ queryKey: ["autoposting-channels"] })}
+            onClick={() => setManageOpen(true)}
             className="text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors"
-            title="Refresh"
+            title="Kelola saluran"
           >
-            <RefreshCw className="size-3" />
+            <Plus className="size-3" />
           </button>
         </SidebarGroupLabel>
         <SidebarGroupContent>
@@ -204,7 +250,7 @@ function AutopostingSidebarContent() {
                 )}
                 <SidebarMenu>
                   {chs.map((ch) => (
-                    <SidebarMenuItem key={ch.id}>
+                    <SidebarMenuItem key={ch.id} className="group/item">
                       <SidebarMenuButton
                         isActive={selectedId === ch.id}
                         onClick={() => select(ch)}
@@ -212,7 +258,15 @@ function AutopostingSidebarContent() {
                         className={cn(selectedId === ch.id && "bg-sidebar-accent text-sidebar-accent-foreground")}
                       >
                         <ProfilePhoto path={ch.profilePhotoPath} username={ch.username} />
-                        <span>{ch.username}</span>
+                        <span className="flex-1 truncate">{ch.username}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(ch.id) }}
+                          disabled={deleteMutation.isPending}
+                          className="opacity-0 group-hover/item:opacity-100 text-sidebar-foreground/40 hover:text-destructive transition-all shrink-0"
+                          title="Hapus saluran"
+                        >
+                          <Trash2 className="size-3" />
+                        </button>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
@@ -238,7 +292,7 @@ function AutopostingSidebarComponent() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link to="/">
-                <div className="flex size-8 items-center justify-center bg-primary text-primary-foreground text-sm font-bold shrink-0">B</div>
+                <img src="/buymium_logo.png" alt="Buymium" className="size-8 shrink-0 object-contain" />
                 <span className="font-semibold">Buymium Admin</span>
               </Link>
             </SidebarMenuButton>
@@ -254,11 +308,7 @@ function AutopostingSidebarComponent() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
-                  <Avatar className="h-7 w-7 rounded-none">
-                    <AvatarFallback className="rounded-none text-xs bg-primary/10 text-primary">
-                      {user?.name?.charAt(0).toUpperCase() ?? "A"}
-                    </AvatarFallback>
-                  </Avatar>
+                  <img src="/buymium_logo.png" alt="Buymium" className="h-7 w-7 shrink-0 object-contain" />
                   <div className="grid flex-1 text-left text-xs leading-tight">
                     <span className="truncate font-medium">{user?.name}</span>
                     <span className="truncate text-xs text-muted-foreground capitalize">{user?.role}</span>
@@ -291,7 +341,7 @@ export function AutopostingShell() {
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
           </header>
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
             <Outlet />
           </div>
         </SidebarInset>

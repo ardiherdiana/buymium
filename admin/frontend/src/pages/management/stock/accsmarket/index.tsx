@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Search, History, RefreshCw, Sheet, Users, ArrowLeft, Heart, CheckCircle2, Trash2, Copy, ScanLine, ShoppingCart } from "lucide-react"
+import { Search, RefreshCw, Sheet, Users, ArrowLeft, Heart, CheckCircle2, Trash2, Copy, ScanLine, ShoppingCart } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,11 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { EmptyRow, LoadingRow, Pagination } from "@/components/ui/table-extras"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAlert } from "@/stores/alertStore"
 import { useNavigate } from "react-router"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
-import AccsmarketPos from "./pos"
 
 interface Accsmarket {
   id: number
@@ -31,12 +31,6 @@ interface Accsmarket {
   isSold: boolean
 }
 
-interface Customer {
-  id: number
-  usernameSh?: string
-  nomorHp?: string
-}
-
 interface Source {
   id: number
   name: string
@@ -45,7 +39,6 @@ interface Source {
 interface AccsmarketsResponse {
   accsmarkets: Accsmarket[]
   sources: Source[]
-  sheets: string[]
   targetFollowers: number[]
   years: string[]
   stats: {
@@ -63,10 +56,6 @@ const STATUS_OPTIONS = [
 
 const PAGE_SIZE = 100
 
-const formatCurrency = (n: number | null) => {
-  if (n === null || n === undefined) return "-"
-  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n)
-}
 
 export default function AccsmarketPage() {
   const queryClient = useQueryClient()
@@ -75,37 +64,52 @@ export default function AccsmarketPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState("all")
-  const [sheets, setSheets] = useState("all")
   const [followers, setFollowers] = useState("all")
   const [year, setYear] = useState("all")
+  const [sourceId, setSourceId] = useState("all")
   const [selectedIds, setSelectedIds] = useState<number[]>([])
-  const [posModalOpen, setPosModalOpen] = useState(false)
 
-  // POS state
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null)
-  const [selectedCustomerName, setSelectedCustomerName] = useState("")
-  const [customerSearchQuery, setCustomerSearchQuery] = useState("")
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
-  const [isShopee, setIsShopee] = useState(false)
-  const [totalSalesInput, setTotalSalesInput] = useState("")
-  const [submittingSale, setSubmittingSale] = useState(false)
-  const customerDropdownRef = useRef<HTMLDivElement>(null)
+  // Sync dialog state
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false)
+  const [syncSourceId, setSyncSourceId] = useState("all")
+  const [syncProgress, setSyncProgress] = useState<{
+    status: "idle" | "syncing" | "done" | "error"
+    current: number; total: number; error?: string
+  }>({ status: "idle", current: 0, total: 0 })
 
-  const { data, isLoading } = useQuery<AccsmarketsResponse>({
-    queryKey: ["management-accsmarkets", page, search, status, sheets, followers, year],
+  // Scan dialog state
+  const [scanDialogOpen, setScanDialogOpen] = useState(false)
+  const [scanSourceId, setScanSourceId] = useState("all")
+  const [scanProgress, setScanProgress] = useState<{
+    status: "idle" | "scanning" | "done" | "error"
+    current: number; total: number; error?: string
+  }>({ status: "idle", current: 0, total: 0 })
+
+  const { data, isLoading, isFetching } = useQuery<AccsmarketsResponse>({
+    queryKey: ["management-accsmarkets", page, search, status, followers, year, sourceId],
     queryFn: () =>
       api.get("/management/accsmarkets/index", {
         params: {
           page,
           search: search || undefined,
           status: status !== "all" ? status : undefined,
-          sheets: sheets !== "all" ? sheets : undefined,
           followers: followers !== "all" ? followers : undefined,
           year: year !== "all" ? year : undefined,
+          source_id: sourceId !== "all" ? sourceId : undefined,
         },
       }).then((r) => r.data),
   })
+
+  const { data: sourcesData } = useQuery<{ sources: Source[] }>({
+    queryKey: ["management-accsmarket-sources"],
+    queryFn: () =>
+      api.get("/management/sources").then((r) => ({
+        sources: (r.data?.sources ?? []).filter((s: Source & { is_accsmarket?: boolean }) => s.is_accsmarket),
+      })),
+    staleTime: 60_000,
+  })
+
+  const accsmarketSources = sourcesData?.sources ?? data?.sources ?? []
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/management/accsmarkets/${id}`),
@@ -122,48 +126,48 @@ export default function AccsmarketPage() {
     onError: () => alert.error("Gagal", "Gagal memperbarui followers"),
   })
 
-  const syncMutation = useMutation({
-    mutationFn: () => api.post("/management/accsmarkets/sync", { sourceId: sourceId !== "all" ? parseInt(sourceId) : data?.sources?.[0]?.id }),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ["management-accsmarkets"] })
-      alert.success("Berhasil", res.data.message)
-    },
-    onError: () => alert.error("Gagal", "Gagal sync sheets"),
-  })
+  // ── Sync ───────────────────────────────────────────────────────────────────
+  const runSync = async () => {
+    const sources = syncSourceId === "all"
+      ? accsmarketSources
+      : accsmarketSources.filter((s) => String(s.id) === syncSourceId)
 
-  // Load customers
-  useEffect(() => {
-    api.get("/management/accsmarkets/search/customers").then((r) => {
-      setCustomers(r.data?.customers ?? [])
-    }).catch(() => {})
-  }, [])
-
-  // Customer search debounce
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (customerSearchQuery) {
-        api.get("/management/accsmarkets/search/customers", { params: { search: customerSearchQuery } }).then((r) => {
-          setCustomers(r.data?.customers ?? [])
-        }).catch(() => {})
-      }
-    }, 300)
-    return () => clearTimeout(t)
-  }, [customerSearchQuery])
-
-  // Click outside dropdown
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node))
-        setShowCustomerDropdown(false)
+    if (!sources.length) {
+      setSyncProgress({ status: "error", current: 0, total: 0, error: "Tidak ada source accsmarket ditemukan" })
+      return
     }
-    if (showCustomerDropdown) document.addEventListener("mousedown", handler)
-    return () => document.removeEventListener("mousedown", handler)
-  }, [showCustomerDropdown])
 
-  const unitPrice = useMemo(() => {
-    if (!totalSalesInput || selectedIds.length === 0) return 0
-    return Math.floor(parseInt(totalSalesInput.replace(/\D/g, "") || "0") / selectedIds.length)
-  }, [totalSalesInput, selectedIds.length])
+    setSyncProgress({ status: "syncing", current: 0, total: sources.length })
+    for (let i = 0; i < sources.length; i++) {
+      try {
+        await api.post("/management/accsmarkets/sync", { sourceId: sources[i].id })
+      } catch { /* continue */ }
+      setSyncProgress((p) => ({ ...p, current: i + 1 }))
+    }
+    setSyncProgress((p) => ({ ...p, status: "done" }))
+    queryClient.invalidateQueries({ queryKey: ["management-accsmarkets"] })
+  }
+
+  // ── Scan Followers ─────────────────────────────────────────────────────────
+  const runScan = async () => {
+    const sourceParam = scanSourceId !== "all" ? scanSourceId : undefined
+    setScanProgress({ status: "scanning", current: 0, total: 0 })
+    let accountIds: number[] = []
+    try {
+      const list = await api.get("/management/accsmarkets/scan/list", { params: { source_id: sourceParam } })
+      accountIds = (list.data?.accsmarkets ?? []).map((a: { id: number }) => a.id)
+    } catch (err: unknown) {
+      setScanProgress({ status: "error", current: 0, total: 0, error: (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Gagal mengambil daftar akun" })
+      return
+    }
+    setScanProgress((p) => ({ ...p, total: accountIds.length }))
+    for (let i = 0; i < accountIds.length; i++) {
+      try { await api.post(`/management/accsmarkets/${accountIds[i]}/refresh-followers`) } catch { /* continue */ }
+      setScanProgress((p) => ({ ...p, current: i + 1 }))
+    }
+    setScanProgress((p) => ({ ...p, status: "done" }))
+    queryClient.invalidateQueries({ queryKey: ["management-accsmarkets"] })
+  }
 
   // ── Scan selected ──────────────────────────────────────────────────────────
   const handleBulkScan = async () => {
@@ -202,47 +206,6 @@ export default function AccsmarketPage() {
     setSelectedIds([])
   }
 
-  // ── Submit sale ────────────────────────────────────────────────────────────
-  const handleSubmitSale = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedCustomerId) { alert.error("Validasi", "Pilih customer"); return }
-    if (selectedIds.length === 0) { alert.error("Validasi", "Pilih akun"); return }
-    if (!totalSalesInput.trim()) { alert.error("Validasi", "Masukkan harga jual"); return }
-    setSubmittingSale(true)
-    try {
-      const selected = (data?.accsmarkets ?? []).filter((a) => selectedIds.includes(a.id))
-      const totalSalePrice = parseInt(totalSalesInput.replace(/\D/g, "") || "0")
-      const unitPriceCalc = totalSalePrice / selected.length
-      const totalProfit = selected.reduce((s, a) => s + (unitPriceCalc - (a.capital ?? 0)), 0)
-      const salesNumber = `SAL-${new Date().toISOString().split("T")[0].replace(/-/g, "")}-${Date.now().toString().slice(-3)}`
-      await api.post("/management/sales", {
-        sales_number: salesNumber,
-        customer_id: selectedCustomerId,
-        total_sale_price: totalSalePrice,
-        total_profit: totalProfit,
-        is_shopee: isShopee,
-        items: selected.map((a) => ({
-          accsmarket_id: a.id,
-          unit_sale_price: unitPriceCalc,
-          profit: unitPriceCalc - (a.capital ?? 0),
-        })),
-      })
-      alert.success("Berhasil", "Penjualan berhasil dibuat")
-      setSelectedIds([])
-      setSelectedCustomerId(null)
-      setSelectedCustomerName("")
-      setCustomerSearchQuery("")
-      setTotalSalesInput("")
-      setIsShopee(false)
-      setPosModalOpen(false)
-      queryClient.invalidateQueries({ queryKey: ["management-accsmarkets"] })
-    } catch {
-      alert.error("Gagal", "Gagal membuat penjualan")
-    } finally {
-      setSubmittingSale(false)
-    }
-  }
-
   const handleDelete = async (acc: Accsmarket) => {
     const ok = await alert.confirm("Hapus Akun", `Hapus akun "${acc.username ?? acc.email}"?`)
     if (ok) deleteMutation.mutate(acc.id)
@@ -251,10 +214,11 @@ export default function AccsmarketPage() {
   const accsmarkets = data?.accsmarkets ?? []
   const stats = data?.stats
 
-  const sheetsOptions = [
-    { value: "all", label: "All Sheets" },
-    ...(data?.sheets ?? []).map((s) => ({ value: s, label: s })),
+  const sourceOptions = [
+    { value: "all", label: "All Sources" },
+    ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name })),
   ]
+
   const followersOptions = [
     { value: "all", label: "All Targets" },
     ...(data?.targetFollowers ?? []).map((f) => ({ value: String(f), label: f.toLocaleString("id-ID") })),
@@ -272,7 +236,7 @@ export default function AccsmarketPage() {
 
   return (
     <div>
-      <div className={`space-y-5 ${selectedIds.length > 0 ? "pb-24" : ""}`}>
+      <div className={`space-y-5 ${selectedIds.length > 0 ? "pb-20 sm:pb-24" : ""}`}>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="size-8" onClick={() => navigate(-1)}>
             <ArrowLeft className="size-4" />
@@ -281,7 +245,26 @@ export default function AccsmarketPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        {/* Mobile: compact */}
+        <div className="grid grid-cols-2 gap-2 sm:hidden">
+          {[
+            { label: "Total Accounts", value: stats?.total_accounts ?? 0, icon: Users, color: "text-blue-600" },
+            { label: "Active Accounts", value: stats?.completed_accounts ?? 0, icon: CheckCircle2, color: "text-emerald-600" },
+            { label: "Total Followers", value: (stats?.total_followers ?? 0).toLocaleString("id-ID"), icon: Heart, color: "text-red-500" },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label}>
+              <CardContent className="p-3 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground truncate">{label}</p>
+                  <p className="text-base font-bold leading-tight">{value}</p>
+                </div>
+                <Icon className={`size-5 shrink-0 ${color}`} />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        {/* Desktop: original */}
+        <div className="hidden sm:grid grid-cols-3 gap-4">
           <Card>
             <CardContent className="p-4 flex items-center justify-between">
               <div>
@@ -333,8 +316,8 @@ export default function AccsmarketPage() {
                 className="pl-9"
               />
             </div>
-            <div className="grid grid-cols-4 gap-3">
-              <Dropdown options={sheetsOptions} value={sheets} onChange={(v) => { setSheets(v); setPage(1) }} className="w-full" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Dropdown options={sourceOptions} value={sourceId} onChange={(v) => { setSourceId(v); setPage(1) }} className="w-full" />
               <Dropdown options={STATUS_OPTIONS} value={status} onChange={(v) => { setStatus(v); setPage(1) }} className="w-full" />
               <Dropdown options={followersOptions} value={followers} onChange={(v) => { setFollowers(v); setPage(1) }} className="w-full" />
               <Dropdown options={yearOptions} value={year} onChange={(v) => { setYear(v); setPage(1) }} className="w-full" />
@@ -343,32 +326,29 @@ export default function AccsmarketPage() {
         </Card>
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-3 gap-3">
-          <Button variant="outline" className="w-full gap-2 border-blue-500 text-blue-600 hover:bg-blue-50">
-            <RefreshCw className="size-4" />
-            Scan Followers
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            variant="outline"
+            className="w-full gap-2 border-blue-500 text-blue-600 hover:bg-blue-50"
+            onClick={() => { setScanSourceId("all"); setScanProgress({ status: "idle", current: 0, total: 0 }); setScanDialogOpen(true) }}
+            disabled={scanProgress.status === "scanning" || syncProgress.status === "syncing"}
+          >
+            <RefreshCw className={`size-4 ${scanProgress.status === "scanning" ? "animate-spin" : ""}`} />
+            {scanProgress.status === "scanning" ? "Scanning..." : "Scan Followers"}
           </Button>
           <Button
             variant="outline"
             className="w-full gap-2 border-blue-500 text-blue-600 hover:bg-blue-50"
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
+            onClick={() => { setSyncSourceId("all"); setSyncProgress({ status: "idle", current: 0, total: 0 }); setSyncDialogOpen(true) }}
+            disabled={syncProgress.status === "syncing" || scanProgress.status === "scanning"}
           >
-            <Sheet className={`size-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
-            {syncMutation.isPending ? "Syncing..." : "Sync Sheets"}
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full gap-2 border-blue-500 text-blue-600 hover:bg-blue-50"
-            onClick={() => navigate("/stock/accsmarket/history")}
-          >
-            <History className="size-4" />
-            History
+            <Sheet className={`size-4 ${syncProgress.status === "syncing" ? "animate-spin" : ""}`} />
+            {syncProgress.status === "syncing" ? "Syncing..." : "Sync Sheets"}
           </Button>
         </div>
 
-        {/* Table */}
-        <Card className="overflow-hidden p-0">
+        {/* Desktop: table */}
+        <Card className="overflow-hidden p-0 hidden sm:block">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -389,7 +369,7 @@ export default function AccsmarketPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? <LoadingRow colSpan={11} /> : !accsmarkets.length ? (
+                {isLoading || isFetching ? <LoadingRow colSpan={11} /> : !accsmarkets.length ? (
                   <EmptyRow colSpan={11} message="No accsmarkets found." />
                 ) : (
                   accsmarkets.map((acc) => (
@@ -403,8 +383,8 @@ export default function AccsmarketPage() {
                       <TableCell>{acc.currentFollowers?.toLocaleString("id-ID") ?? "-"}</TableCell>
                       <TableCell>{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</TableCell>
                       <TableCell>
-                        <Badge variant={acc.accountStatus === "completed" ? "completed" : "progress"}>
-                          {acc.accountStatus === "completed" ? "Completed" : "Progress"}
+                        <Badge variant={acc.accountStatus?.toLowerCase() === "completed" ? "completed" : acc.accountStatus?.toLowerCase() === "error" ? "destructive" : "progress"}>
+                          {acc.accountStatus?.toLowerCase() === "completed" ? "Completed" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Progress"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{acc.twoFactorAuth ?? "-"}</TableCell>
@@ -435,57 +415,226 @@ export default function AccsmarketPage() {
             <Pagination page={page} total={accsmarkets.length} pageSize={PAGE_SIZE} onChange={setPage} />
           </CardContent>
         </Card>
-      </div>
 
-      {/* POS Popup */}
-      <AccsmarketPos
-        isOpen={posModalOpen}
-        onClose={() => setPosModalOpen(false)}
-        selectedIds={selectedIds}
-        accsmarkets={accsmarkets}
-        customers={customers}
-        customerDropdownRef={customerDropdownRef}
-        selectedCustomerId={selectedCustomerId}
-        selectedCustomerName={selectedCustomerName}
-        customerSearchQuery={customerSearchQuery}
-        showCustomerDropdown={showCustomerDropdown}
-        isShopee={isShopee}
-        totalSalesInput={totalSalesInput}
-        unitPrice={unitPrice}
-        submittingSale={submittingSale}
-        onCustomerQueryChange={setCustomerSearchQuery}
-        onCustomerSelect={(id, name) => { setSelectedCustomerId(id); setSelectedCustomerName(name); setCustomerSearchQuery(""); setShowCustomerDropdown(false) }}
-        onDropdownFocus={() => setShowCustomerDropdown(true)}
-        onClearCustomer={() => setSelectedCustomerId(null)}
-        onSetIsShopee={setIsShopee}
-        onSetTotalSalesInput={setTotalSalesInput}
-        onSubmitSale={handleSubmitSale}
-        onRemoveAccount={(id) => setSelectedIds((prev) => prev.filter((x) => x !== id))}
-        formatCurrency={formatCurrency}
-      />
+        {/* Mobile: cards */}
+        <div className="flex flex-col gap-3 sm:hidden">
+          {isLoading || isFetching ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
+          ) : !accsmarkets.length ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No accsmarkets found.</p>
+          ) : (
+            accsmarkets.map((acc) => (
+              <Card key={acc.id} className={selectedIds.includes(acc.id) ? "ring-2 ring-primary" : ""}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Checkbox checked={selectedIds.includes(acc.id)} onCheckedChange={() => toggleOne(acc.id)} className="shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{acc.username ?? "-"}</p>
+                        <p className="text-xs text-muted-foreground truncate">{acc.email ?? "-"}</p>
+                      </div>
+                    </div>
+                    <Badge variant={acc.accountStatus?.toLowerCase() === "completed" ? "completed" : acc.accountStatus?.toLowerCase() === "error" ? "destructive" : "progress"} className="shrink-0">
+                      {acc.accountStatus?.toLowerCase() === "completed" ? "Completed" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Progress"}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Followers</span>
+                      <span className="font-medium">{acc.currentFollowers?.toLocaleString("id-ID") ?? "-"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Target</span>
+                      <span className="font-medium">{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Capital</span>
+                      <span className="font-medium">{acc.capital ? formatIDR(acc.capital) : "-"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Year</span>
+                      <span className="font-medium">{acc.year ?? "-"}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <span className="text-xs text-muted-foreground font-mono">{acc.twoFactorAuth ?? "-"}</span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost" size="icon" className="size-8 text-blue-600 hover:text-blue-700"
+                        onClick={() => refreshMutation.mutate(acc.id)}
+                        disabled={refreshMutation.isPending}
+                      >
+                        <RefreshCw className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(acc)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+          {!!accsmarkets.length && (
+            <Pagination page={page} total={accsmarkets.length} pageSize={PAGE_SIZE} onChange={setPage} />
+          )}
+        </div>
+      </div>
 
       {/* Floating Bulk Action Bar */}
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 bg-background border rounded-lg shadow-2xl px-4 py-3 flex items-center gap-3">
-          <span className="text-sm font-medium text-muted-foreground mr-1">{selectedIds.length} akun</span>
-          <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setPosModalOpen(true)}>
-            <ShoppingCart className="size-3.5" />
-            Sold
-          </Button>
-          <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
-            <ScanLine className="size-3.5" />
-            Scan
-          </Button>
-          <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
-            <Copy className="size-3.5" />
-            Copy
-          </Button>
-          <Button size="sm" variant="destructive" className="gap-1.5" onClick={handleBulkDelete}>
-            <Trash2 className="size-3.5" />
-            Delete
-          </Button>
-        </div>
+        <>
+          {/* Mobile */}
+          <div className="sm:hidden fixed bottom-0 left-0 right-0 z-20 bg-background border-t shadow-2xl px-4 pt-2 pb-3 flex flex-col gap-2">
+            <span className="text-xs font-medium text-muted-foreground">{selectedIds.length} akun dipilih</span>
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/stock/accsmarket/pos", { state: { selectedIds } })}>
+                <ShoppingCart className="size-3.5" />
+                Sold
+              </Button>
+              <Button size="sm" className="flex-1 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
+                <ScanLine className="size-3.5" />
+                Scan
+              </Button>
+              <Button size="sm" className="flex-1 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
+                <Copy className="size-3.5" />
+                Copy
+              </Button>
+              <Button size="sm" variant="destructive" className="flex-1 gap-1.5" onClick={handleBulkDelete}>
+                <Trash2 className="size-3.5" />
+                Delete
+              </Button>
+            </div>
+          </div>
+          {/* Desktop */}
+          <div className="hidden sm:flex fixed bottom-4 left-1/2 -translate-x-1/2 z-20 bg-background border rounded-lg shadow-2xl px-4 py-3 items-center gap-3">
+            <span className="text-sm font-medium text-muted-foreground mr-1">{selectedIds.length} akun</span>
+            <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/stock/accsmarket/pos", { state: { selectedIds } })}>
+              <ShoppingCart className="size-3.5" />
+              Sold
+            </Button>
+            <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
+              <ScanLine className="size-3.5" />
+              Scan
+            </Button>
+            <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
+              <Copy className="size-3.5" />
+              Copy
+            </Button>
+            <Button size="sm" variant="destructive" className="gap-1.5" onClick={handleBulkDelete}>
+              <Trash2 className="size-3.5" />
+              Delete
+            </Button>
+          </div>
+        </>
       )}
+
+      {/* Scan Dialog */}
+      <Dialog open={scanDialogOpen} onOpenChange={(open) => { if (scanProgress.status === "scanning") return; setScanDialogOpen(open) }}>
+        <DialogContent className="max-w-md">
+          {scanProgress.status === "idle" ? (
+            <>
+              <DialogHeader><DialogTitle>Scan Followers</DialogTitle></DialogHeader>
+              <div className="space-y-2 pt-2">
+                <p className="text-sm font-medium">Source</p>
+                <Dropdown options={sourceOptions} value={scanSourceId} onChange={setScanSourceId} className="w-full" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setScanDialogOpen(false)}>Cancel</Button>
+                <Button onClick={runScan}>Scan</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <RefreshCw className={`size-5 ${scanProgress.status === "scanning" ? "animate-spin" : ""}`} />
+                  Scan Followers
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2 pt-1">
+                <div className="flex justify-between text-sm">
+                  <span>Progress</span>
+                  <span className="text-muted-foreground">{scanProgress.current} / {scanProgress.total || "..."}</span>
+                </div>
+                <div className="h-2 w-full bg-secondary overflow-hidden rounded">
+                  <div className="h-full bg-foreground transition-all" style={{ width: scanProgress.total > 0 ? `${(scanProgress.current / scanProgress.total) * 100}%` : "0%" }} />
+                </div>
+              </div>
+              {scanProgress.status === "done" && (
+                <div className="rounded bg-emerald-50 border border-emerald-200 px-4 py-3">
+                  <p className="text-sm font-medium text-emerald-700">Scan completed!</p>
+                </div>
+              )}
+              {scanProgress.status === "error" && (
+                <div className="rounded bg-destructive/10 border border-destructive/20 px-4 py-3">
+                  <p className="text-sm font-medium text-destructive">{scanProgress.error}</p>
+                </div>
+              )}
+              {(scanProgress.status === "done" || scanProgress.status === "error") && (
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={() => setScanDialogOpen(false)}>Close</Button>
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Sync Dialog */}
+      <Dialog open={syncDialogOpen} onOpenChange={(open) => { if (syncProgress.status === "syncing") return; if (open) setSyncProgress({ status: "idle", current: 0, total: 0 }); setSyncDialogOpen(open) }}>
+        <DialogContent className="max-w-md">
+          {syncProgress.status === "idle" ? (
+            <>
+              <DialogHeader><DialogTitle>Sync with Google Sheets</DialogTitle></DialogHeader>
+              <div className="space-y-2 pt-2">
+                <p className="text-sm font-medium">Source</p>
+                <Dropdown options={sourceOptions} value={syncSourceId} onChange={setSyncSourceId} className="w-full" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Cancel</Button>
+                <Button onClick={runSync}>Sync</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <RefreshCw className={`size-5 ${syncProgress.status === "syncing" ? "animate-spin" : ""}`} />
+                  Sync Google Sheets
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2 pt-1">
+                <div className="flex justify-between text-sm">
+                  <span>Progress</span>
+                  <span className="text-muted-foreground">{syncProgress.current} / {syncProgress.total}</span>
+                </div>
+                <div className="h-2 w-full bg-secondary overflow-hidden rounded">
+                  <div className="h-full bg-foreground transition-all" style={{ width: syncProgress.total > 0 ? `${(syncProgress.current / syncProgress.total) * 100}%` : "0%" }} />
+                </div>
+              </div>
+              {syncProgress.status === "done" && (
+                <div className="rounded bg-emerald-50 border border-emerald-200 px-4 py-3">
+                  <p className="text-sm font-medium text-emerald-700">Sync completed!</p>
+                </div>
+              )}
+              {syncProgress.status === "error" && (
+                <div className="rounded bg-destructive/10 border border-destructive/20 px-4 py-3">
+                  <p className="text-sm font-medium text-destructive">{syncProgress.error}</p>
+                </div>
+              )}
+              {(syncProgress.status === "done" || syncProgress.status === "error") && (
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Close</Button>
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

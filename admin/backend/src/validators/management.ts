@@ -104,8 +104,6 @@ export const UpdateExpenseSchema = CreateExpenseSchema.partial().extend({
 export const CreateSourceSchema = z.object({
   name: z.string().min(1, 'name is required'),
   spreadsheet_id: z.string().min(1, 'spreadsheet_id is required'),
-  color: z.string().optional().nullable(),
-  prefix: z.string().optional().nullable(),
   is_accsmarket: z.union([z.boolean(), z.string()]).optional(),
 })
 
@@ -113,8 +111,6 @@ export const UpdateSourceSchema = z.object({
   name: z.string().min(1, 'name is required'),
   spreadsheet_id: z.string().min(1, 'spreadsheet_id is required'),
   index: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().nullable(),
-  color: z.string().optional().nullable(),
-  prefix: z.string().optional().nullable(),
   is_accsmarket: z.union([z.boolean(), z.string()]).optional(),
 })
 

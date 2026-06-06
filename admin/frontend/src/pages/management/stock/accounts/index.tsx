@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Search, History, RefreshCw, Sheet, Users, ArrowLeft, Heart, Target, CheckCircle2, Trash2, Copy, ScanLine, ShoppingCart } from "lucide-react"
+import { Search, RefreshCw, Sheet, Users, ArrowLeft, Heart, Target, CheckCircle2, Trash2, Copy, ScanLine, ShoppingCart } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,7 +14,6 @@ import { useAlert } from "@/stores/alertStore"
 import { useNavigate } from "react-router"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
-import AccountsPos from "./pos"
 
 interface Account {
   id: number
@@ -31,11 +30,6 @@ interface Account {
   isSold: boolean
 }
 
-interface Customer {
-  id: number
-  usernameSh?: string
-  nomorHp?: string
-}
 
 interface Source {
   id: number
@@ -60,16 +54,11 @@ const STATUS_OPTIONS = [
   { value: "all", label: "All Status" },
   { value: "Completed", label: "Completed" },
   { value: "Progress", label: "Progress" },
-  { value: "Warming", label: "Warming" },
   { value: "Error", label: "Error" },
 ]
 
 const PAGE_SIZE = 100
 
-const formatCurrency = (n: number | null) => {
-  if (n === null || n === undefined) return "-"
-  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n)
-}
 
 export default function AccountsPage() {
   const queryClient = useQueryClient()
@@ -82,20 +71,6 @@ export default function AccountsPage() {
   const [phoneModel, setPhoneModel] = useState("all")
   const [targetFollowers, setTargetFollowers] = useState("all")
   const [selectedIds, setSelectedIds] = useState<number[]>([])
-  const [posModalOpen, setPosModalOpen] = useState(false)
-
-  // POS state (lifted up)
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null)
-  const [selectedCustomerName, setSelectedCustomerName] = useState("")
-  const [customerSearchQuery, setCustomerSearchQuery] = useState("")
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
-  const [isShopee, setIsShopee] = useState(false)
-  const [shopeeOrderNumber, setShopeeOrderNumber] = useState("")
-  const [totalSalesInput, setTotalSalesInput] = useState("")
-  const [submittingSale, setSubmittingSale] = useState(false)
-  const customerDropdownRef = useRef<HTMLDivElement>(null)
-
   const [syncDialogOpen, setSyncDialogOpen] = useState(false)
   const [syncSourceId, setSyncSourceId] = useState("all")
   const [syncProgress, setSyncProgress] = useState<{
@@ -142,41 +117,6 @@ export default function AccountsPage() {
     onError: () => alert.error("Gagal", "Gagal memperbarui followers"),
   })
 
-  // Load customers on mount
-  useEffect(() => {
-    api.get("/management/accounts/search/customers").then((r) => {
-      setCustomers(r.data?.customers ?? [])
-    }).catch(() => {})
-  }, [])
-
-  // Customer search debounce
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (customerSearchQuery) {
-        api.get("/management/accounts/search/customers", { params: { search: customerSearchQuery } }).then((r) => {
-          setCustomers(r.data?.customers ?? [])
-        }).catch(() => {})
-      }
-    }, 300)
-    return () => clearTimeout(t)
-  }, [customerSearchQuery])
-
-  // Click outside customer dropdown
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node)) {
-        setShowCustomerDropdown(false)
-      }
-    }
-    if (showCustomerDropdown) document.addEventListener("mousedown", handler)
-    return () => document.removeEventListener("mousedown", handler)
-  }, [showCustomerDropdown])
-
-  const unitPrice = useMemo(() => {
-    if (!totalSalesInput || selectedIds.length === 0) return 0
-    return Math.floor(parseInt(totalSalesInput.replace(/\D/g, "") || "0") / selectedIds.length)
-  }, [totalSalesInput, selectedIds.length])
-
   // ── Scan selected ──────────────────────────────────────────────────────────
   const handleBulkScan = async () => {
     const toScan = (data?.accounts ?? []).filter((a) => selectedIds.includes(a.id))
@@ -211,48 +151,6 @@ export default function AccountsPage() {
     queryClient.invalidateQueries({ queryKey: ["management-accounts"] })
     alert.success("Berhasil", `${selectedIds.length} akun dihapus`)
     setSelectedIds([])
-  }
-
-  // ── Submit sale ────────────────────────────────────────────────────────────
-  const handleSubmitSale = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedCustomerId) { alert.error("Validasi", "Pilih customer"); return }
-    if (selectedIds.length === 0) { alert.error("Validasi", "Pilih akun"); return }
-    if (!totalSalesInput.trim()) { alert.error("Validasi", "Masukkan harga jual"); return }
-    setSubmittingSale(true)
-    try {
-      const selectedAccounts = (data?.accounts ?? []).filter((a) => selectedIds.includes(a.id))
-      const totalSalePrice = parseInt(totalSalesInput.replace(/\D/g, "") || "0")
-      const unitPriceCalc = totalSalePrice / selectedAccounts.length
-      const totalProfit = selectedAccounts.reduce((s, a) => s + (unitPriceCalc - (a.capital ?? 0)), 0)
-      const salesNumber = `SAL-${new Date().toISOString().split("T")[0].replace(/-/g, "")}-${Date.now().toString().slice(-3)}`
-      await api.post("/management/sales", {
-        sales_number: salesNumber,
-        customer_id: selectedCustomerId,
-        total_sale_price: totalSalePrice,
-        total_profit: totalProfit,
-        is_shopee: isShopee,
-        items: selectedAccounts.map((a) => ({
-          account_id: a.id,
-          unit_sale_price: unitPriceCalc,
-          profit: unitPriceCalc - (a.capital ?? 0),
-        })),
-      })
-      alert.success("Berhasil", "Penjualan berhasil dibuat")
-      setSelectedIds([])
-      setSelectedCustomerId(null)
-      setSelectedCustomerName("")
-      setCustomerSearchQuery("")
-      setTotalSalesInput("")
-      setIsShopee(false)
-      setShopeeOrderNumber("")
-      setPosModalOpen(false)
-      queryClient.invalidateQueries({ queryKey: ["management-accounts"] })
-    } catch {
-      alert.error("Gagal", "Gagal membuat penjualan")
-    } finally {
-      setSubmittingSale(false)
-    }
   }
 
   const runSync = async () => {
@@ -331,7 +229,7 @@ export default function AccountsPage() {
 
   return (
     <div>
-      <div className={`space-y-5 ${selectedIds.length > 0 ? "pb-24" : ""}`}>
+      <div className={`space-y-5 ${selectedIds.length > 0 ? "pb-20 sm:pb-24" : ""}`}>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="size-8" onClick={() => navigate(-1)}>
             <ArrowLeft className="size-4" />
@@ -340,7 +238,27 @@ export default function AccountsPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
+        {/* Mobile: compact single-line rows */}
+        <div className="grid grid-cols-2 gap-2 sm:hidden">
+          {[
+            { label: "Total Accounts", value: totalCount, icon: Users, color: "text-blue-600" },
+            { label: "Total Followers", value: (stats?.total_followers ?? 0).toLocaleString("id-ID"), icon: Heart, color: "text-red-500" },
+            { label: "Target Followers", value: (stats?.target_followers ?? 0).toLocaleString("id-ID"), icon: Target, color: "text-blue-600" },
+            { label: "Completed", value: `${completedCount}/${totalCount}`, icon: CheckCircle2, color: "text-emerald-600" },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label}>
+              <CardContent className="p-3 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground truncate">{label}</p>
+                  <p className="text-base font-bold leading-tight">{value}</p>
+                </div>
+                <Icon className={`size-5 shrink-0 ${color}`} />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        {/* Desktop: original cards */}
+        <div className="hidden sm:grid grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4 flex items-center justify-between">
               <div>
@@ -404,7 +322,7 @@ export default function AccountsPage() {
                 className="pl-9"
               />
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <Dropdown options={sourceOptions} value={sourceId} onChange={(v) => { setSourceId(v); setPage(1) }} className="w-full" />
               <Dropdown options={STATUS_OPTIONS} value={status} onChange={(v) => { setStatus(v); setPage(1) }} className="w-full" />
               <Dropdown options={phoneModelOptions} value={phoneModel} onChange={(v) => { setPhoneModel(v); setPage(1) }} className="w-full" />
@@ -414,7 +332,7 @@ export default function AccountsPage() {
         </Card>
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <Button
             variant="outline"
             className="w-full gap-2 border-blue-500 text-blue-600 hover:bg-blue-50"
@@ -433,18 +351,10 @@ export default function AccountsPage() {
             <Sheet className={`size-4 ${syncProgress.status === "syncing" ? "animate-spin" : ""}`} />
             {syncProgress.status === "syncing" ? "Syncing..." : "Sync Sheets"}
           </Button>
-          <Button
-            variant="outline"
-            className="w-full gap-2 border-blue-500 text-blue-600 hover:bg-blue-50"
-            onClick={() => navigate("/stock/accounts/history")}
-          >
-            <History className="size-4" />
-            History
-          </Button>
         </div>
 
-        {/* Table */}
-        <Card className="overflow-hidden p-0">
+        {/* Desktop: table */}
+        <Card className="overflow-hidden p-0 hidden sm:block">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -479,8 +389,8 @@ export default function AccountsPage() {
                       <TableCell>{acc.currentFollowers?.toLocaleString("id-ID") ?? "-"}</TableCell>
                       <TableCell>{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</TableCell>
                       <TableCell>
-                        <Badge variant={acc.accountStatus === "Completed" ? "completed" : "progress"}>
-                          {acc.accountStatus === "Completed" ? "Completed" : "Progress"}
+                        <Badge variant={acc.accountStatus?.toLowerCase() === "completed" ? "completed" : acc.accountStatus?.toLowerCase() === "error" ? "destructive" : "progress"}>
+                          {acc.accountStatus?.toLowerCase() === "completed" ? "Completed" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Progress"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{acc.loginApp ?? "-"}</TableCell>
@@ -511,58 +421,121 @@ export default function AccountsPage() {
             <Pagination page={page} total={data?.pagination?.total ?? 0} pageSize={PAGE_SIZE} onChange={setPage} />
           </CardContent>
         </Card>
-      </div>
 
-      {/* ── POS Sidebar (fixed right) ─────────────────────────────────────── */}
-      <AccountsPos
-        isOpen={posModalOpen}
-        onClose={() => setPosModalOpen(false)}
-        selectedIds={selectedIds}
-        accounts={accounts}
-        customers={customers}
-        customerDropdownRef={customerDropdownRef}
-        selectedCustomerId={selectedCustomerId}
-        selectedCustomerName={selectedCustomerName}
-        customerSearchQuery={customerSearchQuery}
-        showCustomerDropdown={showCustomerDropdown}
-        isShopee={isShopee}
-        shopeeOrderNumber={shopeeOrderNumber}
-        totalSalesInput={totalSalesInput}
-        unitPrice={unitPrice}
-        submittingSale={submittingSale}
-        onCustomerQueryChange={setCustomerSearchQuery}
-        onCustomerSelect={(id, name) => { setSelectedCustomerId(id); setSelectedCustomerName(name); setCustomerSearchQuery(""); setShowCustomerDropdown(false) }}
-        onDropdownFocus={() => setShowCustomerDropdown(true)}
-        onClearCustomer={() => setSelectedCustomerId(null)}
-        onSetIsShopee={setIsShopee}
-        onSetShopeeOrderNumber={setShopeeOrderNumber}
-        onSetTotalSalesInput={setTotalSalesInput}
-        onSubmitSale={handleSubmitSale}
-        onRemoveAccount={(id) => setSelectedIds((prev) => prev.filter((x) => x !== id))}
-        formatCurrency={formatCurrency}
-      />
+        {/* Mobile: cards */}
+        <div className="flex flex-col gap-3 sm:hidden">
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
+          ) : !accounts.length ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No accounts found.</p>
+          ) : (
+            accounts.map((acc) => (
+              <Card key={acc.id} className={selectedIds.includes(acc.id) ? "ring-2 ring-primary" : ""}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Checkbox checked={selectedIds.includes(acc.id)} onCheckedChange={() => toggleOne(acc.id)} className="shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{acc.username ?? "-"}</p>
+                        <p className="text-xs text-muted-foreground truncate">{acc.email ?? "-"}</p>
+                      </div>
+                    </div>
+                    <Badge variant={acc.accountStatus?.toLowerCase() === "completed" ? "completed" : acc.accountStatus?.toLowerCase() === "error" ? "destructive" : "progress"} className="shrink-0">
+                      {acc.accountStatus?.toLowerCase() === "completed" ? "Completed" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Progress"}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Followers</span>
+                      <span className="font-medium">{acc.currentFollowers?.toLocaleString("id-ID") ?? "-"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Target</span>
+                      <span className="font-medium">{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Capital</span>
+                      <span className="font-medium">{acc.capital ? formatIDR(acc.capital) : "-"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Phone</span>
+                      <span className="font-medium truncate">{acc.phoneModel ?? "-"}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <span className="text-xs text-muted-foreground">{acc.loginApp ?? "-"}</span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost" size="icon" className="size-8 text-blue-600 hover:text-blue-700"
+                        onClick={() => refreshMutation.mutate(acc.id)}
+                        disabled={refreshMutation.isPending}
+                      >
+                        <RefreshCw className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(acc)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+          {!!accounts.length && (
+            <Pagination page={page} total={data?.pagination?.total ?? 0} pageSize={PAGE_SIZE} onChange={setPage} />
+          )}
+        </div>
+      </div>
 
       {/* ── Floating Bulk Action Bar ──────────────────────────────────────── */}
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 bg-background border rounded-lg shadow-2xl px-4 py-3 flex items-center gap-3">
-          <span className="text-sm font-medium text-muted-foreground mr-1">{selectedIds.length} akun</span>
-          <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setPosModalOpen(true)}>
-            <ShoppingCart className="size-3.5" />
-            Sold
-          </Button>
-          <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
-            <ScanLine className="size-3.5" />
-            Scan
-          </Button>
-          <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
-            <Copy className="size-3.5" />
-            Copy
-          </Button>
-          <Button size="sm" variant="destructive" className="gap-1.5" onClick={handleBulkDelete}>
-            <Trash2 className="size-3.5" />
-            Delete
-          </Button>
-        </div>
+        <>
+          {/* Mobile: full-width bottom bar */}
+          <div className="sm:hidden fixed bottom-0 left-0 right-0 z-20 bg-background border-t shadow-2xl px-4 pt-2 pb-3 flex flex-col gap-2">
+            <span className="text-xs font-medium text-muted-foreground">{selectedIds.length} akun dipilih</span>
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/stock/accounts/pos", { state: { selectedIds } })}>
+                <ShoppingCart className="size-3.5" />
+                Sold
+              </Button>
+              <Button size="sm" className="flex-1 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
+                <ScanLine className="size-3.5" />
+                Scan
+              </Button>
+              <Button size="sm" className="flex-1 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
+                <Copy className="size-3.5" />
+                Copy
+              </Button>
+              <Button size="sm" variant="destructive" className="flex-1 gap-1.5" onClick={handleBulkDelete}>
+                <Trash2 className="size-3.5" />
+                Delete
+              </Button>
+            </div>
+          </div>
+          {/* Desktop: centered floating pill */}
+          <div className="hidden sm:flex fixed bottom-4 left-1/2 -translate-x-1/2 z-20 bg-background border rounded-lg shadow-2xl px-4 py-3 items-center gap-3">
+            <span className="text-sm font-medium text-muted-foreground mr-1">{selectedIds.length} akun</span>
+            <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/stock/accounts/pos", { state: { selectedIds } })}>
+              <ShoppingCart className="size-3.5" />
+              Sold
+            </Button>
+            <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
+              <ScanLine className="size-3.5" />
+              Scan
+            </Button>
+            <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
+              <Copy className="size-3.5" />
+              Copy
+            </Button>
+            <Button size="sm" variant="destructive" className="gap-1.5" onClick={handleBulkDelete}>
+              <Trash2 className="size-3.5" />
+              Delete
+            </Button>
+          </div>
+        </>
       )}
 
       {/* Scan Dialog */}

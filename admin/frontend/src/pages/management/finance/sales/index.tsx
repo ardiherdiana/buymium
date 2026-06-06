@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { Eye, Trash2, ShoppingCart, Wallet, TrendingUp, BarChart2 } from "lucide-react"
+import { type DateRange } from "react-day-picker"
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
@@ -12,11 +13,12 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyRow, LoadingRow, Pagination } from "@/components/ui/table-extras"
+import { DateRangePicker } from "@/components/ui/date-range-picker"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
 import { useAlert } from "@/stores/alertStore"
 
-interface Source { id: number; name: string; color: string }
+interface Source { id: number; name: string }
 interface Sale {
   id: number
   salesNumber: string
@@ -40,11 +42,22 @@ function StatCard({ title, value, icon: Icon, valueClass, loading }: {
 }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
+      {/* Mobile: compact */}
+      <CardContent className="sm:hidden p-3 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground truncate">{title}</p>
+          {loading ? <Skeleton className="h-5 w-20 mt-0.5" /> : (
+            <p className={`text-base font-bold leading-tight ${valueClass ?? "text-foreground"}`}>{value}</p>
+          )}
+        </div>
+        <Icon className="size-5 shrink-0 text-muted-foreground" />
+      </CardContent>
+      {/* Desktop: original */}
+      <CardHeader className="hidden sm:flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
         <Icon className="size-4 text-muted-foreground" />
       </CardHeader>
-      <CardContent>
+      <CardContent className="hidden sm:block">
         {loading ? <Skeleton className="h-7 w-36" /> : (
           <p className={`text-2xl font-bold ${valueClass ?? "text-foreground"}`}>{value}</p>
         )}
@@ -53,7 +66,12 @@ function StatCard({ title, value, icon: Icon, valueClass, loading }: {
   )
 }
 
-const MONTH_LABEL = new Date().toLocaleString("id-ID", { month: "long", year: "numeric" })
+const toDateStr = (d: Date) => {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
 
 export default function SalesPage() {
   const navigate = useNavigate()
@@ -62,12 +80,27 @@ export default function SalesPage() {
 
   const [search, setSearch] = useState("")
   const [sourceFilter, setSourceFilter] = useState("")
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    const today = new Date()
+    return { from: new Date(today.getFullYear(), today.getMonth(), 1), to: today }
+  })
   const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useQuery<SalesResponse>({
-    queryKey: ["management-sales", page, search, sourceFilter],
+  const dateFrom = dateRange?.from ? toDateStr(dateRange.from) : undefined
+  const dateTo = dateRange?.to ? toDateStr(dateRange.to) : undefined
+
+  const { data, isLoading, isFetching } = useQuery<SalesResponse>({
+    queryKey: ["management-sales", page, search, sourceFilter, dateFrom, dateTo],
     queryFn: () =>
-      api.get("/management/sales", { params: { page, search: search || undefined, source: sourceFilter || undefined } }).then((r) => r.data),
+      api.get("/management/sales", {
+        params: {
+          page,
+          search: search || undefined,
+          source: sourceFilter || undefined,
+          date_from: dateFrom,
+          date_to: dateTo,
+        },
+      }).then((r) => r.data),
   })
 
   const { data: sourcesData } = useQuery<{ sources: Source[] }>({
@@ -101,8 +134,8 @@ export default function SalesPage() {
         <p className="text-sm text-muted-foreground mt-1">Data penjualan management</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Penjualan" value={(stats?.totalSales ?? 0).toLocaleString("id-ID")} icon={ShoppingCart} loading={isLoading} />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatCard title="Total Penjualan" value={(stats?.totalSales ?? 0).toLocaleString("id-ID")} icon={ShoppingCart} loading={isLoading || isFetching} />
         <StatCard title="Total Modal" value={formatIDR(stats?.totalCapital ?? 0)} icon={Wallet} loading={isLoading} />
         <StatCard title="Total Harga Jual" value={formatIDR(stats?.totalSalePrice ?? 0)} icon={BarChart2} loading={isLoading} />
         <StatCard title="Total Profit" value={formatIDR(stats?.totalProfit ?? 0)} icon={TrendingUp} valueClass="text-green-600" loading={isLoading} />
@@ -111,7 +144,7 @@ export default function SalesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Sales — {MONTH_LABEL}</CardTitle>
+            <CardTitle className="text-sm font-medium">Sales{dateFrom ? ` — ${dateFrom}${dateTo ? ` s/d ${dateTo}` : ""}` : ""}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
@@ -132,7 +165,7 @@ export default function SalesPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Profit & Revenue — {MONTH_LABEL}</CardTitle>
+            <CardTitle className="text-sm font-medium">Profit & Revenue{dateFrom ? ` — ${dateFrom}${dateTo ? ` s/d ${dateTo}` : ""}` : ""}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
@@ -163,12 +196,12 @@ export default function SalesPage() {
         </Card>
       </div>
 
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex flex-col sm:flex-row gap-3 sm:flex-wrap sm:items-center">
         <Input
           placeholder="Cari sales number / pelanggan..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-          className="w-64"
+          className="w-full sm:w-64"
         />
         <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v === "__all" ? "" : v); setPage(1) }}>
           <SelectTrigger className="w-40">
@@ -181,9 +214,15 @@ export default function SalesPage() {
             ))}
           </SelectContent>
         </Select>
+        <DateRangePicker
+          value={dateRange}
+          onChange={(range) => { setDateRange(range); setPage(1) }}
+          className="w-64"
+        />
       </div>
 
-      <Card className="overflow-hidden p-0">
+      {/* Desktop: table */}
+      <Card className="overflow-hidden p-0 hidden sm:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -199,7 +238,7 @@ export default function SalesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isLoading || isFetching ? (
                 <LoadingRow colSpan={8} />
               ) : sales.length === 0 ? (
                 <EmptyRow colSpan={8} message="Tidak ada data penjualan" />
@@ -211,10 +250,7 @@ export default function SalesPage() {
                   <TableCell className="font-mono text-xs">{sale.salesNumber}</TableCell>
                   <TableCell>{sale.customer?.usernameSh ?? "-"}</TableCell>
                   <TableCell>
-                    <span
-                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
-                      style={{ backgroundColor: sale.source?.color ?? "#6b7280" }}
-                    >
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                       {sale.source?.name ?? "-"}
                     </span>
                   </TableCell>
@@ -240,6 +276,49 @@ export default function SalesPage() {
           <Pagination page={page} total={pagination?.total ?? 0} pageSize={pagination?.limit ?? 20} onChange={setPage} />
         </CardContent>
       </Card>
+
+      {/* Mobile: cards */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        {isLoading || isFetching ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
+        ) : sales.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Tidak ada data penjualan</p>
+        ) : sales.map((sale) => (
+          <Card key={sale.id} className="cursor-pointer active:opacity-70" onClick={() => navigate(`/finance/sales/${sale.id}`)}>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-mono text-xs text-muted-foreground">{sale.salesNumber}</p>
+                  <p className="font-medium text-sm">{sale.customer?.usernameSh ?? "-"}</p>
+                </div>
+                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 shrink-0">
+                  {sale.source?.name ?? "-"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground text-xs">
+                  {new Date(sale.createdAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                </span>
+                <div className="text-right">
+                  <p className="font-medium">{formatIDR(sale.totalSalePrice)}</p>
+                  <p className="text-xs font-medium text-green-600">{formatIDR(sale.totalProfit)}</p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-1 pt-1 border-t" onClick={(e) => e.stopPropagation()}>
+                <Button variant="ghost" size="icon" className="size-7" onClick={() => navigate(`/finance/sales/${sale.id}`)}>
+                  <Eye className="size-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="size-7 hover:text-destructive" onClick={() => handleDelete(sale)}>
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {sales.length > 0 && (
+          <Pagination page={page} total={pagination?.total ?? 0} pageSize={pagination?.limit ?? 20} onChange={setPage} />
+        )}
+      </div>
     </div>
   )
 }

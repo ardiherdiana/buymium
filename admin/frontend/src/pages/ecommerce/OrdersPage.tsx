@@ -74,8 +74,9 @@ export default function OrdersPage() {
         <p className="text-sm text-muted-foreground mt-1">Kelola pesanan pelanggan</p>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      {/* Filters — column on mobile (search first), row on sm+ */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <div className="relative flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             placeholder="Cari nama atau email pelanggan..."
@@ -88,11 +89,12 @@ export default function OrdersPage() {
           options={STATUS_OPTIONS}
           value={status}
           onChange={(v) => { setStatus(v); setPage(1) }}
-          className="w-44"
+          className="w-full sm:w-44"
         />
       </div>
 
-      <Card className="overflow-hidden p-0">
+      {/* Desktop: table */}
+      <Card className="overflow-hidden p-0 hidden sm:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -153,6 +155,55 @@ export default function OrdersPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Mobile: cards */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
+        ) : !data?.data?.length ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Tidak ada pesanan ditemukan</p>
+        ) : (
+          data.data.map((order) => (
+            <Card
+              key={order.id}
+              className="cursor-pointer active:opacity-70"
+              onClick={() => navigate(`/ecommerce/orders/${order.id}`)}
+            >
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{order.user.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{order.user.email}</p>
+                  </div>
+                  <Badge variant={statusVariant[order.status] ?? "outline"} className="shrink-0">
+                    {statusLabel[order.status] ?? order.status}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground truncate">{order.product.title}</p>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="font-mono">#{order.id}</span>
+                  <span className="font-semibold text-foreground text-sm">{formatIDR(order.totalPrice)}</span>
+                  <span>
+                    {new Date(order.createdAt).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+        {!!data?.data?.length && (
+          <Pagination
+            page={page}
+            total={data?.meta?.total ?? 0}
+            pageSize={PAGE_SIZE}
+            onChange={setPage}
+          />
+        )}
+      </div>
     </div>
   )
 }

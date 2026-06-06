@@ -7,6 +7,7 @@ export const userRateLimit = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   keyGenerator: (req: Request) => {
     return req.user?.userId?.toString() ?? req.ip ?? 'unknown'
   },

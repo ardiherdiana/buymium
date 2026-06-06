@@ -106,7 +106,7 @@ function UploadPage() {
         <h1 className="text-xl font-semibold">Kelola Stok Akun</h1>
       </div>
 
-      <div className="grid grid-cols-[380px_1fr] gap-6 items-start">
+      <div className="grid grid-cols-1 sm:grid-cols-[380px_1fr] gap-6 items-start">
         {/* Left — settings */}
         <div className="space-y-4">
           <Card>
@@ -196,7 +196,6 @@ function ProductStockTable({ productId }: { productId: string }) {
   const queryClient = useQueryClient()
   const alert = useAlert()
   const [page, setPage] = useState(1)
-  const [uploadOpen, setUploadOpen] = useState(false)
 
   const { data, isLoading } = useQuery<StocksResponse>({
     queryKey: ["stocks", productId, page],
@@ -228,13 +227,14 @@ function ProductStockTable({ productId }: { productId: string }) {
           <h1 className="text-xl font-semibold">Stok Produk</h1>
           <p className="text-sm text-muted-foreground">{data?.meta?.total ?? 0} stok</p>
         </div>
-        <Button onClick={() => setUploadOpen(true)}>
+        <Button onClick={() => navigate("/ecommerce/stocks")}>
           <Plus className="size-4 mr-2" />
           Upload Stok
         </Button>
       </div>
 
-      <Card className="overflow-hidden p-0">
+      {/* Desktop: table */}
+      <Card className="overflow-hidden p-0 hidden sm:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -286,96 +286,54 @@ function ProductStockTable({ productId }: { productId: string }) {
         </CardContent>
       </Card>
 
-      {/* Inline upload panel */}
-      {uploadOpen && (
-        <Card>
-          <CardContent className="p-5">
-            <InlineUpload
-              productId={productId}
-              onSuccess={() => {
-                queryClient.invalidateQueries({ queryKey: ["stocks", productId] })
-                setUploadOpen(false)
-              }}
-              onCancel={() => setUploadOpen(false)}
-            />
-          </CardContent>
-        </Card>
-      )}
+      {/* Mobile: cards */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
+        ) : !data?.data?.length ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Tidak ada stok ditemukan</p>
+        ) : (
+          data.data.map((stock) => (
+            <Card key={stock.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="font-mono text-sm font-medium truncate">{stock.username}</p>
+                    <p className="font-mono text-xs text-muted-foreground truncate">{stock.email || "-"}</p>
+                  </div>
+                  <Badge variant={stock.status === "sold" ? "outline" : "completed"} className="shrink-0">
+                    {stock.status === "sold" ? "Terjual" : "Tersedia"}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(stock.createdAt).toLocaleDateString("id-ID", {
+                      day: "2-digit", month: "short", year: "numeric",
+                    })}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(stock)}
+                    disabled={stock.status === "sold"}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+        {!!data?.data?.length && (
+          <Pagination page={page} total={data?.meta?.total ?? 0} pageSize={PAGE_SIZE} onChange={setPage} />
+        )}
+      </div>
+
     </div>
   )
 }
 
-function InlineUpload({
-  productId,
-  onSuccess,
-  onCancel,
-}: {
-  productId: string
-  onSuccess: () => void
-  onCancel: () => void
-}) {
-  const alert = useAlert()
-  const [delimiter, setDelimiter] = useState("|")
-  const [raw, setRaw] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-
-  const parsed = parseBulkLines(raw, delimiter)
-
-  const handleSubmit = async () => {
-    if (parsed.length === 0) { alert.error("Validasi", "Tidak ada data valid"); return }
-    setIsLoading(true)
-    try {
-      await api.post("/stocks/bulk", { productId: parseInt(productId), data: parsed })
-      alert.success("Berhasil", `${parsed.length} stok berhasil disimpan`)
-      onSuccess()
-    } catch {
-      alert.error("Gagal", "Gagal menyimpan stok")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  return (
-    <div className="grid grid-cols-[320px_1fr] gap-5 items-start">
-      <div className="space-y-4">
-        <p className="text-sm font-semibold">Pilih & Atur</p>
-        <div className="space-y-1.5">
-          <Label>Pemisah Kolom (Delimiter)</Label>
-          <Input value={delimiter} onChange={(e) => setDelimiter(e.target.value)} className="font-mono w-24" />
-        </div>
-        <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-3 space-y-1">
-          <div className="flex items-center gap-1.5">
-            <span className="size-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">i</span>
-            <span className="text-xs font-semibold text-blue-700 dark:text-blue-400">INFORMASI FORMAT</span>
-          </div>
-          <p className="text-xs font-mono text-blue-700 dark:text-blue-300">
-            email{delimiter}pass_email{delimiter}username{delimiter}password{delimiter}2fa
-          </p>
-          <p className="text-xs font-mono text-blue-700 dark:text-blue-300">
-            Minimal: {delimiter}username{delimiter}password
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button className="flex-1 gap-2" onClick={handleSubmit} disabled={isLoading}>
-            <Send className="size-4" />
-            {isLoading ? "Menyimpan..." : "Simpan"}
-          </Button>
-          <Button variant="outline" onClick={onCancel}>Batal</Button>
-        </div>
-      </div>
-      <div className="space-y-1.5">
-        <p className="text-sm font-semibold">Input Data Massal</p>
-        <Textarea
-          className="font-mono text-xs min-h-[200px]"
-          placeholder={`Masukkan data akun...\nContoh: email${delimiter}pass_email${delimiter}username${delimiter}password`}
-          value={raw}
-          onChange={(e) => setRaw(e.target.value)}
-        />
-        {raw && <p className="text-xs text-muted-foreground">{parsed.length} baris valid</p>}
-      </div>
-    </div>
-  )
-}
 
 // ─── Main export ─────────────────────────────────────────────────────────────
 

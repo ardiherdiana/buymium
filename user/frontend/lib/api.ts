@@ -3,6 +3,7 @@ const BASE_URL =
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const fetchInit: RequestInit & { next?: { revalidate?: number } } = {
+    signal: AbortSignal.timeout(8000),
     ...init,
     next: { revalidate: 60 },
   }

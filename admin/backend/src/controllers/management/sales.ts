@@ -134,13 +134,11 @@ export const SalesController = {
           source: sale.customer.sourceRel ? {
             id: sale.customer.sourceRel.id,
             name: sale.customer.sourceRel.name,
-            color: sale.customer.sourceRel.color,
           } : undefined,
         } : undefined,
         source: sale.source ? {
           id: sale.source.id,
           name: sale.source.name,
-          color: sale.source.color,
         } : undefined,
       }))
 

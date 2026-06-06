@@ -241,14 +241,13 @@ export const AnalyticsController = {
 
       // Fetch sources once — reused for profitBySource map and for the response
       const allSources = await prisma.source.findMany()
-      const sourcesMap = new Map(allSources.map((s) => [s.id, { name: s.name, color: s.color }]))
+      const sourcesMap = new Map(allSources.map((s) => [s.id, { name: s.name }]))
 
       const profitBySource = profitBySourceData.map((item) => {
         const source = sourcesMap.get(item.sourceId ?? -1)
         return {
           name: source?.name || 'Unknown',
           value: item._sum.totalProfit || 0,
-          color: source?.color,
         }
       })
 

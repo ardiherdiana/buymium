@@ -153,7 +153,7 @@ export default function ProductFormPage() {
 
   if (isEdit && isLoading) {
     return (
-      <div className="grid grid-cols-[1fr_280px] gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_280px] gap-6">
         <div className="space-y-4">
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-64 w-full" />
@@ -165,7 +165,7 @@ export default function ProductFormPage() {
 
   return (
     <form onSubmit={handleSubmit((d) => mutation.mutate(d))}>
-      <div className="grid grid-cols-[1fr_280px] gap-6 items-start">
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_280px] gap-6 items-start">
         {/* Left column */}
         <div className="space-y-4">
           {/* Title & Description card */}
@@ -211,7 +211,7 @@ export default function ProductFormPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="price">Harga Satuan (IDR)</Label>
                   <Input id="price" type="number" {...register("price", { valueAsNumber: true })} placeholder="0" />

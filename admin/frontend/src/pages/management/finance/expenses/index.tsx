@@ -196,7 +196,7 @@ export default function ExpensesPage() {
               className="pl-9"
             />
           </div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Dropdown options={categoryOptions} value={categoryId} onChange={(v) => { setCategoryId(v); setPage(1) }} className="w-full" />
             <Dropdown options={sourceOptions} value={sourceId} onChange={(v) => { setSourceId(v); setPage(1) }} className="w-full" />
             <Dropdown options={MONTH_OPTIONS} value={month} onChange={(v) => { setMonth(v); setPage(1) }} className="w-full" />
@@ -205,8 +205,8 @@ export default function ExpensesPage() {
         </CardContent>
       </Card>
 
-      {/* Table */}
-      <Card className="overflow-hidden p-0">
+      {/* Desktop: table */}
+      <Card className="overflow-hidden p-0 hidden sm:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -225,41 +225,17 @@ export default function ExpensesPage() {
               ) : (
                 expenses.map((exp, idx) => (
                   <TableRow key={exp.id}>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {(page - 1) * PAGE_SIZE + idx + 1}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{(page - 1) * PAGE_SIZE + idx + 1}</TableCell>
                     <TableCell className="text-sm">
                       {new Date(exp.expenseDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
                     </TableCell>
-                    <TableCell>
-                      {exp.category ? (
-                        <Badge variant="blue">{exp.category.name}</Badge>
-                      ) : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {exp.source ? (
-                        <Badge variant="warning">{exp.source.name}</Badge>
-                      ) : "-"}
-                    </TableCell>
+                    <TableCell>{exp.category ? <Badge variant="blue">{exp.category.name}</Badge> : "-"}</TableCell>
+                    <TableCell>{exp.source ? <Badge variant="warning">{exp.source.name}</Badge> : "-"}</TableCell>
                     <TableCell className="text-right font-medium">{formatIDR(exp.amount)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8"
-                          onClick={() => handleEdit(exp)}
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(exp)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
+                        <Button variant="ghost" size="icon" className="size-8" onClick={() => handleEdit(exp)}><Pencil className="size-4" /></Button>
+                        <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" onClick={() => handleDelete(exp)}><Trash2 className="size-4" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -270,6 +246,39 @@ export default function ExpensesPage() {
           <Pagination page={page} total={data?.pagination?.total ?? 0} pageSize={PAGE_SIZE} onChange={setPage} />
         </CardContent>
       </Card>
+
+      {/* Mobile: cards */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
+        ) : !expenses.length ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Tidak ada pengeluaran ditemukan</p>
+        ) : (
+          expenses.map((exp) => (
+            <Card key={exp.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(exp.expenseDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {exp.category && <Badge variant="blue">{exp.category.name}</Badge>}
+                      {exp.source && <Badge variant="warning">{exp.source.name}</Badge>}
+                    </div>
+                  </div>
+                  <p className="font-semibold text-sm shrink-0">{formatIDR(exp.amount)}</p>
+                </div>
+                <div className="flex justify-end gap-1 mt-3 pt-3 border-t">
+                  <Button variant="ghost" size="icon" className="size-8" onClick={() => handleEdit(exp)}><Pencil className="size-4" /></Button>
+                  <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" onClick={() => handleDelete(exp)}><Trash2 className="size-4" /></Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+        {!!expenses.length && <Pagination page={page} total={data?.pagination?.total ?? 0} pageSize={PAGE_SIZE} onChange={setPage} />}
+      </div>
 
       <Fab onClick={handleAdd} title="Tambah Pengeluaran" />
 

@@ -114,7 +114,7 @@ router.post('/cart', requireAuth, userRateLimit, validate(CartOrderSchema), asyn
 
 router.post('/:id/proof', requireAuth, userRateLimit, upload.single('proof'), async (req: Request, res: Response) => {
   const { userId } = req.user!
-  const orderId = parseInt(req.params.id, 10)
+  const orderId = parseInt(req.params.id as string, 10)
   const { bankAccountId } = req.body as { bankAccountId?: string }
 
   if (!req.file) { res.status(400).json({ error: 'File bukti transfer wajib diupload' }); return }
@@ -211,7 +211,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 
 router.post('/:id/cancel', requireAuth, async (req: Request, res: Response) => {
   const { userId } = req.user!
-  const orderId = parseInt(req.params.id, 10)
+  const orderId = parseInt(req.params.id as string, 10)
   if (isNaN(orderId)) { res.status(400).json({ error: 'ID pesanan tidak valid' }); return }
 
   const order = await db.order.findFirst({ where: { id: orderId, userId } })
@@ -232,7 +232,7 @@ router.post('/:id/cancel', requireAuth, async (req: Request, res: Response) => {
 
 router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   const { userId } = req.user!
-  const orderId = parseInt(req.params.id, 10)
+  const orderId = parseInt(req.params.id as string, 10)
   if (isNaN(orderId)) { res.status(400).json({ error: 'ID pesanan tidak valid' }); return }
 
   const order = await db.order.findFirst({
@@ -259,7 +259,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
 
 router.get('/:id/download', requireAuth, async (req: Request, res: Response) => {
   const { userId } = req.user!
-  const orderId = parseInt(req.params.id, 10)
+  const orderId = parseInt(req.params.id as string, 10)
   if (isNaN(orderId)) { res.status(400).json({ error: 'ID pesanan tidak valid' }); return }
 
   const order = await db.order.findFirst({
@@ -294,7 +294,7 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
 
 router.get('/:id/invoice', requireAuth, async (req: Request, res: Response) => {
   const { userId } = req.user!
-  const orderId = parseInt(req.params.id, 10)
+  const orderId = parseInt(req.params.id as string, 10)
   if (isNaN(orderId)) { res.status(400).json({ error: 'ID pesanan tidak valid' }); return }
 
   const order = await db.order.findFirst({

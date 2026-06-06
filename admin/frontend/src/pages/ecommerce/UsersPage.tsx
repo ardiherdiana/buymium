@@ -56,7 +56,8 @@ export default function UsersPage() {
         />
       </div>
 
-      <Card className="overflow-hidden p-0">
+      {/* Desktop: table */}
+      <Card className="overflow-hidden p-0 hidden sm:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -110,6 +111,56 @@ export default function UsersPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Mobile: cards */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
+        ) : !data?.data?.length ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Tidak ada pengguna ditemukan</p>
+        ) : (
+          data.data.map((user) => (
+            <Card key={user.id}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <Avatar className="size-10 shrink-0">
+                    <AvatarFallback className="text-sm bg-primary/10 text-primary">
+                      {user.name?.charAt(0).toUpperCase() ?? "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm truncate">{user.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground shrink-0">
+                    {new Date(user.createdAt).toLocaleDateString("id-ID", {
+                      day: "2-digit", month: "short", year: "numeric",
+                    })}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between mt-3 pt-3 border-t text-sm">
+                  <div className="text-center">
+                    <p className="font-semibold">{user.orderCount}</p>
+                    <p className="text-xs text-muted-foreground">Pesanan</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-semibold">{formatIDR(user.totalSpent)}</p>
+                    <p className="text-xs text-muted-foreground">Total Belanja</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+        {!!data?.data?.length && (
+          <Pagination
+            page={page}
+            total={data?.meta?.total ?? 0}
+            pageSize={PAGE_SIZE}
+            onChange={setPage}
+          />
+        )}
+      </div>
     </div>
   )
 }

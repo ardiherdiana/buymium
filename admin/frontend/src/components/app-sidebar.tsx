@@ -56,9 +56,7 @@ export function AppSidebar({ navGroups }: { navGroups: NavGroup[] }) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild tooltip="Pilih Modul">
               <Link to="/">
-                <div className="flex size-8 items-center justify-center bg-primary text-primary-foreground text-sm font-bold shrink-0">
-                  B
-                </div>
+                <img src="/buymium_logo.png" alt="Buymium" className="size-8 shrink-0 object-contain" />
                 <span className="font-semibold">Buymium Admin</span>
               </Link>
             </SidebarMenuButton>
@@ -87,11 +85,7 @@ export function AppSidebar({ navGroups }: { navGroups: NavGroup[] }) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
-                  <Avatar className="h-7 w-7 rounded-none">
-                    <AvatarFallback className="rounded-none text-xs bg-primary/10 text-primary">
-                      {user?.name?.charAt(0).toUpperCase() ?? "A"}
-                    </AvatarFallback>
-                  </Avatar>
+                  <img src="/buymium_logo.png" alt="Buymium" className="h-7 w-7 shrink-0 object-contain" />
                   <div className="grid flex-1 text-left text-xs leading-tight">
                     <span className="truncate font-medium">{user?.name}</span>
                     <span className="truncate text-xs text-muted-foreground capitalize">{user?.role}</span>

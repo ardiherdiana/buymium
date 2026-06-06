@@ -43,12 +43,6 @@ export const AccsmarketsController = {
         where.sourceId = parseInt(sourceIdFilter)
       }
 
-      // Filter by sheets field
-      const sheetsFilter = req.query.sheets as string
-      if (sheetsFilter && sheetsFilter !== 'all') {
-        where.sheets = sheetsFilter
-      }
-
       // Only query accsmarket sources
       const accsmarketSources = await prisma.source.findMany({
         where: { isAccsmarket: true },
@@ -66,15 +60,6 @@ export const AccsmarketsController = {
         skip: (page - 1) * limit,
         take: limit,
       })
-
-      // Distinct sheets values
-      const sheetsRaw = await prisma.accsmarket.findMany({
-        where: { sheets: { not: null }, isSold: false },
-        select: { sheets: true },
-        distinct: ['sheets'],
-        orderBy: { sheets: 'asc' },
-      })
-      const sheetsList = sheetsRaw.map((s) => s.sheets).filter((s): s is string => !!s)
 
       const yearsRaw = await prisma.accsmarket.findMany({
         where: { year: { not: null }, isSold: false },
@@ -121,7 +106,6 @@ export const AccsmarketsController = {
       res.json({
         accsmarkets,
         sources: accsmarketSources,
-        sheets: sheetsList,
         targetFollowers,
         years,
         customers,

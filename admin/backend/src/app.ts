@@ -1,6 +1,8 @@
 import './config/env'
 import express from 'express'
 import cors from 'cors'
+import path from 'path'
+import fs from 'fs'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import swaggerUi from 'swagger-ui-express'
@@ -78,6 +80,11 @@ app.use('/api/', apiLimiter)
 // API Docs
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 app.get('/api/docs.json', (req, res) => res.json(swaggerSpec))
+
+// Static uploads
+const uploadsDir = path.join(process.cwd(), 'uploads')
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
+app.use('/uploads', express.static(uploadsDir))
 
 // All routes via master router
 app.use('/api', apiRouter)

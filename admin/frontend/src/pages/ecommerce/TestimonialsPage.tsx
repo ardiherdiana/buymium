@@ -82,7 +82,8 @@ export default function TestimonialsPage() {
         <p className="text-sm text-muted-foreground mt-1">Ulasan produk dari pelanggan</p>
       </div>
 
-      <Card className="overflow-hidden p-0">
+      {/* Desktop: table */}
+      <Card className="overflow-hidden p-0 hidden sm:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -155,6 +156,60 @@ export default function TestimonialsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Mobile: cards */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
+        ) : !data?.length ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Tidak ada testimoni</p>
+        ) : (
+          data.map((t) => (
+            <Card key={t.id}>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm">{t.customerName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{t.product.title}</p>
+                  </div>
+                  <Badge variant={t.isPublished ? "completed" : "warning"} className="shrink-0">
+                    {t.isPublished ? "Tayang" : "Disembunyikan"}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <RatingStars rating={t.rating} />
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(t.createdAt).toLocaleDateString("id-ID", {
+                      day: "2-digit", month: "short", year: "numeric",
+                    })}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground line-clamp-2">{t.message}</p>
+                <div className="flex items-center justify-end gap-1 pt-1 border-t">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`size-8 ${t.isPublished ? "text-muted-foreground" : "text-emerald-600 hover:text-emerald-600"}`}
+                    onClick={() => handlePublish(t.id, !t.isPublished)}
+                    title={t.isPublished ? "Sembunyikan" : "Tayangkan"}
+                  >
+                    <Check className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(t)}
+                    title="Hapus"
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   )
 }

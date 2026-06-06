@@ -23,12 +23,10 @@ const ManagementPage = lazy(() => import("@/pages/management/index"))
 // Stock
 const StockIndexPage = lazy(() => import("@/pages/management/stock/index"))
 const AccountsPage = lazy(() => import("@/pages/management/stock/accounts/index"))
-const AccountsHistoryPage = lazy(() => import("@/pages/management/stock/accounts/history"))
-const AccountsPosPage = lazy(() => import("@/pages/management/stock/accounts/pos"))
+const AccountsPosPage = lazy(() => import("@/pages/management/stock/accounts/pos-page"))
 const AccountsSalesMobilePage = lazy(() => import("@/pages/management/stock/accounts/sales-mobile"))
 const AccsmarketPage = lazy(() => import("@/pages/management/stock/accsmarket/index"))
-const AccsmarketHistoryPage = lazy(() => import("@/pages/management/stock/accsmarket/history"))
-const AccsmarketPosPage = lazy(() => import("@/pages/management/stock/accsmarket/pos"))
+const AccsmarketPosPage = lazy(() => import("@/pages/management/stock/accsmarket/pos-page"))
 const AccsmarketSalesMobilePage = lazy(() => import("@/pages/management/stock/accsmarket/sales-mobile"))
 
 // Finance
@@ -86,11 +84,9 @@ export default function App() {
             <Route path="/management" element={<S><ManagementPage /></S>} />
             <Route path="/stock" element={<S><StockIndexPage /></S>} />
             <Route path="/stock/accounts" element={<S><AccountsPage /></S>} />
-            <Route path="/stock/accounts/history" element={<S><AccountsHistoryPage /></S>} />
             <Route path="/stock/accounts/pos" element={<S><AccountsPosPage /></S>} />
             <Route path="/stock/accounts/sales-mobile" element={<S><AccountsSalesMobilePage /></S>} />
             <Route path="/stock/accsmarket" element={<S><AccsmarketPage /></S>} />
-            <Route path="/stock/accsmarket/history" element={<S><AccsmarketHistoryPage /></S>} />
             <Route path="/stock/accsmarket/pos" element={<S><AccsmarketPosPage /></S>} />
             <Route path="/stock/accsmarket/sales-mobile" element={<S><AccsmarketSalesMobilePage /></S>} />
             <Route path="/finance/sales" element={<S><SalesPage /></S>} />
