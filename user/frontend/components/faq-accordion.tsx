@@ -11,7 +11,7 @@ const FAQS = [
   },
   {
     q: "Bagaimana cara membayar?",
-    a: "Transfer manual ke rekening yang kami tampilkan di halaman checkout. Setelah transfer, upload foto/screenshot bukti pembayaran di halaman pesanan Anda.",
+    a: "Transfer ke rekening yang kami tampilkan di halaman checkout sesuai nominal pesanan. Setelah transfer, upload foto/screenshot bukti pembayaran di halaman pesanan Anda.",
   },
   {
     q: "Berapa lama proses verifikasi pembayaran?",

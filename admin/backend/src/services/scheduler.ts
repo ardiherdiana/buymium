@@ -100,17 +100,15 @@ export function startScheduler() {
       })
 
       if (scheduledPosts.length > 0) {
-        await db.autopostingPost.updateMany({
-          where: {
-            id: {
-              in: scheduledPosts.map(p => p.id)
-            }
-          },
-          data: {
-            status: 'published',
-            postedAt: now
-          }
-        })
+        for (const post of scheduledPosts) {
+          await db.autopostingPost.update({
+            where: { id: post.id },
+            data: {
+              status: 'published',
+              postedAt: post.scheduledTime ?? now,
+            },
+          })
+        }
 
         console.log(`[Scheduler] Updated ${scheduledPosts.length} posts from scheduled to published`)
       }

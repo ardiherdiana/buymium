@@ -8,24 +8,11 @@ const prisma = db
 export const CustomersController = {
   async index(req: Request, res: Response) {
     try {
-      const user = req.user
-      const autoFilterSource: number | null = null
-
       const searchQuery = req.query.search as string
-      const sourceFilter = req.query.source as string
       const page = parseInt(req.query.page as string) || 1
       const limit = 15
 
-      let where: Prisma.CustomerWhereInput = {}
-
-      if (autoFilterSource) {
-        where.sourceId = autoFilterSource
-      } else if (sourceFilter && sourceFilter !== 'all') {
-        const sourceId = parseInt(sourceFilter)
-        if (!isNaN(sourceId)) {
-          where.sourceId = sourceId
-        }
-      }
+      const where: Prisma.CustomerWhereInput = {}
 
       if (searchQuery) {
         where.OR = [
@@ -34,14 +21,12 @@ export const CustomersController = {
         ]
       }
 
-      // Fetch all matching customer IDs to sort by total_profit
       const allIds = await prisma.customer.findMany({
         where,
         select: { id: true },
       })
       const ids = allIds.map(c => c.id)
 
-      // Get profit sums for all matching customers in one query
       const profitRows = await prisma.sale.groupBy({
         by: ['customerId'],
         where: { customerId: { in: ids } },
@@ -49,18 +34,15 @@ export const CustomersController = {
       })
       const profitMap = new Map(profitRows.map(r => [r.customerId, r._sum.totalProfit || 0]))
 
-      // Sort all IDs by profit desc, then paginate
       const sortedIds = [...ids].sort((a, b) => (profitMap.get(b) || 0) - (profitMap.get(a) || 0))
       const totalCount = sortedIds.length
       const paginatedIds = sortedIds.slice((page - 1) * limit, page * limit)
 
-      // Fetch full data for this page only
       const customers = await prisma.customer.findMany({
         where: { id: { in: paginatedIds } },
-        include: { creator: true, sourceRel: true },
+        include: { creator: true },
       })
 
-      // Re-order to match sorted order
       const customerMap = new Map(customers.map(c => [c.id, c]))
       const customersWithProfit = paginatedIds
         .map(id => customerMap.get(id))
@@ -69,25 +51,14 @@ export const CustomersController = {
           id: customer!.id,
           username_shopee: customer!.usernameSh,
           nomor_hp: customer!.nomorHp,
-          source: null,
-          source_name: customer!.sourceRel?.name || null,
-          source_id: customer!.sourceId,
           creator: customer!.creator ? { id: customer!.creator.id, name: customer!.creator.name } : null,
           created_at: customer!.createdAt,
           total_profit: profitMap.get(customer!.id) || 0,
         }))
 
-      const sources = await prisma.source.findMany({
-        orderBy: [{ index: 'asc' }, { id: 'asc' }],
-      })
-
       res.json({
         customers: customersWithProfit,
-        sources,
-        filters: {
-          search: searchQuery || '',
-          source: sourceFilter || 'all',
-        },
+        filters: { search: searchQuery || '' },
         pagination: {
           page,
           limit,
@@ -109,7 +80,6 @@ export const CustomersController = {
 
       const customer = await prisma.customer.findUnique({
         where: { id: parseInt(id) },
-        include: { sourceRel: true },
       })
 
       if (!customer) {
@@ -148,21 +118,18 @@ export const CustomersController = {
         created_at: sale.createdAt,
       }))
 
-      const stats = {
-        total_sales_count: salesCount,
-        total_sales_amount: salesAgg._sum.totalSalePrice || 0,
-        total_profit: salesAgg._sum.totalProfit || 0,
-      }
-
       res.json({
         customer: {
           id: customer.id,
           username_shopee: customer.usernameSh,
           nomor_hp: customer.nomorHp,
-          source: customer.sourceRel,
           created_at: customer.createdAt,
         },
-        stats,
+        stats: {
+          total_sales_count: salesCount,
+          total_sales_amount: salesAgg._sum.totalSalePrice || 0,
+          total_profit: salesAgg._sum.totalProfit || 0,
+        },
         sales: salesWithDetails,
         pagination: {
           page,
@@ -179,31 +146,17 @@ export const CustomersController = {
 
   async store(req: Request, res: Response) {
     try {
-      const { username_shopee, nomor_hp, source_id } = req.body
+      const { username_shopee, nomor_hp } = req.body
       const userId = req.user?.userId
 
       if (!username_shopee) {
         return res.status(400).json({ error: 'username_shopee is required' })
       }
 
-      if (source_id) {
-        const existingCustomer = await prisma.customer.findFirst({
-          where: {
-            usernameSh: username_shopee,
-            sourceId: parseInt(source_id),
-          },
-        })
-
-        if (existingCustomer) {
-          return res.status(400).json({ error: 'Customer with this username already exists in this source' })
-        }
-      }
-
       const customer = await prisma.customer.create({
         data: {
           usernameSh: username_shopee,
           nomorHp: nomor_hp || null,
-          sourceId: source_id ? parseInt(source_id) : null,
           createdBy: userId,
         },
       })
@@ -218,24 +171,10 @@ export const CustomersController = {
   async update(req: Request, res: Response) {
     try {
       const { id } = req.params
-      const { username_shopee, nomor_hp, source_id } = req.body
+      const { username_shopee, nomor_hp } = req.body
 
       if (!username_shopee) {
         return res.status(400).json({ error: 'username_shopee is required' })
-      }
-
-      if (source_id) {
-        const existingCustomer = await prisma.customer.findFirst({
-          where: {
-            usernameSh: username_shopee,
-            sourceId: parseInt(source_id),
-            id: { not: parseInt(id) },
-          },
-        })
-
-        if (existingCustomer) {
-          return res.status(400).json({ error: 'Customer with this username already exists in this source' })
-        }
       }
 
       const customer = await prisma.customer.update({
@@ -243,7 +182,6 @@ export const CustomersController = {
         data: {
           usernameSh: username_shopee,
           nomorHp: nomor_hp || null,
-          sourceId: source_id ? parseInt(source_id) : null,
         },
       })
 

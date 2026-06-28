@@ -41,14 +41,17 @@ export async function uploadMedia(filePath: string): Promise<{ uploadToken: stri
   const initRes = await client().post('/upload_media', { name: fileName, mime_type: mimeType })
   const { signed_url, key, url } = initRes.data as { signed_url: string; key: string; url: string }
 
-  // 2. Upload to signed URL
-  const fileBuffer = fs.readFileSync(filePath)
-  await axios.put(signed_url, fileBuffer, {
+  // 2. Upload to signed URL — stream file directly (no readFileSync) like the Go implementation
+  const fileSize = fs.statSync(filePath).size
+  const fileStream = fs.createReadStream(filePath)
+  await axios.put(signed_url, fileStream, {
     headers: {
       'Content-Type': mimeType,
-      'Content-Length': fileBuffer.length,
+      'Content-Length': fileSize,
       'x-amz-acl': 'private',
     },
+    maxBodyLength: 200 * 1024 * 1024,
+    maxContentLength: 200 * 1024 * 1024,
   })
 
   // 3. Verify status
@@ -66,15 +69,19 @@ export async function createPost(
   accountIds: number[],
   uploadTokens: string[],
   publishAt: string,
+  options?: Record<string, unknown>,
 ): Promise<string> {
   const payload: Record<string, unknown> = {
     content,
     accounts: accountIds,
     publish_at: publishAt,
-    is_draft: false,
+    draft: false,
   }
   if (uploadTokens.length > 0) {
     payload.existing_attachments = uploadTokens.map((t) => ({ upload_token: t }))
+  }
+  if (options && Object.keys(options).length > 0) {
+    payload.options = options
   }
   const res = await client().post('/posts', payload)
   const result = res.data as { success: boolean; posts?: { id: number }[] }

@@ -2,7 +2,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom"
 import type { LucideIcon } from "lucide-react"
 import { LogOut, EllipsisVertical } from "lucide-react"
 import { useAuthStore } from "@/stores/authStore"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Sidebar,
   SidebarContent,

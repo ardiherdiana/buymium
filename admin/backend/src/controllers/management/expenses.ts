@@ -1,4 +1,4 @@
-import { Request, Response } from 'express'
+﻿import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import { logger } from '../../utils/logger'
 import db from '../../config/database'
@@ -8,8 +8,6 @@ const prisma = db
 export const ExpensesController = {
   async index(req: Request, res: Response) {
     try {
-      const autoFilterSourceId: number | null = null
-
       const searchQuery = req.query.search as string
       const categoryIdFilter = req.query.category_id as string
       const sourceIdFilter = req.query.source_id as string
@@ -19,10 +17,6 @@ export const ExpensesController = {
       const limit = 50
 
       let where: Prisma.ExpenseWhereInput = {}
-
-      if (autoFilterSourceId) {
-        where.sourceId = autoFilterSourceId
-      }
 
       if (searchQuery) {
         where.OR = [{ category: { name: { contains: searchQuery } } }]
@@ -68,7 +62,7 @@ export const ExpensesController = {
       })
 
       const sources = await prisma.source.findMany({
-        orderBy: [{ index: 'asc' }, { id: 'asc' }],
+        orderBy: [{ id: 'asc' }],
       })
 
       res.json({

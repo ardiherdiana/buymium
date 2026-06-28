@@ -587,13 +587,9 @@ export const AccsmarketsService = {
     }
   },
 
-  async searchCustomers(search: string, userRole?: { name?: string }, userSourceId?: number) {
+  async searchCustomers(search: string) {
     try {
       let where: Prisma.CustomerWhereInput = {}
-
-      if (userRole?.name === 'admin' && userSourceId) {
-        where.sourceId = userSourceId
-      }
 
       if (search) {
         where.OR = [{ usernameSh: { contains: search } }, { nomorHp: { contains: search } }]

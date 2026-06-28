@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { ShieldCheck, Star, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { Section, Product } from "@/lib/api"
+import type { Product } from "@/lib/api"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
 
@@ -70,106 +70,58 @@ function ProductCard({ product, onClick }: { product: Product; onClick: () => vo
 
 export default function DashboardProdukListPage() {
   const router = useRouter()
-  const [sections, setSections] = useState<Section[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
 
   useEffect(() => {
-    fetch(`${API_BASE}/sections`)
+    const params = new URLSearchParams({ limit: "100" })
+    if (search.trim()) params.set("search", search.trim())
+
+    fetch(`${API_BASE}/products?${params}`)
       .then((r) => r.json())
-      .then((d) => setSections(Array.isArray(d) ? d : []))
+      .then((d) => setProducts(Array.isArray(d.data) ? d.data : []))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
-
-  const allProducts: (Product & { sectionTitle: string })[] = sections.flatMap((s) =>
-    s.listings.map((p) => ({ ...p, sectionTitle: s.title }))
-  )
-
-  const filtered = search.trim()
-    ? allProducts.filter(
-        (p) =>
-          p.title.toLowerCase().includes(search.toLowerCase()) ||
-          p.description.toLowerCase().includes(search.toLowerCase()) ||
-          p.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()))
-      )
-    : null
+  }, [search])
 
   if (loading) {
     return (
       <div className="w-full space-y-6">
         <Skeleton className="h-9 w-full max-w-sm" />
-        {[1, 2].map((i) => (
-          <div key={i} className="space-y-3">
-            <Skeleton className="h-5 w-40" />
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((j) => (
-                <Skeleton key={j} className="h-36 w-full" />
-              ))}
-            </div>
-          </div>
-        ))}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Skeleton key={i} className="h-36 w-full" />
+          ))}
+        </div>
       </div>
     )
   }
 
   return (
     <div className="w-full space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Cari produk..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <Input
+          placeholder="Cari produk..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
       </div>
 
-      {filtered ? (
-        <div>
-          <p className="mb-4 text-sm text-muted-foreground">
-            {filtered.length} hasil untuk &ldquo;{search}&rdquo;
-          </p>
-          {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Tidak ada produk yang cocok.</p>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((p) => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  onClick={() => router.push(`/dashboard/produk/${p.id}`)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+      {products.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {search ? "Tidak ada produk yang cocok." : "Belum ada produk."}
+        </p>
       ) : (
-        <div className="space-y-10">
-          {sections.map((section) => (
-            <div key={section.id}>
-              <div className="mb-4">
-                <h2 className="text-base font-semibold">{section.title}</h2>
-                {section.subtitle && (
-                  <p className="text-sm text-muted-foreground">{section.subtitle}</p>
-                )}
-              </div>
-              {section.listings.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Belum ada produk.</p>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {section.listings.map((p) => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      onClick={() => router.push(`/dashboard/produk/${p.id}`)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {products.map((p) => (
+            <ProductCard
+              key={p.id}
+              product={p}
+              onClick={() => router.push(`/dashboard/produk/${p.id}`)}
+            />
           ))}
         </div>
       )}

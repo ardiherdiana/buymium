@@ -1,4 +1,4 @@
-import { Request, Response } from 'express'
+﻿import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import { logger } from '../../utils/logger'
 import { AccountsService } from '../../services/management/accountsService'
@@ -11,16 +11,6 @@ type AuthenticatedRequest = Request
 export class AccountsController {
   public static async index(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const user = req.user as (typeof req.user & { role?: { name?: string }; sourceId?: number }) | undefined
-      const userRole = user?.role
-      const userSourceId = user?.sourceId
-
-      // Auto-filter by user source if admin (not superadmin)
-      let autoFilterSourceId: number | null = null
-      if (userRole && userRole.name === 'admin' && userSourceId) {
-        autoFilterSourceId = userSourceId
-      }
-
       const page = parseInt(req.query.page as string) || 1
       const limit = 100
       const skip = (page - 1) * limit
@@ -28,16 +18,14 @@ export class AccountsController {
       // Get sources (only non-accsmarket sources) — used for filter options and scoping the list
       const nonAccsmarketSources = await prisma.source.findMany({
         where: { isAccsmarket: false },
-        orderBy: [{ index: 'asc' }, { id: 'asc' }],
+        orderBy: [{ id: 'asc' }],
       })
       const nonAccsmarketSourceIds = nonAccsmarketSources.map((s) => s.id)
 
       // Build where clause
       const where: Prisma.AccountWhereInput = { isSold: false }
 
-      if (autoFilterSourceId) {
-        where.sourceId = autoFilterSourceId
-      } else if (req.query.source_id && req.query.source_id !== 'all') {
+      if (req.query.source_id && req.query.source_id !== 'all') {
         where.sourceId = parseInt(req.query.source_id as string)
       } else {
         where.sourceId = { in: nonAccsmarketSourceIds }
@@ -83,8 +71,8 @@ export class AccountsController {
 
       // Get phone models
       let phoneModels: string[] = []
-      if (autoFilterSourceId || (req.query.source_id && req.query.source_id !== 'all')) {
-        const effectiveSourceId = autoFilterSourceId || parseInt(req.query.source_id as string)
+      if (req.query.source_id && req.query.source_id !== 'all') {
+        const effectiveSourceId = parseInt(req.query.source_id as string)
         const phoneModelsData = await prisma.account.findMany({
           where: {
             phoneModel: { not: null },
@@ -131,11 +119,9 @@ export class AccountsController {
         where: {
           targetFollowers: { not: null },
           isSold: false,
-          ...(autoFilterSourceId && { sourceId: autoFilterSourceId }),
-          ...(req.query.source_id &&
-            req.query.source_id !== 'all' && {
-              sourceId: parseInt(req.query.source_id as string),
-            }),
+          ...(req.query.source_id && req.query.source_id !== 'all'
+            ? { sourceId: parseInt(req.query.source_id as string) }
+            : { sourceId: { in: nonAccsmarketSourceIds } }),
         },
         select: { targetFollowers: true },
         distinct: ['targetFollowers'],
@@ -147,9 +133,7 @@ export class AccountsController {
 
       // Get stats — same source scoping as main query
       const statsWhere: Prisma.AccountWhereInput = { isSold: false }
-      if (autoFilterSourceId) {
-        statsWhere.sourceId = autoFilterSourceId
-      } else if (req.query.source_id && req.query.source_id !== 'all') {
+      if (req.query.source_id && req.query.source_id !== 'all') {
         statsWhere.sourceId = parseInt(req.query.source_id as string)
       } else {
         statsWhere.sourceId = { in: nonAccsmarketSourceIds }

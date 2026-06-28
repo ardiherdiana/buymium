@@ -1,4 +1,4 @@
-import { Request, Response } from 'express'
+﻿import { Request, Response } from 'express'
 import { logger } from '../../utils/logger'
 import db from '../../config/database'
 import { Prisma } from '@prisma/client'
@@ -8,9 +8,6 @@ const prisma = db
 export const DashboardController = {
   async index(req: Request, res: Response) {
     try {
-      const user = req.user
-      const autoFilterSourceId: number | null = null
-
       const [
         totalUsers,
         completedAccounts,
@@ -33,26 +30,18 @@ export const DashboardController = {
       const activeAccounts = activeAccountsCount + activeAccsmarketsCount
 
       // ── Accounts: grouped by source ──────────────────────────────────────────
-      const sourcesQuery: Prisma.SourceFindManyArgs = {
-        orderBy: [{ index: 'asc' }, { id: 'asc' }],
-      }
-
-      if (autoFilterSourceId) {
-        sourcesQuery.where = { id: autoFilterSourceId }
-      }
-
-      const sources = await prisma.source.findMany(sourcesQuery)
+      const sources = await prisma.source.findMany({ orderBy: [{ id: 'asc' }] })
 
       // Use groupBy instead of loading all account rows into memory
       const [stockAcc, accDistRaw] = await Promise.all([
         prisma.account.groupBy({
           by: ['sourceId'],
-          where: { accountStatus: 'Completed', isSold: false, ...(autoFilterSourceId ? { sourceId: autoFilterSourceId } : {}) },
+          where: { accountStatus: 'Completed', isSold: false,  },
           _count: true,
         }),
         prisma.account.groupBy({
           by: ['sourceId', 'targetFollowers'],
-          where: { accountStatus: 'Completed', isSold: false, ...(autoFilterSourceId ? { sourceId: autoFilterSourceId } : {}) },
+          where: { accountStatus: 'Completed', isSold: false,  },
           _count: true,
         }),
       ])
@@ -109,7 +98,6 @@ export const DashboardController = {
         where: {
           accountStatus: 'completed',
           isSold: false,
-          ...(autoFilterSourceId ? { sourceId: autoFilterSourceId } : {}),
         },
         select: { year: true, targetFollowers: true, sourceId: true },
       })
@@ -180,8 +168,9 @@ export const DashboardController = {
         })
         .sort((a, b) => b.value - a.value)
 
-      const userWithRole = user ? await prisma.user.findUnique({
-        where: { id: user.userId },
+      const reqUser = req.user
+      const userWithRole = reqUser ? await prisma.user.findUnique({
+        where: { id: reqUser.userId },
         include: { role: true },
       }) : null
 

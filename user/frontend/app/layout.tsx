@@ -11,7 +11,7 @@ const fontSans = Geist({ subsets: ["latin"], variable: "--font-sans" })
 const fontMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://buymium.com"),
+  metadataBase: new URL("https://buymium.id"),
   title: {
     default: "Buymium – Jual Beli Akun Instagram Terpercaya di Indonesia",
     template: "%s | Buymium",
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "id_ID",
-    url: "https://buymium.com",
+    url: "https://buymium.id",
     siteName: "Buymium",
     title: "Buymium – Jual Beli Akun Instagram Terpercaya di Indonesia",
     description: "Beli akun Instagram terverifikasi dengan harga terjangkau. Proses cepat, aman, garansi 24 jam.",
@@ -47,13 +47,13 @@ export const metadata: Metadata = {
     images: ["/buymium_logo.png"],
   },
   icons: {
-    icon: "/buymium_logo.png",
+    icon: [{ url: "/buymium_logo.png", type: "image/png" }],
     shortcut: "/buymium_logo.png",
     apple: "/buymium_logo.png",
   },
   alternates: {
-    canonical: "https://buymium.com",
-    languages: { "id-ID": "https://buymium.com" },
+    canonical: "https://buymium.id",
+    languages: { "id-ID": "https://buymium.id" },
   },
 }
 

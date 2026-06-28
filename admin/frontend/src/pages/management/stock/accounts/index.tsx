@@ -51,9 +51,9 @@ interface AccountsResponse {
 }
 
 const STATUS_OPTIONS = [
-  { value: "all", label: "All Status" },
-  { value: "Completed", label: "Completed" },
-  { value: "Progress", label: "Progress" },
+  { value: "all", label: "Semua Status" },
+  { value: "Completed", label: "Selesai" },
+  { value: "Progress", label: "Proses" },
   { value: "Error", label: "Error" },
 ]
 
@@ -206,15 +206,15 @@ export default function AccountsPage() {
   const stats = data?.stats
 
   const sourceOptions = [
-    { value: "all", label: "All Sources" },
+    { value: "all", label: "Semua Source" },
     ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name })),
   ]
   const phoneModelOptions = [
-    { value: "all", label: "All Models" },
+    { value: "all", label: "Semua Model" },
     ...(data?.phoneModels ?? []).map((m) => ({ value: m, label: m })),
   ]
   const targetFollowersOptions = [
-    { value: "all", label: "All Targets" },
+    { value: "all", label: "Semua Target" },
     ...(data?.targetFollowers ?? []).map((f) => ({ value: String(f), label: f.toLocaleString("id-ID") })),
   ]
 
@@ -241,10 +241,10 @@ export default function AccountsPage() {
         {/* Mobile: compact single-line rows */}
         <div className="grid grid-cols-2 gap-2 sm:hidden">
           {[
-            { label: "Total Accounts", value: totalCount, icon: Users, color: "text-blue-600" },
+            { label: "Total Akun", value: totalCount, icon: Users, color: "text-blue-600" },
             { label: "Total Followers", value: (stats?.total_followers ?? 0).toLocaleString("id-ID"), icon: Heart, color: "text-red-500" },
             { label: "Target Followers", value: (stats?.target_followers ?? 0).toLocaleString("id-ID"), icon: Target, color: "text-blue-600" },
-            { label: "Completed", value: `${completedCount}/${totalCount}`, icon: CheckCircle2, color: "text-emerald-600" },
+            { label: "Selesai", value: `${completedCount}/${totalCount}`, icon: CheckCircle2, color: "text-emerald-600" },
           ].map(({ label, value, icon: Icon, color }) => (
             <Card key={label}>
               <CardContent className="p-3 flex items-center justify-between gap-2">
@@ -262,9 +262,9 @@ export default function AccountsPage() {
           <Card>
             <CardContent className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Accounts</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Akun</p>
                 <p className="text-2xl font-bold mt-1">{totalCount}</p>
-                <p className="text-xs text-muted-foreground">Active accounts</p>
+                <p className="text-xs text-muted-foreground">Akun aktif</p>
               </div>
               <div className="size-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                 <Users className="size-5 text-blue-600" />
@@ -276,7 +276,7 @@ export default function AccountsPage() {
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Followers</p>
                 <p className="text-2xl font-bold mt-1">{(stats?.total_followers ?? 0).toLocaleString("id-ID")}</p>
-                <p className="text-xs text-muted-foreground">Combined followers</p>
+                <p className="text-xs text-muted-foreground">Gabungan followers</p>
               </div>
               <div className="size-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
                 <Heart className="size-5 text-red-500" />
@@ -289,6 +289,7 @@ export default function AccountsPage() {
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Target Followers</p>
                 <p className="text-2xl font-bold mt-1">{(stats?.target_followers ?? 0).toLocaleString("id-ID")}</p>
                 <p className="text-xs text-muted-foreground">Total target</p>
+
               </div>
               <div className="size-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                 <Target className="size-5 text-blue-600" />
@@ -298,9 +299,9 @@ export default function AccountsPage() {
           <Card>
             <CardContent className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Completed Accounts</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Akun Selesai</p>
                 <p className="text-2xl font-bold mt-1">{completedCount}/{totalCount}</p>
-                <p className="text-xs text-muted-foreground">Finished accounts</p>
+                <p className="text-xs text-muted-foreground">Akun selesai</p>
               </div>
               <div className="size-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
                 <CheckCircle2 className="size-5 text-emerald-600" />
@@ -312,7 +313,7 @@ export default function AccountsPage() {
         {/* Search & Filter */}
         <Card>
           <CardContent className="p-4 space-y-3">
-            <p className="text-sm font-medium">Search & Filter</p>
+            <p className="text-sm font-medium">Cari & Filter</p>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
@@ -323,10 +324,22 @@ export default function AccountsPage() {
               />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <Dropdown options={sourceOptions} value={sourceId} onChange={(v) => { setSourceId(v); setPage(1) }} className="w-full" />
-              <Dropdown options={STATUS_OPTIONS} value={status} onChange={(v) => { setStatus(v); setPage(1) }} className="w-full" />
-              <Dropdown options={phoneModelOptions} value={phoneModel} onChange={(v) => { setPhoneModel(v); setPage(1) }} className="w-full" />
-              <Dropdown options={targetFollowersOptions} value={targetFollowers} onChange={(v) => { setTargetFollowers(v); setPage(1) }} className="w-full" />
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground font-medium">Source</p>
+                <Dropdown options={sourceOptions} value={sourceId} onChange={(v) => { setSourceId(v); setPage(1) }} className="w-full" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground font-medium">Status</p>
+                <Dropdown options={STATUS_OPTIONS} value={status} onChange={(v) => { setStatus(v); setPage(1) }} className="w-full" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground font-medium">Model HP</p>
+                <Dropdown options={phoneModelOptions} value={phoneModel} onChange={(v) => { setPhoneModel(v); setPage(1) }} className="w-full" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground font-medium">Target Followers</p>
+                <Dropdown options={targetFollowersOptions} value={targetFollowers} onChange={(v) => { setTargetFollowers(v); setPage(1) }} className="w-full" />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -340,7 +353,7 @@ export default function AccountsPage() {
             disabled={scanProgress.status === "scanning" || syncProgress.status === "syncing"}
           >
             <RefreshCw className={`size-4 ${scanProgress.status === "scanning" ? "animate-spin" : ""}`} />
-            {scanProgress.status === "scanning" ? "Scanning..." : "Scan Followers"}
+            {scanProgress.status === "scanning" ? "Memindai..." : "Scan Followers"}
           </Button>
           <Button
             variant="outline"
@@ -349,7 +362,7 @@ export default function AccountsPage() {
             disabled={syncProgress.status === "syncing" || scanProgress.status === "scanning"}
           >
             <Sheet className={`size-4 ${syncProgress.status === "syncing" ? "animate-spin" : ""}`} />
-            {syncProgress.status === "syncing" ? "Syncing..." : "Sync Sheets"}
+            {syncProgress.status === "syncing" ? "Menyinkronkan..." : "Sync Sheets"}
           </Button>
         </div>
 
@@ -365,18 +378,18 @@ export default function AccountsPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Username</TableHead>
                   <TableHead>Password</TableHead>
-                  <TableHead>Current</TableHead>
+                  <TableHead>Saat Ini</TableHead>
                   <TableHead>Target</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Login App</TableHead>
-                  <TableHead>Capital</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Aplikasi Login</TableHead>
+                  <TableHead>Modal</TableHead>
+                  <TableHead>HP</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? <LoadingRow colSpan={11} /> : !accounts.length ? (
-                  <EmptyRow colSpan={11} message="No accounts found." />
+                  <EmptyRow colSpan={11} message="Tidak ada akun ditemukan." />
                 ) : (
                   accounts.map((acc) => (
                     <TableRow key={acc.id} className={selectedIds.includes(acc.id) ? "bg-muted/40" : ""}>
@@ -390,7 +403,7 @@ export default function AccountsPage() {
                       <TableCell>{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</TableCell>
                       <TableCell>
                         <Badge variant={acc.accountStatus?.toLowerCase() === "completed" ? "completed" : acc.accountStatus?.toLowerCase() === "error" ? "destructive" : "progress"}>
-                          {acc.accountStatus?.toLowerCase() === "completed" ? "Completed" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Progress"}
+                          {acc.accountStatus?.toLowerCase() === "completed" ? "Selesai" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Proses"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{acc.loginApp ?? "-"}</TableCell>
@@ -427,7 +440,7 @@ export default function AccountsPage() {
           {isLoading ? (
             <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
           ) : !accounts.length ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No accounts found.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">Tidak ada akun ditemukan.</p>
           ) : (
             accounts.map((acc) => (
               <Card key={acc.id} className={selectedIds.includes(acc.id) ? "ring-2 ring-primary" : ""}>
@@ -441,7 +454,7 @@ export default function AccountsPage() {
                       </div>
                     </div>
                     <Badge variant={acc.accountStatus?.toLowerCase() === "completed" ? "completed" : acc.accountStatus?.toLowerCase() === "error" ? "destructive" : "progress"} className="shrink-0">
-                      {acc.accountStatus?.toLowerCase() === "completed" ? "Completed" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Progress"}
+                      {acc.accountStatus?.toLowerCase() === "completed" ? "Selesai" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Proses"}
                     </Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -454,11 +467,11 @@ export default function AccountsPage() {
                       <span className="font-medium">{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Capital</span>
+                      <span className="text-muted-foreground">Modal</span>
                       <span className="font-medium">{acc.capital ? formatIDR(acc.capital) : "-"}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Phone</span>
+                      <span className="text-muted-foreground">HP</span>
                       <span className="font-medium truncate">{acc.phoneModel ?? "-"}</span>
                     </div>
                   </div>
@@ -499,19 +512,19 @@ export default function AccountsPage() {
             <div className="flex items-center gap-2">
               <Button size="sm" className="flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/stock/accounts/pos", { state: { selectedIds } })}>
                 <ShoppingCart className="size-3.5" />
-                Sold
+                Terjual
               </Button>
               <Button size="sm" className="flex-1 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
                 <ScanLine className="size-3.5" />
-                Scan
+                Pindai
               </Button>
               <Button size="sm" className="flex-1 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
                 <Copy className="size-3.5" />
-                Copy
+                Salin
               </Button>
               <Button size="sm" variant="destructive" className="flex-1 gap-1.5" onClick={handleBulkDelete}>
                 <Trash2 className="size-3.5" />
-                Delete
+                Hapus
               </Button>
             </div>
           </div>
@@ -520,19 +533,19 @@ export default function AccountsPage() {
             <span className="text-sm font-medium text-muted-foreground mr-1">{selectedIds.length} akun</span>
             <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/stock/accounts/pos", { state: { selectedIds } })}>
               <ShoppingCart className="size-3.5" />
-              Sold
+              Terjual
             </Button>
             <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
               <ScanLine className="size-3.5" />
-              Scan
+              Pindai
             </Button>
             <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
               <Copy className="size-3.5" />
-              Copy
+              Salin
             </Button>
             <Button size="sm" variant="destructive" className="gap-1.5" onClick={handleBulkDelete}>
               <Trash2 className="size-3.5" />
-              Delete
+              Hapus
             </Button>
           </div>
         </>
@@ -546,11 +559,11 @@ export default function AccountsPage() {
               <DialogHeader><DialogTitle>Scan Followers</DialogTitle></DialogHeader>
               <div className="space-y-2 pt-2">
                 <p className="text-sm font-medium">Source</p>
-                <Dropdown options={[{ value: "all", label: "All Sources" }, ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name }))]} value={scanSourceId} onChange={setScanSourceId} className="w-full" />
+                <Dropdown options={[{ value: "all", label: "Semua Source" }, ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name }))]} value={scanSourceId} onChange={setScanSourceId} className="w-full" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setScanDialogOpen(false)}>Cancel</Button>
-                <Button onClick={runScan}>Scan</Button>
+                <Button variant="outline" onClick={() => setScanDialogOpen(false)}>Batal</Button>
+                <Button onClick={runScan}>Pindai</Button>
               </div>
             </>
           ) : (
@@ -567,9 +580,9 @@ export default function AccountsPage() {
                   <div className="h-full bg-foreground transition-all" style={{ width: scanProgress.total > 0 ? `${(scanProgress.current / scanProgress.total) * 100}%` : "0%" }} />
                 </div>
               </div>
-              {scanProgress.status === "done" && <div className="rounded bg-emerald-50 border border-emerald-200 px-4 py-3"><p className="text-sm font-medium text-emerald-700">Scan completed!</p></div>}
+              {scanProgress.status === "done" && <div className="rounded bg-emerald-50 border border-emerald-200 px-4 py-3"><p className="text-sm font-medium text-emerald-700">Pemindaian selesai!</p></div>}
               {scanProgress.status === "error" && <div className="rounded bg-destructive/10 border border-destructive/20 px-4 py-3"><p className="text-sm font-medium text-destructive">{scanProgress.error}</p></div>}
-              {(scanProgress.status === "done" || scanProgress.status === "error") && <div className="flex justify-end"><Button variant="outline" onClick={() => setScanDialogOpen(false)}>Close</Button></div>}
+              {(scanProgress.status === "done" || scanProgress.status === "error") && <div className="flex justify-end"><Button variant="outline" onClick={() => setScanDialogOpen(false)}>Tutup</Button></div>}
             </>
           )}
         </DialogContent>
@@ -583,11 +596,11 @@ export default function AccountsPage() {
               <DialogHeader><DialogTitle>Sync with Google Sheets</DialogTitle></DialogHeader>
               <div className="space-y-2 pt-2">
                 <p className="text-sm font-medium">Source</p>
-                <Dropdown options={[{ value: "all", label: "All Sources" }, ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name }))]} value={syncSourceId} onChange={setSyncSourceId} className="w-full" />
+                <Dropdown options={[{ value: "all", label: "Semua Source" }, ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name }))]} value={syncSourceId} onChange={setSyncSourceId} className="w-full" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Cancel</Button>
-                <Button onClick={runSync}>Sync</Button>
+                <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Batal</Button>
+                <Button onClick={runSync}>Sinkron</Button>
               </div>
             </>
           ) : (
@@ -604,9 +617,9 @@ export default function AccountsPage() {
                   <div className="h-full bg-foreground transition-all" style={{ width: syncProgress.total > 0 ? `${(syncProgress.current / syncProgress.total) * 100}%` : "0%" }} />
                 </div>
               </div>
-              {syncProgress.status === "done" && <div className="rounded bg-emerald-50 border border-emerald-200 px-4 py-3"><p className="text-sm font-medium text-emerald-700">Sync completed!</p></div>}
+              {syncProgress.status === "done" && <div className="rounded bg-emerald-50 border border-emerald-200 px-4 py-3"><p className="text-sm font-medium text-emerald-700">Sinkronisasi selesai!</p></div>}
               {syncProgress.status === "error" && <div className="rounded bg-destructive/10 border border-destructive/20 px-4 py-3"><p className="text-sm font-medium text-destructive">{syncProgress.error}</p></div>}
-              {(syncProgress.status === "done" || syncProgress.status === "error") && <div className="flex justify-end"><Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Close</Button></div>}
+              {(syncProgress.status === "done" || syncProgress.status === "error") && <div className="flex justify-end"><Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Tutup</Button></div>}
             </>
           )}
         </DialogContent>

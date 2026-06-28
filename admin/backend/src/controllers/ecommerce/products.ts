@@ -18,7 +18,7 @@ export class ProductsController {
           { description: { contains: search } },
         ]
       }
-      if (sectionId) where.sectionId = sectionId
+      if (sectionId) where.sectionId = parseInt(sectionId)
 
       const [total, products] = await Promise.all([
         db.product.count({ where }),

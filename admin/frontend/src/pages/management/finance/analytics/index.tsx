@@ -45,10 +45,10 @@ interface AnalyticsData {
 
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 const MONTH_OPTIONS = [
-  { value: "all", label: "All Months" },
+  { value: "all", label: "Semua Bulan" },
   ...Array.from({ length: 12 }, (_, i) => ({
     value: String(i + 1),
-    label: new Intl.DateTimeFormat("en-US", { month: "long" }).format(new Date(2024, i, 1)),
+    label: new Intl.DateTimeFormat("id-ID", { month: "long" }).format(new Date(2024, i, 1)),
   })),
 ]
 
@@ -134,10 +134,10 @@ export default function AnalyticsPage() {
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Select value={sourceId} onValueChange={setSourceId}>
             <SelectTrigger className="flex-1 sm:w-36 min-w-0">
-              <SelectValue placeholder="All Sources" />
+              <SelectValue placeholder="Semua Source" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Sources</SelectItem>
+              <SelectItem value="all">Semua Source</SelectItem>
               {sources.map((s) => (
                 <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
               ))}
@@ -169,29 +169,29 @@ export default function AnalyticsPage() {
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
-          title="Revenue" icon={DollarSign} loading={isLoading}
+          title="Pendapatan" icon={DollarSign} loading={isLoading}
           value={formatIDR(summary?.revenue ?? 0)}
           comparison={summary?.comparisons.revenue}
         />
         <StatCard
-          title="Capital" icon={Wallet} loading={isLoading}
+          title="Modal" icon={Wallet} loading={isLoading}
           value={formatIDR(summary?.capital ?? 0)}
           comparison={summary?.comparisons.capital}
         />
         <StatCard
-          title="Expenses" icon={Receipt} loading={isLoading}
+          title="Pengeluaran" icon={Receipt} loading={isLoading}
           value={formatIDR(summary?.expenses ?? 0)}
           comparison={summary?.comparisons.expenses}
           invert
         />
         <StatCard
-          title="Net Profit" icon={TrendingUp} loading={isLoading}
+          title="Laba Bersih" icon={TrendingUp} loading={isLoading}
           value={formatIDR(summary?.net_profit ?? 0)}
           valueClass="text-green-600"
           comparison={summary?.comparisons.net_profit}
         />
         <StatCard
-          title="Net Margin" icon={Percent} loading={isLoading}
+          title="Margin Bersih" icon={Percent} loading={isLoading}
           value={`${summary?.net_margin ?? 0}%`}
           valueClass="text-green-600"
           comparison={summary?.comparisons.net_margin}
@@ -212,7 +212,7 @@ export default function AnalyticsPage() {
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              {t === "income" ? "Income" : "Expenses"}
+              {t === "income" ? "Pendapatan" : "Pengeluaran"}
             </Button>
           ))}
         </div>
@@ -225,8 +225,8 @@ export default function AnalyticsPage() {
             {/* Sales Volume */}
             <Card>
               <CardHeader className="pb-1">
-                <CardTitle className="text-sm font-semibold">Sales Volume</CardTitle>
-                <p className="text-xs text-muted-foreground">Number of accounts sold</p>
+                <CardTitle className="text-sm font-semibold">Volume Penjualan</CardTitle>
+                <p className="text-xs text-muted-foreground">Jumlah akun terjual</p>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={220}>
@@ -236,8 +236,8 @@ export default function AnalyticsPage() {
                     <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <Tooltip
                       {...TOOLTIP_STYLE}
-                      formatter={(v) => [v as number, "Sales"]}
-                      labelFormatter={(l) => `Day ${l}`}
+                      formatter={(v) => [v as number, "Penjualan"]}
+                      labelFormatter={(l) => `Hari ${l}`}
                     />
                     <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} />
                   </BarChart>
@@ -248,8 +248,8 @@ export default function AnalyticsPage() {
             {/* Sales & Profit Trend */}
             <Card>
               <CardHeader className="pb-1">
-                <CardTitle className="text-sm font-semibold">Sales & Profit Trend</CardTitle>
-                <p className="text-xs text-muted-foreground">Revenue vs Profit</p>
+                <CardTitle className="text-sm font-semibold">Tren Penjualan & Profit</CardTitle>
+                <p className="text-xs text-muted-foreground">Pendapatan vs Profit</p>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={220}>
@@ -272,12 +272,12 @@ export default function AnalyticsPage() {
                     />
                     <Tooltip
                       {...TOOLTIP_STYLE}
-                      formatter={(v, name) => [formatIDR(v as number), name === "revenue" ? "Revenue" : "Profit"]}
-                      labelFormatter={(l) => `Day ${l}`}
+                      formatter={(v, name) => [formatIDR(v as number), name === "revenue" ? "Pendapatan" : "Profit"]}
+                      labelFormatter={(l) => `Hari ${l}`}
                     />
                     <Legend
                       iconType="circle" iconSize={8}
-                      formatter={(value) => (value === "profit" ? "Profit" : "Revenue")}
+                      formatter={(value) => (value === "profit" ? "Profit" : "Pendapatan")}
                     />
                     <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} fill="url(#aRevenue)" dot={false} />
                     <Area type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} fill="url(#aProfit)" dot={false} />
@@ -291,8 +291,8 @@ export default function AnalyticsPage() {
           {profitBySource.length > 0 && (
             <Card>
               <CardHeader className="pb-1">
-                <CardTitle className="text-sm font-semibold">Profit by Source</CardTitle>
-                <p className="text-xs text-muted-foreground">Profit distribution across sources</p>
+                <CardTitle className="text-sm font-semibold">Profit per Source</CardTitle>
+                <p className="text-xs text-muted-foreground">Distribusi profit per source</p>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-8 flex-wrap">
@@ -344,7 +344,7 @@ export default function AnalyticsPage() {
           <Card>
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground text-center py-8">
-                Total Expenses: <span className="font-semibold text-foreground">{formatIDR(summary?.expenses ?? 0)}</span>
+                Total Pengeluaran: <span className="font-semibold text-foreground">{formatIDR(summary?.expenses ?? 0)}</span>
               </p>
             </CardContent>
           </Card>

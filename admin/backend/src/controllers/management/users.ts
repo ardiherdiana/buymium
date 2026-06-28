@@ -1,4 +1,4 @@
-import { Request, Response } from 'express'
+﻿import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import db from '../../config/database'
 import bcrypt from 'bcrypt'
@@ -28,7 +28,7 @@ export const UsersController = {
 
       const roles = await prisma.role.findMany()
       const sources = await prisma.source.findMany({
-        orderBy: [{ index: 'asc' }, { id: 'asc' }],
+        orderBy: [{ id: 'asc' }],
       })
 
       res.json({
@@ -50,7 +50,7 @@ export const UsersController = {
 
   async store(req: Request, res: Response) {
     try {
-      const { name, email, password, role_id, source_id } = req.body
+      const { name, email, password, role_id } = req.body
 
       if (!name || !email || !password) {
         return res.status(400).json({ error: 'Name, email, and password are required' })
@@ -64,7 +64,6 @@ export const UsersController = {
           email,
           password: hashedPassword,
           roleId: role_id || 3,
-          sourceId: source_id || null,
         },
         include: { role: true },
       })
@@ -84,7 +83,7 @@ export const UsersController = {
   async update(req: Request, res: Response) {
     try {
       const { id } = req.params
-      const { name, email, password, role_id, source_id } = req.body
+      const { name, email, password, role_id } = req.body
 
       if (!name || !email) {
         return res.status(400).json({ error: 'Name and email are required' })
@@ -94,7 +93,6 @@ export const UsersController = {
         name,
         email,
         role: role_id ? { connect: { id: parseInt(String(role_id)) } } : undefined,
-        sourceId: source_id || null,
       }
 
       if (password) {

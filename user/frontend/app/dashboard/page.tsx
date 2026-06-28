@@ -114,7 +114,7 @@ export default function DashboardPage() {
             <ShoppingBag className="mx-auto mb-3 size-10 text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">Belum ada pesanan</p>
             <Link
-              href="/katalog"
+              href="/dashboard/produk"
               className="mt-2 inline-block text-sm text-primary hover:underline"
             >
               Mulai belanja →

@@ -12,13 +12,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useAlert } from "@/stores/alertStore"
 import api from "@/lib/api"
 
@@ -28,7 +21,6 @@ const schema = z.object({
   tags: z.string().optional(),
   price: z.number().min(0),
   inStock: z.number().min(0).optional(),
-  sectionId: z.string().optional(),
   rating: z.number().min(0).max(5).optional(),
   isVerified: z.boolean().default(false),
   isActive: z.boolean().default(true),
@@ -40,7 +32,6 @@ type FormData = {
   tags?: string
   price: number
   inStock?: number
-  sectionId?: string
   rating?: number
   isVerified: boolean
   isActive: boolean
@@ -53,15 +44,9 @@ interface Product {
   tags?: string
   price: number
   inStock?: number
-  sectionId?: string
   rating?: number
   isVerified?: boolean
   isActive?: boolean
-}
-
-interface Section {
-  id: string
-  title: string
 }
 
 export default function ProductFormPage() {
@@ -75,11 +60,6 @@ export default function ProductFormPage() {
     queryKey: ["product", id],
     queryFn: () => api.get(`/products/${id}`).then((r) => r.data),
     enabled: isEdit,
-  })
-
-  const { data: sections = [] } = useQuery<Section[]>({
-    queryKey: ["sections-list"],
-    queryFn: () => api.get("/sections").then((r) => r.data),
   })
 
   const {
@@ -97,7 +77,6 @@ export default function ProductFormPage() {
       tags: "",
       price: 0,
       inStock: 0,
-      sectionId: "",
       rating: 0,
       isVerified: false,
       isActive: true,
@@ -120,7 +99,6 @@ export default function ProductFormPage() {
         tags: tagsStr,
         price: product.price,
         inStock: product.inStock ?? 0,
-        sectionId: product.sectionId ?? "",
         rating: product.rating ?? 0,
         isVerified: product.isVerified ?? false,
         isActive: product.isActive ?? true,
@@ -136,10 +114,9 @@ export default function ProductFormPage() {
       const payload = {
         ...data,
         tags: tagsArray,
-        sectionId: data.sectionId || null,
       }
       return isEdit
-        ? api.patch(`/products/${id}`, payload)
+        ? api.put(`/products/${id}`, payload)
         : api.post("/products", payload)
     },
     onSuccess: () => {
@@ -223,30 +200,9 @@ export default function ProductFormPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Kategori Katalog</Label>
-                  <Select
-                    value={watch("sectionId") ?? ""}
-                    onValueChange={(v) => setValue("sectionId", v === "__none__" ? "" : v)}
-                  >
-                    <SelectTrigger className="w-full h-9">
-                      <SelectValue placeholder="-- Pilih Kategori --" />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="__none__">-- Pilih Kategori --</SelectItem>
-                      {sections.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="rating">Rating (0.0 - 5.0)</Label>
-                  <Input id="rating" type="number" step="0.1" min="0" max="5" {...register("rating", { valueAsNumber: true })} placeholder="0.0" />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rating">Rating (0.0 - 5.0)</Label>
+                <Input id="rating" type="number" step="0.1" min="0" max="5" {...register("rating", { valueAsNumber: true })} placeholder="0.0" />
               </div>
             </CardContent>
           </Card>
@@ -262,7 +218,7 @@ export default function ProductFormPage() {
                   checked={!!watch("isVerified")}
                   onCheckedChange={(v) => setValue("isVerified", !!v)}
                 />
-                <Label htmlFor="isVerified" className="cursor-pointer font-normal">Verified Product</Label>
+                <Label htmlFor="isVerified" className="cursor-pointer font-normal">Produk Terverifikasi</Label>
               </div>
 
               <Button type="submit" className="w-full gap-2" disabled={isSubmitting || mutation.isPending}>

@@ -7,36 +7,34 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id              Int      @id @default(autoincrement())
-  name            String   @db.VarChar(255)
-  email           String   @unique @db.VarChar(255)
-  password        String   @db.VarChar(255)
-  roleId          Int      @default(2) @map("role_id")
-  googleId        String?  @unique @db.VarChar(255) @map("google_id")
-  avatar          String?  @db.VarChar(500)
-  referralCode    String?  @unique @db.VarChar(32) @map("referral_code")
-  referredById    Int?     @map("referred_by_id")
-  referredBy      User?    @relation("UserReferrals", fields: [referredById], references: [id])
-  referrals       User[]   @relation("UserReferrals")
-  referralBalance Int      @default(0) @map("referral_balance")
-  orders          Order[]
-  testimonials    Testimonial[] @relation("TestimonialCreatedBy")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  displayName String   @db.VarChar(255) @map("display_name")
+  description String?  @db.Text
+  permissions String   @db.LongText
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  users       User[]
 
-  @@map("users")
+  @@map("roles")
 }
 
-model ProductSection {
-  id        String    @id @db.VarChar(100)
-  title     String    @db.VarChar(255)
-  subtitle  String    @db.Text
-  order     Int       @default(0) @map("order_index")
-  products  Product[]
-  createdAt DateTime  @default(now()) @map("created_at")
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String   @db.VarChar(255)
+  email        String   @unique @db.VarChar(255)
+  password     String   @db.VarChar(255)
+  roleId       Int      @default(3) @map("role_id")
+  role         Role     @relation(fields: [roleId], references: [id])
+  googleId     String?  @unique @db.VarChar(255) @map("google_id")
+  avatar       String?  @db.VarChar(500)
+  orders       Order[]
+  testimonials Testimonial[] @relation("TestimonialCreatedBy")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  @@map("product_sections")
+  @@map("users")
 }
 
 model Product {
@@ -51,8 +49,6 @@ model Product {
   rating       Float           @default(0)
   isVerified   Boolean         @default(false) @map("is_verified")
   tags         String          @default("[]") @db.VarChar(1000)
-  sectionId    String?         @db.VarChar(100) @map("section_id")
-  section      ProductSection? @relation(fields: [sectionId], references: [id])
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
 
@@ -104,10 +100,10 @@ model Stock {
   productId     Int      @map("product_id")
   product       Product  @relation(fields: [productId], references: [id])
   email         String?  @db.VarChar(255)
-  passwordEmail String?  @db.VarChar(255) @map("password_email")
+  passwordEmail String?  @db.Text @map("password_email")
   username      String   @db.VarChar(255)
-  password      String   @db.VarChar(255)
-  twoFactorCode String?  @db.VarChar(255) @map("two_factor_code")
+  password      String   @db.Text
+  twoFactorCode String?  @db.Text @map("two_factor_code")
   orderId       Int?     @map("order_id")
   order         Order?   @relation(fields: [orderId], references: [id])
   status        String   @default("available") @db.VarChar(50)
@@ -118,15 +114,17 @@ model Stock {
 }
 
 model Channel {
-  id                         Int      @id @default(autoincrement())
-  name                       String   @db.VarChar(255)
-  username                   String   @db.VarChar(255)
-  profilePhotoPath           String   @default("") @db.VarChar(500) @map("profile_photo_path")
-  socialbuId                 String?  @db.VarChar(255) @map("socialbu_id")
-  instagramBusinessAccountId String?  @db.VarChar(255) @map("instagram_business_account_id")
-  createdAt                  DateTime @default(now()) @map("created_at")
-  updatedAt                  DateTime @updatedAt @map("updated_at")
+  id               Int      @id @default(autoincrement())
+  userId           Int      @map("user_id")
+  username         String   @db.VarChar(255)
+  type             String?  @db.VarChar(50)
+  profilePhotoPath String?  @db.VarChar(500) @map("profile_photo_path")
+  socialBuId       String?  @unique @db.VarChar(255) @map("social_bu_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
+  @@index([userId])
+  @@index([socialBuId])
   @@map("channels")
 }
 

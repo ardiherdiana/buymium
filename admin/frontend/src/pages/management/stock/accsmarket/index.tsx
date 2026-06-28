@@ -49,9 +49,10 @@ interface AccsmarketsResponse {
 }
 
 const STATUS_OPTIONS = [
-  { value: "all", label: "All Status" },
-  { value: "completed", label: "Completed" },
-  { value: "progress", label: "Progress" },
+  { value: "all", label: "Semua Status" },
+  { value: "completed", label: "Selesai" },
+  { value: "progress", label: "Proses" },
+  { value: "error", label: "Error" },
 ]
 
 const PAGE_SIZE = 100
@@ -215,16 +216,16 @@ export default function AccsmarketPage() {
   const stats = data?.stats
 
   const sourceOptions = [
-    { value: "all", label: "All Sources" },
+    { value: "all", label: "Semua Source" },
     ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name })),
   ]
 
   const followersOptions = [
-    { value: "all", label: "All Targets" },
+    { value: "all", label: "Semua Target" },
     ...(data?.targetFollowers ?? []).map((f) => ({ value: String(f), label: f.toLocaleString("id-ID") })),
   ]
   const yearOptions = [
-    { value: "all", label: "All Years" },
+    { value: "all", label: "Semua Tahun" },
     ...(data?.years ?? []).map((y) => ({ value: y, label: y })),
   ]
 
@@ -248,8 +249,8 @@ export default function AccsmarketPage() {
         {/* Mobile: compact */}
         <div className="grid grid-cols-2 gap-2 sm:hidden">
           {[
-            { label: "Total Accounts", value: stats?.total_accounts ?? 0, icon: Users, color: "text-blue-600" },
-            { label: "Active Accounts", value: stats?.completed_accounts ?? 0, icon: CheckCircle2, color: "text-emerald-600" },
+            { label: "Total Akun", value: stats?.total_accounts ?? 0, icon: Users, color: "text-blue-600" },
+            { label: "Akun Aktif", value: stats?.completed_accounts ?? 0, icon: CheckCircle2, color: "text-emerald-600" },
             { label: "Total Followers", value: (stats?.total_followers ?? 0).toLocaleString("id-ID"), icon: Heart, color: "text-red-500" },
           ].map(({ label, value, icon: Icon, color }) => (
             <Card key={label}>
@@ -268,9 +269,9 @@ export default function AccsmarketPage() {
           <Card>
             <CardContent className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Accounts</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Akun</p>
                 <p className="text-2xl font-bold mt-1">{stats?.total_accounts ?? 0}</p>
-                <p className="text-xs text-muted-foreground">All accounts</p>
+                <p className="text-xs text-muted-foreground">Semua akun</p>
               </div>
               <div className="size-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                 <Users className="size-5 text-blue-600" />
@@ -280,9 +281,9 @@ export default function AccsmarketPage() {
           <Card>
             <CardContent className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Active Accounts</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Akun Aktif</p>
                 <p className="text-2xl font-bold mt-1">{stats?.completed_accounts ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Completed accounts</p>
+                <p className="text-xs text-muted-foreground">Akun selesai</p>
               </div>
               <div className="size-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
                 <CheckCircle2 className="size-5 text-emerald-600" />
@@ -294,7 +295,7 @@ export default function AccsmarketPage() {
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Followers</p>
                 <p className="text-2xl font-bold mt-1">{stats?.total_followers?.toLocaleString("id-ID") ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Combined followers</p>
+                <p className="text-xs text-muted-foreground">Gabungan followers</p>
               </div>
               <div className="size-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
                 <Heart className="size-5 text-red-500" />
@@ -306,7 +307,7 @@ export default function AccsmarketPage() {
         {/* Search & Filter */}
         <Card>
           <CardContent className="p-4 space-y-3">
-            <p className="text-sm font-medium">Search & Filter</p>
+            <p className="text-sm font-medium">Cari & Filter</p>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
@@ -334,7 +335,7 @@ export default function AccsmarketPage() {
             disabled={scanProgress.status === "scanning" || syncProgress.status === "syncing"}
           >
             <RefreshCw className={`size-4 ${scanProgress.status === "scanning" ? "animate-spin" : ""}`} />
-            {scanProgress.status === "scanning" ? "Scanning..." : "Scan Followers"}
+            {scanProgress.status === "scanning" ? "Memindai..." : "Scan Followers"}
           </Button>
           <Button
             variant="outline"
@@ -343,7 +344,7 @@ export default function AccsmarketPage() {
             disabled={syncProgress.status === "syncing" || scanProgress.status === "scanning"}
           >
             <Sheet className={`size-4 ${syncProgress.status === "syncing" ? "animate-spin" : ""}`} />
-            {syncProgress.status === "syncing" ? "Syncing..." : "Sync Sheets"}
+            {syncProgress.status === "syncing" ? "Menyinkronkan..." : "Sync Sheets"}
           </Button>
         </div>
 
@@ -359,18 +360,18 @@ export default function AccsmarketPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Username</TableHead>
                   <TableHead>Password</TableHead>
-                  <TableHead>Current</TableHead>
+                  <TableHead>Saat Ini</TableHead>
                   <TableHead>Target</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>2FA</TableHead>
-                  <TableHead>Year</TableHead>
-                  <TableHead>Capital</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Tahun</TableHead>
+                  <TableHead>Modal</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading || isFetching ? <LoadingRow colSpan={11} /> : !accsmarkets.length ? (
-                  <EmptyRow colSpan={11} message="No accsmarkets found." />
+                  <EmptyRow colSpan={11} message="Tidak ada akun ditemukan." />
                 ) : (
                   accsmarkets.map((acc) => (
                     <TableRow key={acc.id} className={selectedIds.includes(acc.id) ? "bg-muted/40" : ""}>
@@ -384,7 +385,7 @@ export default function AccsmarketPage() {
                       <TableCell>{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</TableCell>
                       <TableCell>
                         <Badge variant={acc.accountStatus?.toLowerCase() === "completed" ? "completed" : acc.accountStatus?.toLowerCase() === "error" ? "destructive" : "progress"}>
-                          {acc.accountStatus?.toLowerCase() === "completed" ? "Completed" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Progress"}
+                          {acc.accountStatus?.toLowerCase() === "completed" ? "Selesai" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Proses"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{acc.twoFactorAuth ?? "-"}</TableCell>
@@ -421,7 +422,7 @@ export default function AccsmarketPage() {
           {isLoading || isFetching ? (
             <p className="text-sm text-muted-foreground text-center py-8">Memuat...</p>
           ) : !accsmarkets.length ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No accsmarkets found.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">Tidak ada akun ditemukan.</p>
           ) : (
             accsmarkets.map((acc) => (
               <Card key={acc.id} className={selectedIds.includes(acc.id) ? "ring-2 ring-primary" : ""}>
@@ -435,7 +436,7 @@ export default function AccsmarketPage() {
                       </div>
                     </div>
                     <Badge variant={acc.accountStatus?.toLowerCase() === "completed" ? "completed" : acc.accountStatus?.toLowerCase() === "error" ? "destructive" : "progress"} className="shrink-0">
-                      {acc.accountStatus?.toLowerCase() === "completed" ? "Completed" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Progress"}
+                      {acc.accountStatus?.toLowerCase() === "completed" ? "Selesai" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Proses"}
                     </Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -448,11 +449,11 @@ export default function AccsmarketPage() {
                       <span className="font-medium">{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Capital</span>
+                      <span className="text-muted-foreground">Modal</span>
                       <span className="font-medium">{acc.capital ? formatIDR(acc.capital) : "-"}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Year</span>
+                      <span className="text-muted-foreground">Tahun</span>
                       <span className="font-medium">{acc.year ?? "-"}</span>
                     </div>
                   </div>
@@ -493,19 +494,19 @@ export default function AccsmarketPage() {
             <div className="flex items-center gap-2">
               <Button size="sm" className="flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/stock/accsmarket/pos", { state: { selectedIds } })}>
                 <ShoppingCart className="size-3.5" />
-                Sold
+                Terjual
               </Button>
               <Button size="sm" className="flex-1 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
                 <ScanLine className="size-3.5" />
-                Scan
+                Pindai
               </Button>
               <Button size="sm" className="flex-1 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
                 <Copy className="size-3.5" />
-                Copy
+                Salin
               </Button>
               <Button size="sm" variant="destructive" className="flex-1 gap-1.5" onClick={handleBulkDelete}>
                 <Trash2 className="size-3.5" />
-                Delete
+                Hapus
               </Button>
             </div>
           </div>
@@ -514,19 +515,19 @@ export default function AccsmarketPage() {
             <span className="text-sm font-medium text-muted-foreground mr-1">{selectedIds.length} akun</span>
             <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/stock/accsmarket/pos", { state: { selectedIds } })}>
               <ShoppingCart className="size-3.5" />
-              Sold
+              Terjual
             </Button>
             <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
               <ScanLine className="size-3.5" />
-              Scan
+              Pindai
             </Button>
             <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
               <Copy className="size-3.5" />
-              Copy
+              Salin
             </Button>
             <Button size="sm" variant="destructive" className="gap-1.5" onClick={handleBulkDelete}>
               <Trash2 className="size-3.5" />
-              Delete
+              Hapus
             </Button>
           </div>
         </>
@@ -543,8 +544,8 @@ export default function AccsmarketPage() {
                 <Dropdown options={sourceOptions} value={scanSourceId} onChange={setScanSourceId} className="w-full" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setScanDialogOpen(false)}>Cancel</Button>
-                <Button onClick={runScan}>Scan</Button>
+                <Button variant="outline" onClick={() => setScanDialogOpen(false)}>Batal</Button>
+                <Button onClick={runScan}>Pindai</Button>
               </div>
             </>
           ) : (
@@ -566,7 +567,7 @@ export default function AccsmarketPage() {
               </div>
               {scanProgress.status === "done" && (
                 <div className="rounded bg-emerald-50 border border-emerald-200 px-4 py-3">
-                  <p className="text-sm font-medium text-emerald-700">Scan completed!</p>
+                  <p className="text-sm font-medium text-emerald-700">Pemindaian selesai!</p>
                 </div>
               )}
               {scanProgress.status === "error" && (
@@ -576,7 +577,7 @@ export default function AccsmarketPage() {
               )}
               {(scanProgress.status === "done" || scanProgress.status === "error") && (
                 <div className="flex justify-end">
-                  <Button variant="outline" onClick={() => setScanDialogOpen(false)}>Close</Button>
+                  <Button variant="outline" onClick={() => setScanDialogOpen(false)}>Tutup</Button>
                 </div>
               )}
             </>
@@ -589,14 +590,14 @@ export default function AccsmarketPage() {
         <DialogContent className="max-w-md">
           {syncProgress.status === "idle" ? (
             <>
-              <DialogHeader><DialogTitle>Sync with Google Sheets</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Sinkron dengan Google Sheets</DialogTitle></DialogHeader>
               <div className="space-y-2 pt-2">
                 <p className="text-sm font-medium">Source</p>
                 <Dropdown options={sourceOptions} value={syncSourceId} onChange={setSyncSourceId} className="w-full" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Cancel</Button>
-                <Button onClick={runSync}>Sync</Button>
+                <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Batal</Button>
+                <Button onClick={runSync}>Sinkron</Button>
               </div>
             </>
           ) : (
@@ -618,7 +619,7 @@ export default function AccsmarketPage() {
               </div>
               {syncProgress.status === "done" && (
                 <div className="rounded bg-emerald-50 border border-emerald-200 px-4 py-3">
-                  <p className="text-sm font-medium text-emerald-700">Sync completed!</p>
+                  <p className="text-sm font-medium text-emerald-700">Sinkronisasi selesai!</p>
                 </div>
               )}
               {syncProgress.status === "error" && (
@@ -628,7 +629,7 @@ export default function AccsmarketPage() {
               )}
               {(syncProgress.status === "done" || syncProgress.status === "error") && (
                 <div className="flex justify-end">
-                  <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Close</Button>
+                  <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Tutup</Button>
                 </div>
               )}
             </>

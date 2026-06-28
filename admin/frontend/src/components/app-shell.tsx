@@ -4,8 +4,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   ShoppingCart, Package, Users, Layers, Star,
   BarChart3, ShoppingBag, TrendingUp, Receipt, PieChart, UserSquare, Database,
-  LayoutDashboard, Plus, Trash2,
+  LayoutDashboard, Plus, Trash2, Sun, Moon,
 } from "lucide-react"
+import { useTheme } from "@/components/theme-provider"
 import { AppSidebar, type NavGroup } from "@/components/app-sidebar"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
@@ -18,7 +19,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuthStore } from "@/stores/authStore"
 import { EllipsisVertical, LogOut } from "lucide-react"
 import api from "@/lib/api"
@@ -83,6 +83,19 @@ const MANAGEMENT_NAV: NavGroup[] = [
 
 // ── generic shell ─────────────────────────────────────────────────
 
+function ThemeToggleButton() {
+  const { theme, setTheme } = useTheme()
+  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+  return (
+    <button
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+    >
+      {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+    </button>
+  )
+}
+
 function Shell({ navGroups }: { navGroups: NavGroup[] }) {
   return (
     <TooltipProvider>
@@ -92,6 +105,9 @@ function Shell({ navGroups }: { navGroups: NavGroup[] }) {
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
+            <div className="ml-auto">
+              <ThemeToggleButton />
+            </div>
           </header>
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
             <Outlet />
@@ -147,23 +163,14 @@ function ProfilePhoto({ path, username }: { path?: string; username: string }) {
 function AutopostingSidebarContent() {
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedId = searchParams.get("channel_id") ? Number(searchParams.get("channel_id")) : null
-  const queryClient = useQueryClient()
   const { state } = useSidebar()
-  const [manageOpen, setManageOpen] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ["autoposting-channels"],
     queryFn: () => api.get("/autoposting/channels").then((r) => r.data),
   })
 
-  const syncMutation = useMutation({
-    mutationFn: () => api.get("/autoposting/channels"),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["autoposting-channels"] })
-      setManageOpen(false)
-    },
-  })
-
+  const queryClient = useQueryClient()
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/autoposting/channels/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["autoposting-channels"] }),
@@ -196,45 +203,9 @@ function AutopostingSidebarContent() {
         </SidebarGroupContent>
       </SidebarGroup>
 
-      {/* Manage Channels Dialog */}
-      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Kelola Saluran</DialogTitle>
-            <DialogDescription>
-              Kelola akun sosial media kamu melalui SocialBu. Hubungkan akun baru di SocialBu, lalu klik Sinkronisasi di sini.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex gap-3 pt-2">
-            <Button
-              className="flex-1"
-              onClick={() => window.open("https://socialbu.com/app/accounts/add", "_blank")}
-            >
-              Hubungkan Akun
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={() => syncMutation.mutate()}
-              disabled={syncMutation.isPending}
-            >
-              {syncMutation.isPending ? "Menyinkron..." : "Sinkronisasi"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Channel list */}
       <SidebarGroup>
-        <SidebarGroupLabel className="flex items-center justify-between pr-1">
-          <span>Saluran</span>
-          <button
-            onClick={() => setManageOpen(true)}
-            className="text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors"
-            title="Kelola saluran"
-          >
-            <Plus className="size-3" />
-          </button>
-        </SidebarGroupLabel>
+        <SidebarGroupLabel>Saluran</SidebarGroupLabel>
         <SidebarGroupContent>
           {isLoading ? (
             <p className="text-xs text-muted-foreground px-2 py-1">Loading...</p>
@@ -332,6 +303,17 @@ function AutopostingSidebarComponent() {
 }
 
 export function AutopostingShell() {
+  const [manageOpen, setManageOpen] = useState(false)
+  const queryClient = useQueryClient()
+
+  const syncMutation = useMutation({
+    mutationFn: () => api.get("/autoposting/channels"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["autoposting-channels"] })
+      setManageOpen(false)
+    },
+  })
+
   return (
     <TooltipProvider>
       <SidebarProvider>
@@ -340,12 +322,49 @@ export function AutopostingShell() {
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
+            <div className="ml-auto">
+              <ThemeToggleButton />
+            </div>
           </header>
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative">
             <Outlet />
+            {/* FAB — Tambah Saluran */}
+            <button
+              onClick={() => setManageOpen(true)}
+              className="fixed bottom-6 right-6 size-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-50"
+              title="Tambah / kelola saluran"
+            >
+              <Plus className="size-5" />
+            </button>
           </div>
         </SidebarInset>
       </SidebarProvider>
+
+      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Kelola Saluran</DialogTitle>
+            <DialogDescription>
+              Kelola akun sosial media kamu melalui SocialBu. Hubungkan akun baru di SocialBu, lalu klik Sinkronisasi di sini.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 pt-2">
+            <Button
+              className="flex-1"
+              onClick={() => window.open("https://socialbu.com/app/accounts/add", "_blank")}
+            >
+              Hubungkan Akun
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+            >
+              {syncMutation.isPending ? "Menyinkron..." : "Sinkronisasi"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   )
 }

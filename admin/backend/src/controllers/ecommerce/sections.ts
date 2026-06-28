@@ -20,7 +20,7 @@ export class SectionsController {
   static async show(req: Request, res: Response): Promise<void> {
     try {
       const section = await db.productSection.findUnique({
-        where: { id: String(req.params.id) },
+        where: { id: parseInt(req.params.id) },
         include: { products: { orderBy: { createdAt: 'asc' } } },
       })
       if (!section) {
@@ -51,7 +51,7 @@ export class SectionsController {
     try {
       const { title, subtitle, order } = req.body
       const section = await db.productSection.update({
-        where: { id: String(req.params.id) },
+        where: { id: parseInt(req.params.id) },
         data: { title, subtitle, order },
       })
       res.json(section)
@@ -63,7 +63,7 @@ export class SectionsController {
 
   static async destroy(req: Request, res: Response): Promise<void> {
     try {
-      await db.productSection.delete({ where: { id: String(req.params.id) } })
+      await db.productSection.delete({ where: { id: parseInt(req.params.id) } })
       res.json({ message: 'Section dihapus' })
     } catch (err) {
       console.error('[Delete Section Error]', err)

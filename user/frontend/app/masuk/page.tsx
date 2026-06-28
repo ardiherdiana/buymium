@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, type FormEvent, Suspense } from "react"
+import { useState, useRef, type FormEvent, type KeyboardEvent, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Loader2, ArrowLeft, Eye, EyeOff } from "lucide-react"
+import { Loader2, ArrowLeft, Eye, EyeOff, Mail } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { GoogleSignInButton } from "@/components/google-signin-button"
@@ -23,6 +23,49 @@ export default function MasukPage() {
   )
 }
 
+function OtpInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputs = useRef<(HTMLInputElement | null)[]>([])
+  const digits = Array.from({ length: 6 }, (_, i) => value[i] ?? "")
+
+  function handleChange(i: number, v: string) {
+    const d = v.replace(/\D/g, "").slice(-1)
+    const next = [...digits]
+    next[i] = d
+    onChange(next.join(""))
+    if (d && i < 5) inputs.current[i + 1]?.focus()
+  }
+
+  function handleKeyDown(i: number, e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !digits[i] && i > 0) {
+      inputs.current[i - 1]?.focus()
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6)
+    if (pasted) { onChange(pasted.padEnd(6, "").slice(0, 6)); inputs.current[Math.min(pasted.length, 5)]?.focus() }
+    e.preventDefault()
+  }
+
+  return (
+    <div className="flex gap-2 justify-center" onPaste={handlePaste}>
+      {digits.map((d, i) => (
+        <input
+          key={i}
+          ref={(el) => { inputs.current[i] = el }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={d}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          className="size-11 rounded-lg border border-input bg-background text-center text-lg font-bold outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        />
+      ))}
+    </div>
+  )
+}
+
 function MasukForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -31,6 +74,11 @@ function MasukForm() {
   const redirectTo = searchParams.get("redirect") ?? "/dashboard"
 
   const [tab, setTab] = useState<Tab>("masuk")
+  const [step, setStep] = useState<"form" | "otp">("form")
+  const [pendingEmail, setPendingEmail] = useState("")
+  const [otpValue, setOtpValue] = useState("")
+  const [resendCooldown, setResendCooldown] = useState(0)
+
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -44,6 +92,15 @@ function MasukForm() {
     setName("")
     setEmail("")
     setPassword("")
+    setStep("form")
+    setOtpValue("")
+  }
+
+  function startResendCooldown() {
+    setResendCooldown(60)
+    const iv = setInterval(() => {
+      setResendCooldown((c) => { if (c <= 1) { clearInterval(iv); return 0 } return c - 1 })
+    }, 1000)
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -51,21 +108,72 @@ function MasukForm() {
     setError("")
     setLoading(true)
     try {
-      const endpoint = tab === "masuk" ? "/auth/login" : "/auth/register"
-      const body = tab === "masuk" ? { email, password } : { name, email, password }
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message ?? data.error ?? "Terjadi kesalahan")
-      login(data.user, data.token)
-      router.push(redirectTo)
+      if (tab === "masuk") {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.message ?? data.error ?? "Terjadi kesalahan")
+        login(data.user, data.token)
+        router.push(redirectTo)
+      } else {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.message ?? data.error ?? "Terjadi kesalahan")
+        setPendingEmail(email)
+        setStep("otp")
+        startResendCooldown()
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Terjadi kesalahan")
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleVerifyOtp(e: FormEvent) {
+    e.preventDefault()
+    if (otpValue.length < 6) { setError("Masukkan 6 digit kode OTP"); return }
+    setError("")
+    setLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail, otp: otpValue }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message ?? data.error ?? "Verifikasi gagal")
+      login(data.user, data.token)
+      router.push(redirectTo)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verifikasi gagal")
+      setOtpValue("")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleResendOtp() {
+    if (resendCooldown > 0) return
+    setError("")
+    try {
+      const res = await fetch(`${API_BASE}/auth/resend-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Gagal mengirim ulang")
+      startResendCooldown()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal mengirim ulang OTP")
     }
   }
 
@@ -91,6 +199,72 @@ function MasukForm() {
 
   const busy = loading || googleLoading
 
+  // ── OTP Step ──
+  if (step === "otp") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-primary/5 to-background px-4">
+        <div className="w-full max-w-sm">
+          <div className="mb-8 flex flex-col items-center gap-3 text-center">
+            <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10">
+              <Mail className="size-7 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold">Verifikasi Email</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Kode OTP dikirim ke
+              </p>
+              <p className="text-sm font-medium">{pendingEmail}</p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card shadow-sm p-6">
+            <form onSubmit={handleVerifyOtp} className="flex flex-col gap-6">
+              <div className="flex flex-col gap-2">
+                <label className="text-center text-xs font-medium text-muted-foreground">
+                  Masukkan 6 digit kode OTP
+                </label>
+                <OtpInput value={otpValue} onChange={setOtpValue} />
+              </div>
+
+              {error && (
+                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive text-center">
+                  {error}
+                </p>
+              )}
+
+              <Button type="submit" className="w-full" disabled={busy || otpValue.length < 6}>
+                {loading && <Loader2 className="size-4 animate-spin" />}
+                Verifikasi & Buat Akun
+              </Button>
+            </form>
+
+            <div className="mt-4 text-center">
+              <p className="text-xs text-muted-foreground">
+                Tidak menerima kode?{" "}
+                <button
+                  onClick={handleResendOtp}
+                  disabled={resendCooldown > 0}
+                  className="font-medium text-primary disabled:opacity-50 hover:underline"
+                >
+                  {resendCooldown > 0 ? `Kirim ulang (${resendCooldown}s)` : "Kirim ulang"}
+                </button>
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => { setStep("form"); setOtpValue(""); setError("") }}
+            className="mt-4 flex w-full items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Kembali ke pendaftaran
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Login / Register form ──
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-primary/5 to-background px-4">
       <a
@@ -224,21 +398,14 @@ function MasukForm() {
 
               <Button type="submit" className="w-full" disabled={busy}>
                 {loading && <Loader2 className="size-4 animate-spin" />}
-                {tab === "masuk" ? "Masuk" : "Buat Akun"}
+                {tab === "masuk" ? "Masuk" : "Daftar & Verifikasi Email"}
               </Button>
             </form>
           </div>
         </div>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          Dengan masuk, kamu setuju dengan{" "}
-          <a href="/syarat" className="underline hover:text-foreground">
-            Syarat & Ketentuan
-          </a>{" "}
-          dan{" "}
-          <a href="/privasi" className="underline hover:text-foreground">
-            Kebijakan Privasi
-          </a>
+          Dengan masuk, kamu menyetujui syarat & ketentuan Buymium.
         </p>
       </div>
     </div>

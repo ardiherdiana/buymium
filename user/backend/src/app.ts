@@ -6,13 +6,11 @@ import path from 'path'
 
 import authRoutes from './routes/auth'
 import productRoutes from './routes/products'
-import sectionRoutes from './routes/sections'
 import orderRoutes from './routes/orders'
 import adminRoutes from './routes/admin'
 import stockRoutes from './routes/stocks'
 import bankAccountRoutes from './routes/bankAccounts'
 import sitemapRoutes from './routes/sitemap'
-import referralRoutes from './routes/referral'
 import testimonialRoutes from './routes/testimonials'
 
 import { securityLogger } from './utils/securityLogger'
@@ -76,13 +74,11 @@ app.use('/api/uploads', express.static(path.join(process.cwd(), 'uploads')))
 
 app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)
-app.use('/api/sections', sectionRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/stocks', stockRoutes)
 app.use('/api/bank-accounts', bankAccountRoutes)
 app.use('/sitemap.xml', sitemapRoutes)
-app.use('/api/referral', referralRoutes)
 app.use('/api/testimonials', testimonialRoutes)
 
 export default app

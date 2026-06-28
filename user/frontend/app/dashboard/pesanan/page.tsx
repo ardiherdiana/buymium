@@ -96,7 +96,7 @@ export default function PesananPage() {
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <ShoppingBag className="mb-3 size-12 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">Tidak ada pesanan di kategori ini</p>
-          <Link href="/katalog" className="mt-2 text-sm text-primary hover:underline">
+          <Link href="/dashboard/produk" className="mt-2 text-sm text-primary hover:underline">
             Mulai belanja →
           </Link>
         </div>

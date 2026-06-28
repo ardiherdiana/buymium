@@ -30,7 +30,7 @@ export const SalesController = {
       // Base where: current month + optional source
       const buildWhere = (extra: Prisma.SaleWhereInput = {}): Prisma.SaleWhereInput => {
         const w: Prisma.SaleWhereInput = { createdAt: { gte: startOfMonth, lte: endOfDay }, ...extra }
-        if (sourceFilter) w.customer = { sourceId: parseInt(sourceFilter) }
+        if (sourceFilter) w.sourceId = parseInt(sourceFilter)
         return w
       }
 
@@ -96,9 +96,8 @@ export const SalesController = {
         ]
         if (sourceFilter) {
           // OR must not break the source filter — re-apply as AND
-          delete listWhere.customer
           listWhere.AND = [
-            { customer: { sourceId: parseInt(sourceFilter) } },
+            { sourceId: parseInt(sourceFilter) },
             { OR: listWhere.OR },
           ]
           delete listWhere.OR
@@ -108,7 +107,7 @@ export const SalesController = {
       const sales = await prisma.sale.findMany({
         where: listWhere,
         include: {
-          customer: { include: { sourceRel: true } },
+          customer: true,
           source: true,
         },
         orderBy: { createdAt: 'desc' },
@@ -131,10 +130,6 @@ export const SalesController = {
         customer: sale.customer ? {
           id: sale.customer.id,
           usernameSh: sale.customer.usernameSh,
-          source: sale.customer.sourceRel ? {
-            id: sale.customer.sourceRel.id,
-            name: sale.customer.sourceRel.name,
-          } : undefined,
         } : undefined,
         source: sale.source ? {
           id: sale.source.id,

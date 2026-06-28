@@ -144,7 +144,7 @@ export default function SalesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Sales{dateFrom ? ` — ${dateFrom}${dateTo ? ` s/d ${dateTo}` : ""}` : ""}</CardTitle>
+            <CardTitle className="text-sm font-medium">Penjualan{dateFrom ? ` — ${dateFrom}${dateTo ? ` s/d ${dateTo}` : ""}` : ""}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
@@ -165,7 +165,7 @@ export default function SalesPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Profit & Revenue{dateFrom ? ` — ${dateFrom}${dateTo ? ` s/d ${dateTo}` : ""}` : ""}</CardTitle>
+            <CardTitle className="text-sm font-medium">Profit & Pendapatan{dateFrom ? ` — ${dateFrom}${dateTo ? ` s/d ${dateTo}` : ""}` : ""}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>

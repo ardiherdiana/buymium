@@ -1,4 +1,4 @@
-import { Request, Response } from 'express'
+﻿import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import db from '../../config/database'
 import { logger } from '../../utils/logger'
@@ -46,7 +46,7 @@ export const AccsmarketsController = {
       // Only query accsmarket sources
       const accsmarketSources = await prisma.source.findMany({
         where: { isAccsmarket: true },
-        orderBy: [{ index: 'asc' }, { id: 'asc' }],
+        orderBy: [{ id: 'asc' }],
       })
       const accsmarketSourceIds = accsmarketSources.map((s) => s.id)
       if (accsmarketSourceIds.length > 0 && !where.sourceId) {
@@ -167,7 +167,7 @@ export const AccsmarketsController = {
       })
 
       const sources = await prisma.source.findMany({
-        orderBy: [{ index: 'asc' }, { id: 'asc' }],
+        orderBy: [{ id: 'asc' }],
       })
 
       const yearsRaw = await prisma.accsmarket.findMany({

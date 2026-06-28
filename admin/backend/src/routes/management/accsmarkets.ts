@@ -34,7 +34,7 @@ router.get('/scan/list', async (req: Request, res: Response) => {
 router.get('/search/customers', async (req: Request, res: Response) => {
   try {
     const search = req.query.search as string
-    const result = await AccsmarketsService.searchCustomers(search || '', undefined, undefined)
+    const result = await AccsmarketsService.searchCustomers(search || '')
     res.json(result)
   } catch (error) {
     logger.error('Error searching customers:', error)

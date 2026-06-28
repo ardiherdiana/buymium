@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -79,6 +79,7 @@ export default function UsersPage() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="size-8">
+                          <AvatarImage src={user.avatar ?? undefined} alt={user.name} />
                           <AvatarFallback className="text-xs bg-primary/10 text-primary">
                             {user.name?.charAt(0).toUpperCase() ?? "?"}
                           </AvatarFallback>
@@ -124,6 +125,7 @@ export default function UsersPage() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <Avatar className="size-10 shrink-0">
+                    <AvatarImage src={user.avatar ?? undefined} alt={user.name} />
                     <AvatarFallback className="text-sm bg-primary/10 text-primary">
                       {user.name?.charAt(0).toUpperCase() ?? "?"}
                     </AvatarFallback>

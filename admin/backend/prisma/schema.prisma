@@ -31,18 +31,12 @@ model User {
   email     String  @unique @db.VarChar(255)
   password  String  @db.VarChar(255)
   roleId    Int     @default(3) @map("role_id")
-  sourceId  Int?    @map("source_id")
   googleId  String? @unique @db.VarChar(255) @map("google_id")
   avatar    String? @db.VarChar(500)
-  referralCode    String? @unique @db.VarChar(32) @map("referral_code")
-  referredById    Int?    @map("referred_by_id")
-  referralBalance Int     @default(0) @map("referral_balance")
   createdAt DateTime @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
   role      Role                  @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  referredBy User?                @relation("UserReferrals", fields: [referredById], references: [id])
-  referrals  User[]                @relation("UserReferrals")
   orders       Order[]
   channels     Channel[]
   posts        AutopostingPost[]
@@ -53,22 +47,7 @@ model User {
   @@index([email])
   @@index([googleId])
   @@index([roleId])
-  @@index([sourceId])
   @@map("users")
-}
-
-// Product Section
-model ProductSection {
-  id        String   @id @db.VarChar(100)
-  title     String   @db.VarChar(255)
-  subtitle  String   @db.Text
-  order     Int      @default(0) @map("order_index")
-  createdAt DateTime @db.DateTime(3) @default(now()) @map("created_at")
-
-  products Product[]
-
-  @@index([order])
-  @@map("product_sections")
 }
 
 // Product model - shared
@@ -81,7 +60,7 @@ model Product {
   rating      Float   @default(0)
   isVerified  Boolean @default(false) @map("is_verified")
   tags        String  @default("[]") @db.VarChar(1000)
-  sectionId   String? @db.VarChar(100) @map("section_id")
+  sectionId   Int?    @map("section_id")
   createdAt   DateTime @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt   DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
@@ -93,6 +72,19 @@ model Product {
   @@index([inStock])
   @@index([sectionId])
   @@map("products")
+}
+
+model ProductSection {
+  id        Int      @id
+  title     String
+  subtitle  String   @default("")
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  products Product[]
+
+  @@map("product_sections")
 }
 
 // Order model - shared
@@ -232,19 +224,16 @@ model AutopostingSchedule {
 model Source {
   id                      Int       @id @default(autoincrement())
   name                    String    @db.VarChar(255)
-  index                   Int       @default(0)
   spreadsheetId           String?   @db.VarChar(500) @map("spreadsheet_id")
   isAccsmarket            Boolean   @default(false) @map("is_accsmarket")
   createdAt               DateTime  @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt               DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
   accounts Account[]
-  customers Customer[]
   accsmarkets Accsmarket[]
   sales Sale[]
   expenses Expense[]
 
-  @@index([index])
   @@map("sources")
 }
 
@@ -274,8 +263,6 @@ model Account {
   @@index([sourceId])
   @@index([orderIndex])
   @@index([accountStatus])
-  @@unique([email])
-  @@unique([username])
   @@map("accounts")
 }
 
@@ -283,16 +270,13 @@ model Customer {
   id              Int       @id @default(autoincrement())
   usernameSh      String?   @db.VarChar(255) @map("username_shopee")
   nomorHp         String?   @db.VarChar(20) @map("nomor_hp")
-  sourceId        Int?      @map("source_id")
   createdBy       Int?      @map("created_by")
   createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  sourceRel Source? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   creator   User?   @relation(fields: [createdBy], references: [id], onDelete: SetNull)
   sales     Sale[]
 
-  @@index([sourceId])
   @@index([createdAt])
   @@index([usernameSh])
   @@map("customers")
@@ -325,8 +309,6 @@ model Accsmarket {
   @@index([sourceId])
   @@index([orderIndex])
   @@index([accountStatus])
-  @@unique([email])
-  @@unique([username])
   @@map("accsmarkets")
 }
 

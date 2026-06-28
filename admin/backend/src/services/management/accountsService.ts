@@ -87,7 +87,7 @@ export const AccountsService = {
             isSold: false,
           },
         })
-        logger.info(`Deleted ${deletedCount} existing accounts (is_sold = false) for source ID: ${source.id} (${source.name})`)
+        logger.info(`Deleted ${deletedCount.count} existing accounts (is_sold = false) for source ID: ${source.id} (${source.name})`)
 
         let syncedCount = 0
         let orderIndex = 1
@@ -508,13 +508,9 @@ export const AccountsService = {
     }
   },
 
-  async searchCustomers(search: string, userRole?: { name?: string }, userSourceId?: number) {
+  async searchCustomers(search: string) {
     try {
       let where: Prisma.CustomerWhereInput = {}
-
-      if (userRole?.name === 'admin' && userSourceId) {
-        where.sourceId = userSourceId
-      }
 
       if (search) {
         where.OR = [

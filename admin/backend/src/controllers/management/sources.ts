@@ -1,5 +1,4 @@
 import { Request, Response } from 'express'
-import { Prisma } from '@prisma/client'
 import db from '../../config/database'
 import { logger } from '../../utils/logger'
 
@@ -12,7 +11,7 @@ export const SourcesController = {
       const limit = 15
 
       const sources = await prisma.source.findMany({
-        orderBy: [{ index: 'asc' }, { id: 'asc' }],
+        orderBy: [{ id: 'asc' }],
         skip: (page - 1) * limit,
         take: limit,
       })
@@ -20,7 +19,6 @@ export const SourcesController = {
       const sourcesWithMeta = sources.map((source) => ({
         id: source.id,
         name: source.name,
-        index: source.index,
         spreadsheet_id: source.spreadsheetId,
         is_accsmarket: source.isAccsmarket,
         created_at: source.createdAt,
@@ -56,7 +54,6 @@ export const SourcesController = {
         data: {
           name,
           spreadsheetId: spreadsheet_id,
-          index: 0,
           isAccsmarket: is_accsmarket === 'true' || is_accsmarket === true,
         },
       })
@@ -66,7 +63,6 @@ export const SourcesController = {
         source: {
           id: source.id,
           name: source.name,
-          index: source.index,
           spreadsheet_id: source.spreadsheetId,
           is_accsmarket: source.isAccsmarket,
           created_at: source.createdAt,
@@ -86,22 +82,19 @@ export const SourcesController = {
   async update(req: Request, res: Response) {
     try {
       const { id } = req.params
-      const { name, spreadsheet_id, index, is_accsmarket } = req.body
+      const { name, spreadsheet_id, is_accsmarket } = req.body
 
       if (!name || !spreadsheet_id) {
         return res.status(400).json({ error: 'Name and spreadsheet_id are required' })
       }
 
-      const updateData: Prisma.SourceUpdateInput = {
-        name,
-        spreadsheetId: spreadsheet_id,
-        isAccsmarket: is_accsmarket === 'true' || is_accsmarket === true,
-        ...(index !== undefined && { index }),
-      }
-
       const source = await prisma.source.update({
         where: { id: parseInt(id) },
-        data: updateData,
+        data: {
+          name,
+          spreadsheetId: spreadsheet_id,
+          isAccsmarket: is_accsmarket === 'true' || is_accsmarket === true,
+        },
       })
 
       res.json({
@@ -109,7 +102,6 @@ export const SourcesController = {
         source: {
           id: source.id,
           name: source.name,
-          index: source.index,
           spreadsheet_id: source.spreadsheetId,
           is_accsmarket: source.isAccsmarket,
           created_at: source.createdAt,

@@ -5,7 +5,7 @@ import { ArrowLeft, Loader2, CheckCircle } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api"
 
 const INPUT_CLASS =
   "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2"

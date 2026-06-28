@@ -19,9 +19,8 @@ import {
   SquaresFourIcon,
   ShoppingBagIcon,
   UserCircleIcon,
-  StorefrontIcon,
-  QuestionIcon,
   TagIcon,
+  WhatsappLogoIcon,
 } from "@phosphor-icons/react"
 
 const navMain = [
@@ -49,14 +48,10 @@ const navMain = [
 
 const navSecondary = [
   {
-    title: "Toko",
-    url: "/katalog",
-    icon: <StorefrontIcon />,
-  },
-  {
-    title: "Bantuan",
-    url: "/#faq",
-    icon: <QuestionIcon />,
+    title: "WhatsApp",
+    url: "https://wa.me/6285692689599",
+    icon: <WhatsappLogoIcon />,
+    external: true,
   },
 ]
 

@@ -37,7 +37,7 @@ router.get('/scan/list', async (req: Request, res: Response) => {
 router.get('/search/customers', async (req: Request, res: Response) => {
   try {
     const search = req.query.search as string
-    const result = await AccountsService.searchCustomers(search || '', undefined, undefined)
+    const result = await AccountsService.searchCustomers(search || '')
     res.json(result)
   } catch (error) {
     logger.error('Error searching customers:', error)
@@ -61,7 +61,7 @@ router.post('/sync', validate(SyncAccountSchema), async (req: Request, res: Resp
       // Sync all non-accsmarket sources if source_id is not provided
       const sources = await prisma.source.findMany({
         where: { isAccsmarket: false },
-        orderBy: [{ index: 'asc' }, { id: 'asc' }],
+        orderBy: [{ id: 'asc' }],
       })
 
       if (!sources.length) {

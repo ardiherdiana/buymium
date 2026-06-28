@@ -44,7 +44,7 @@ interface ExpensesResponse {
 const PAGE_SIZE = 50
 
 const MONTH_OPTIONS = [
-  { value: "all", label: "All Months" },
+  { value: "all", label: "Semua Bulan" },
   ...Array.from({ length: 12 }, (_, i) => ({
     value: String(i + 1),
     label: new Intl.DateTimeFormat("id-ID", { month: "long" }).format(new Date(2024, i, 1)),
@@ -162,18 +162,18 @@ export default function ExpensesPage() {
   const expenses = data?.expenses ?? []
 
   const categoryOptions = [
-    { value: "all", label: "All Categories" },
+    { value: "all", label: "Semua Kategori" },
     ...(data?.categories ?? []).map((c) => ({ value: String(c.id), label: c.name })),
   ]
 
   const sourceOptions = [
-    { value: "all", label: "All Sources" },
+    { value: "all", label: "Semua Source" },
     ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name })),
   ]
 
   const categoryFormOptions = (data?.categories ?? []).map((c) => ({ value: String(c.id), label: c.name }))
   const sourceFormOptions = [
-    { value: "", label: "No Source" },
+    { value: "", label: "Tanpa Source" },
     ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name })),
   ]
 
@@ -186,11 +186,11 @@ export default function ExpensesPage() {
       {/* Search & Filter */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          <p className="text-sm font-medium">Search & Filter</p>
+          <p className="text-sm font-medium">Cari & Filter</p>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search expenses..."
+              placeholder="Cari pengeluaran..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
               className="pl-9"
@@ -212,11 +212,11 @@ export default function ExpensesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12">No</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Category</TableHead>
+                <TableHead>Tanggal</TableHead>
+                <TableHead>Kategori</TableHead>
                 <TableHead>Source</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right">Jumlah</TableHead>
+                <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

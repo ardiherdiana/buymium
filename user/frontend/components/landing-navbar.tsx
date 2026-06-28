@@ -3,6 +3,7 @@
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export function LandingNavbar() {
   const { user, isLoading } = useAuth()
@@ -16,6 +17,7 @@ export function LandingNavbar() {
         </a>
 
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           {!isLoading && (
             user ? (
               <Button size="sm" asChild>

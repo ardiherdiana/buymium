@@ -27,15 +27,6 @@ export interface Product {
   rating: number
   isVerified: boolean
   tags: string[]
-  sectionId: string | null
-}
-
-export interface Section {
-  id: string
-  title: string
-  subtitle: string
-  order: number
-  listings: Product[]
 }
 
 export interface Testimonial {

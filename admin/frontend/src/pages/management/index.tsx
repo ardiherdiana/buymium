@@ -160,12 +160,12 @@ export default function ManagementDashboard() {
   const accsmarketStock = data?.accsmarket_stock
 
   const statCards = [
-    { title: "Total Revenue", value: formatIDR(stats?.total_revenue ?? 0), icon: DollarSign },
+    { title: "Total Pendapatan", value: formatIDR(stats?.total_revenue ?? 0), icon: DollarSign },
     { title: "Total Profit", value: formatIDR(stats?.total_profit ?? 0), icon: TrendingUp },
-    { title: "Total Users", value: (stats?.total_users ?? 0).toLocaleString("id-ID"), icon: Users },
-    { title: "Total Accounts", value: (stats?.total_accounts ?? 0).toLocaleString("id-ID"), icon: Package },
-    { title: "Active Accounts", value: (stats?.active_accounts ?? 0).toLocaleString("id-ID"), icon: Activity },
-    { title: "Total Customers", value: (stats?.total_customers ?? 0).toLocaleString("id-ID"), icon: UserSquare },
+    { title: "Total Pengguna", value: (stats?.total_users ?? 0).toLocaleString("id-ID"), icon: Users },
+    { title: "Total Akun", value: (stats?.total_accounts ?? 0).toLocaleString("id-ID"), icon: Package },
+    { title: "Akun Aktif", value: (stats?.active_accounts ?? 0).toLocaleString("id-ID"), icon: Activity },
+    { title: "Total Pelanggan", value: (stats?.total_customers ?? 0).toLocaleString("id-ID"), icon: UserSquare },
   ]
 
   return (
@@ -185,14 +185,14 @@ export default function ManagementDashboard() {
       {/* Stock Summary */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Stock Summary</h2>
+          <h2 className="text-lg font-semibold text-foreground">Ringkasan Stok</h2>
           <p className="text-xs text-muted-foreground">Distribusi stok berdasarkan platform dan tipe produk</p>
         </div>
 
         {/* Tabs */}
         <div className="flex border-b border-border overflow-x-auto">
           {([
-            { key: "accounts" as const, label: "Accounts", total: accountsStock?.total_stock },
+            { key: "accounts" as const, label: "Akun", total: accountsStock?.total_stock },
             { key: "accsmarket" as const, label: "Accsmarket", total: accsmarketStock?.total_stock },
           ]).map((tab) => (
             <button

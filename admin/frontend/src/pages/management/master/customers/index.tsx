@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Search, Pencil, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Dropdown } from "@/components/ui/dropdown-select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyRow, LoadingRow, Pagination } from "@/components/ui/table-extras"
 import { Card, CardContent } from "@/components/ui/card"
@@ -17,21 +16,13 @@ interface Customer {
   id: number
   username_shopee: string
   nomor_hp?: string
-  source_name?: string
-  source_id?: number
   creator?: { id: number; name: string }
   created_at: string
   total_profit: number
 }
 
-interface Source {
-  id: number
-  name: string
-}
-
 interface CustomersResponse {
   customers: Customer[]
-  sources: Source[]
   pagination: { page: number; limit: number; total: number; pages: number }
 }
 
@@ -40,26 +31,24 @@ const PAGE_SIZE = 15
 interface CustomerForm {
   username_shopee: string
   nomor_hp: string
-  source_id: string
 }
 
-const emptyForm: CustomerForm = { username_shopee: "", nomor_hp: "", source_id: "" }
+const emptyForm: CustomerForm = { username_shopee: "", nomor_hp: "" }
 
 export default function CustomersPage() {
   const queryClient = useQueryClient()
   const alert = useAlert()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState("")
-  const [source, setSource] = useState("all")
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState<CustomerForm>(emptyForm)
 
   const { data, isLoading } = useQuery<CustomersResponse>({
-    queryKey: ["management-customers", page, search, source],
+    queryKey: ["management-customers", page, search],
     queryFn: () =>
       api.get("/management/customers", {
-        params: { page, search: search || undefined, source: source !== "all" ? source : undefined },
+        params: { page, search: search || undefined },
       }).then((r) => r.data),
   })
 
@@ -98,7 +87,6 @@ export default function CustomersPage() {
     setForm({
       username_shopee: c.username_shopee,
       nomor_hp: c.nomor_hp ?? "",
-      source_id: String(c.source_id ?? ""),
     })
     setModalOpen(true)
   }
@@ -118,21 +106,10 @@ export default function CustomersPage() {
     saveMutation.mutate({
       username_shopee: form.username_shopee,
       nomor_hp: form.nomor_hp || undefined,
-      source_id: form.source_id || undefined,
     })
   }
 
   const customers = data?.customers ?? []
-
-  const sourceOptions = [
-    { value: "all", label: "All Sources" },
-    ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name })),
-  ]
-
-  const sourceFormOptions = [
-    { value: "", label: "No Source" },
-    ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name })),
-  ]
 
   return (
     <div className="space-y-5">
@@ -140,7 +117,7 @@ export default function CustomersPage() {
         <h1 className="text-xl font-semibold">Pelanggan</h1>
       </div>
 
-      {/* Search + Source filter */}
+      {/* Search */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -151,12 +128,6 @@ export default function CustomersPage() {
             className="pl-9"
           />
         </div>
-        <Dropdown
-          options={sourceOptions}
-          value={source}
-          onChange={(v) => { setSource(v); setPage(1) }}
-          className="w-44"
-        />
       </div>
 
       {/* Desktop: table */}
@@ -168,16 +139,15 @@ export default function CustomersPage() {
                 <TableHead className="w-14">NO</TableHead>
                 <TableHead>Username Shopee</TableHead>
                 <TableHead>Nomor HP</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Created By</TableHead>
-                <TableHead>Created At</TableHead>
+                <TableHead>Dibuat Oleh</TableHead>
+                <TableHead>Tanggal Dibuat</TableHead>
                 <TableHead className="text-right">Total Profit</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? <LoadingRow colSpan={8} /> : !customers.length ? (
-                <EmptyRow colSpan={8} message="Tidak ada pelanggan ditemukan" />
+              {isLoading ? <LoadingRow colSpan={7} /> : !customers.length ? (
+                <EmptyRow colSpan={7} message="Tidak ada pelanggan ditemukan" />
               ) : (
                 customers.map((c, idx) => {
                   const rank = (page - 1) * PAGE_SIZE + idx + 1
@@ -195,7 +165,6 @@ export default function CustomersPage() {
                       </TableCell>
                       <TableCell className="font-medium">{c.username_shopee}</TableCell>
                       <TableCell className="text-muted-foreground">{c.nomor_hp ?? "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{c.source_name ?? "-"}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{c.creator?.name ?? "-"}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {new Date(c.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
@@ -242,7 +211,6 @@ export default function CustomersPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     <span>{c.nomor_hp ?? "-"}</span>
-                    <span>{c.source_name ?? "-"}</span>
                     <span>{c.creator?.name ?? "-"}</span>
                     <span>{new Date(c.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}</span>
                   </div>
@@ -281,15 +249,6 @@ export default function CustomersPage() {
               placeholder="081234567890"
               value={form.nomor_hp}
               onChange={(e) => setForm((f) => ({ ...f, nomor_hp: e.target.value }))}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Source</label>
-            <Dropdown
-              options={sourceFormOptions}
-              value={form.source_id}
-              onChange={(v) => setForm((f) => ({ ...f, source_id: v }))}
-              className="w-full"
             />
           </div>
           <div className="flex gap-2 pt-2">

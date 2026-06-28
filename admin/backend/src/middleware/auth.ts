@@ -50,7 +50,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   try {
     const payload = jwt.verify(token, getSecret()) as JwtPayload
 
-    if (!['admin', 'superadmin'].includes(payload.roleName)) {
+    if (payload.roleName !== 'admin') {
       securityLogger.forbidden(payload.userId, req.path, ip)
       res.status(403).json({ success: false, error: 'Admin access required' })
       return
@@ -65,30 +65,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 export function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
-  const token = req.headers.authorization?.split(' ')[1]
-  const ip = getClientIp(req)
-
-  if (!token) {
-    securityLogger.unauthorized(req.path, ip, req.method)
-    res.status(401).json({ success: false, error: 'Missing authorization token' })
-    return
-  }
-
-  try {
-    const payload = jwt.verify(token, getSecret()) as JwtPayload
-
-    if (payload.roleName !== 'superadmin') {
-      securityLogger.forbidden(payload.userId, req.path, ip)
-      res.status(403).json({ success: false, error: 'Superadmin access required' })
-      return
-    }
-
-    req.user = payload
-    next()
-  } catch (err) {
-    securityLogger.unauthorized(req.path, ip, req.method)
-    res.status(401).json({ success: false, error: 'Invalid token' })
-  }
+  return requireAdmin(req, res, next)
 }
 
 export function generateToken(userId: number, email: string, roleName: string, roleId: number): string {

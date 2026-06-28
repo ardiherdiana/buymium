@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom"
-import { ShoppingCart, Bot, BarChart3, LogOut, ArrowRight } from "lucide-react"
+import { ShoppingCart, Bot, BarChart3, LogOut, ArrowRight, Sun, Moon } from "lucide-react"
 import { useAuthStore } from "@/stores/authStore"
+import { useTheme } from "@/components/theme-provider"
 
 const modules = [
   {
@@ -28,6 +29,8 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+  const { theme, setTheme } = useTheme()
+  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -41,11 +44,17 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <div className="hidden sm:block text-right">
             <p className="text-xs font-medium text-foreground">{user?.name}</p>
             <p className="text-xs text-muted-foreground">{user?.email}</p>
           </div>
+          <button
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            className="flex size-8 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors border border-border"
+          >
+            {isDark ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+          </button>
           <button
             onClick={() => { logout(); navigate("/login") }}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-border px-3 h-8"

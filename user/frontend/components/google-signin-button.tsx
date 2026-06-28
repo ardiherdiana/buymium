@@ -15,6 +15,7 @@ declare global {
           initialize: (config: object) => void
           renderButton: (element: HTMLElement, options: object) => void
           prompt: () => void
+          disableAutoSelect: () => void
         }
       }
     }
@@ -43,6 +44,9 @@ export function GoogleSignInButton({ onCredential, disabled }: GoogleSignInButto
           onCredentialRef.current(response.credential)
         },
         ux_mode: "popup",
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        itp_support: true,
       })
       window.google.accounts.id.renderButton(containerRef.current, {
         type: "standard",
@@ -58,17 +62,17 @@ export function GoogleSignInButton({ onCredential, disabled }: GoogleSignInButto
 
     if (window.google) {
       initGoogle()
-      return
-    }
-
-    // Only append script once
-    if (!document.querySelector('script[src="https://accounts.google.com/gsi/client"]')) {
+    } else if (!document.querySelector('script[src="https://accounts.google.com/gsi/client"]')) {
       const script = document.createElement("script")
       script.src = "https://accounts.google.com/gsi/client"
       script.async = true
       script.defer = true
       script.onload = initGoogle
       document.head.appendChild(script)
+    }
+
+    return () => {
+      window.google?.accounts.id.disableAutoSelect()
     }
   }, []) // empty deps — init once on mount
 

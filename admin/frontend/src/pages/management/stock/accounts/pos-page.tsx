@@ -54,7 +54,7 @@ export default function AccountsPosPage() {
   const { data } = useQuery<AccountsResponse>({
     queryKey: ["accounts-pos-items", initialIds],
     queryFn: () =>
-      api.get("/management/accounts", { params: { account_ids: initialIds.join(",") } }).then((r) => r.data),
+      api.get("/management/accounts/sales-mobile", { params: { account_ids: initialIds.join(",") } }).then((r) => r.data),
     enabled: initialIds.length > 0,
   })
 
@@ -184,7 +184,7 @@ export default function AccountsPosPage() {
         {/* RIGHT — Checkout panel (order-1 on mobile, col-2 on desktop) */}
         <div className="flex flex-col gap-4 order-1 sm:order-2">
           {/* Customer */}
-          <Card>
+          <Card className="overflow-visible">
             <CardHeader className="pb-3 pt-4 px-4">
               <CardTitle className="text-sm flex items-center gap-2"><User className="size-4" /> Customer *</CardTitle>
             </CardHeader>

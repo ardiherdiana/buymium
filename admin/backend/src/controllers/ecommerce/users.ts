@@ -9,7 +9,7 @@ export class UsersController {
       const limit = Math.min(100, parseInt(String(req.query.limit || '20')) || 20)
       const search = req.query.search as string | undefined
 
-      const where: Prisma.UserWhereInput = { roleId: 2 }
+      const where: Prisma.UserWhereInput = { roleId: { in: [2, 3] } }
       if (search) {
         where.OR = [
           { name: { contains: search } },

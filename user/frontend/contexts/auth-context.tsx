@@ -7,6 +7,7 @@ export interface AuthUser {
   name: string
   email: string
   avatar?: string
+  hasPassword?: boolean
 }
 
 interface AuthContextValue {
@@ -28,8 +29,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedToken = localStorage.getItem("auth_token")
     const storedUser = localStorage.getItem("auth_user")
     if (storedToken && storedUser) {
-      setToken(storedToken)
-      setUser(JSON.parse(storedUser))
+      try {
+        const payload = JSON.parse(atob(storedToken.split(".")[1]))
+        const isExpired = payload.exp && Date.now() / 1000 > payload.exp
+        if (isExpired) {
+          localStorage.removeItem("auth_token")
+          localStorage.removeItem("auth_user")
+        } else {
+          setToken(storedToken)
+          setUser(JSON.parse(storedUser))
+        }
+      } catch {
+        localStorage.removeItem("auth_token")
+        localStorage.removeItem("auth_user")
+      }
     }
     setIsLoading(false)
   }, [])

@@ -18,7 +18,6 @@ interface Product {
   id: number
   title: string
   price: number
-  section?: { title: string }
   stocks?: { id: number }[]
   isActive: boolean
   imageUrl?: string
@@ -90,7 +89,6 @@ export default function ProductsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[40%]">Produk</TableHead>
-                <TableHead className="w-[15%]">Seksi</TableHead>
                 <TableHead className="w-[15%]">Harga</TableHead>
                 <TableHead className="w-[10%]">Stok</TableHead>
                 <TableHead className="w-[10%]">Status</TableHead>
@@ -108,7 +106,6 @@ export default function ProductsPage() {
                     <TableCell className="max-w-0">
                       <span className="font-medium truncate block">{product.title}</span>
                     </TableCell>
-                    <TableCell className="text-muted-foreground truncate max-w-0">{product.section?.title || "-"}</TableCell>
                     <TableCell className="font-medium">{formatIDR(product.price)}</TableCell>
                     <TableCell>{product.stocks?.length ?? 0}</TableCell>
                     <TableCell>
@@ -172,7 +169,6 @@ export default function ProductsPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 space-y-1">
                     <p className="font-medium text-sm leading-tight truncate">{product.title}</p>
-                    <p className="text-xs text-muted-foreground">{product.section?.title || "—"}</p>
                     <div className="flex items-center gap-3">
                       <span className="font-semibold text-sm">{formatIDR(product.price)}</span>
                       <span className="text-xs text-muted-foreground">{product.stocks?.length ?? 0} stok</span>

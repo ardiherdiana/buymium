@@ -5,7 +5,7 @@ import { requireAdmin } from '../middleware/auth'
 
 const router = Router()
 
-function parseProduct(p: Product & { section?: any }) {
+function parseProduct(p: Product) {
   return {
     ...p,
     tags: (() => { try { return JSON.parse(p.tags) } catch { return [] } })(),
@@ -15,19 +15,16 @@ function parseProduct(p: Product & { section?: any }) {
 router.get('/', async (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1)
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '20')) || 20))
-  const sectionId = req.query.sectionId as string | undefined
   const rawSearch = req.query.search as string | undefined
   const search = rawSearch ? rawSearch.slice(0, 100) : undefined
 
   const where: Prisma.ProductWhereInput = {}
-  if (sectionId) where.sectionId = sectionId
   if (search) where.title = { contains: search }
 
   const [total, products] = await Promise.all([
     db.product.count({ where }),
     db.product.findMany({
       where,
-      include: { section: true },
       orderBy: { createdAt: 'asc' },
       skip: (page - 1) * limit,
       take: limit,
@@ -79,10 +76,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     return
   }
 
-  const product = await db.product.findUnique({
-    where: { id },
-    include: { section: true },
-  })
+  const product = await db.product.findUnique({ where: { id } })
 
   if (!product) {
     res.status(404).json({ error: 'Produk tidak ditemukan' })
@@ -93,10 +87,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 })
 
 router.post('/', requireAdmin, async (req: Request, res: Response) => {
-  const {
-    title, description, inStock, price,
-    rating, isVerified, tags, sectionId,
-  } = req.body
+  const { title, description, inStock, price, rating, isVerified, tags } = req.body
 
   if (!title || !description) {
     res.status(400).json({ error: 'title dan description wajib diisi' })
@@ -111,7 +102,6 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
       rating: rating ?? 0,
       isVerified: isVerified ?? false,
       tags: Array.isArray(tags) ? JSON.stringify(tags) : (tags ?? '[]'),
-      sectionId: sectionId || null,
     },
   })
 
@@ -125,18 +115,13 @@ router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
     return
   }
 
-  const {
-    title, description, inStock, price,
-    rating, isVerified, tags, sectionId,
-  } = req.body
+  const { title, description, inStock, price, rating, isVerified, tags } = req.body
 
   const product = await db.product.update({
     where: { id },
     data: {
-      title, description, inStock, price,
-      rating, isVerified,
+      title, description, inStock, price, rating, isVerified,
       tags: Array.isArray(tags) ? JSON.stringify(tags) : tags,
-      sectionId: sectionId || null,
     },
   })
 

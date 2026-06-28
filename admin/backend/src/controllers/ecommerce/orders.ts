@@ -163,15 +163,6 @@ export class OrdersController {
 
       const buyer = await db.user.findUnique({ where: { id: order.userId } })
 
-      if (buyer?.referredById) {
-        const totalAll = groupOrders.reduce((s, o) => s + o.totalPrice, 0)
-        const commission = Math.round(totalAll * 0.05)
-        await db.user.update({
-          where: { id: buyer.referredById },
-          data: { referralBalance: { increment: commission } },
-        })
-      }
-
       if (buyer?.email) {
         const totalAll = groupOrders.reduce((s, o) => s + o.totalPrice, 0)
         sendOrderConfirmed({
