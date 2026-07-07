@@ -39,7 +39,7 @@ router.get('/orders', requireAdmin, async (req: Request, res: Response) => {
       where,
       include: {
         user: { select: { id: true, name: true, email: true } },
-        product: { select: { id: true, title: true, section: { select: { title: true } } } },
+        product: { select: { id: true, title: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
@@ -56,11 +56,7 @@ router.get('/orders/:id', requireAdmin, async (req: Request, res: Response) => {
     where: { id: parseInt(String(id)) },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      product: { 
-        include: { 
-          section: { select: { title: true } } 
-        } 
-      },
+      product: true,
     },
   })
 

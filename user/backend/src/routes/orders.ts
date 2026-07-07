@@ -200,7 +200,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   const orders = await db.order.findMany({
     where: { userId },
     include: {
-      product: { select: { id: true, title: true, price: true, section: { select: { title: true } } } },
+      product: { select: { id: true, title: true, price: true } },
       bankAccount: { select: { id: true, bankName: true, accountHolder: true, accountNumber: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -238,7 +238,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   const order = await db.order.findFirst({
     where: { id: orderId, userId },
     include: {
-      product: { include: { section: true } },
+      product: true,
       bankAccount: { select: { id: true, bankName: true, accountHolder: true, accountNumber: true, logo: true } },
     },
   })
@@ -249,7 +249,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   if (order.groupId?.startsWith('BUYMIUM-CART-')) {
     relatedOrders = await db.order.findMany({
       where: { groupId: order.groupId, userId },
-      include: { product: { include: { section: true } } },
+      include: { product: true },
       orderBy: { id: 'asc' },
     })
   }
@@ -299,7 +299,7 @@ router.get('/:id/invoice', requireAuth, async (req: Request, res: Response) => {
 
   const order = await db.order.findFirst({
     where: { id: orderId, userId },
-    include: { product: { include: { section: true } }, user: true, bankAccount: true },
+    include: { product: true, user: true, bankAccount: true },
   })
   if (!order) { res.status(404).json({ error: 'Pesanan tidak ditemukan' }); return }
 
@@ -307,7 +307,7 @@ router.get('/:id/invoice', requireAuth, async (req: Request, res: Response) => {
   if (order.groupId?.startsWith('BUYMIUM-CART-')) {
     const related = await db.order.findMany({
       where: { groupId: order.groupId, userId },
-      include: { product: { include: { section: true } }, user: true, bankAccount: true },
+      include: { product: true, user: true, bankAccount: true },
       orderBy: { id: 'asc' },
     })
     if (related.length > 0) allOrders = related as typeof order[]
@@ -388,7 +388,7 @@ router.get('/:id/invoice', requireAuth, async (req: Request, res: Response) => {
         : item.product.title
       const itemSubtotal = Math.round(item.product.price * item.quantity)
       label(titleDisplay, 58, y, { size: 8 })
-      label(item.product.section?.title ?? 'Instagram', 270, y, { size: 8 })
+      label('Instagram', 270, y, { size: 8 })
       label(String(item.quantity), 370, y, { size: 8 })
       label(`Rp ${item.product.price.toLocaleString('id-ID')}`, 410, y, { size: 8 })
       label(`Rp ${itemSubtotal.toLocaleString('id-ID')}`, W - 100, y, { size: 8, width: 50, align: 'right' })

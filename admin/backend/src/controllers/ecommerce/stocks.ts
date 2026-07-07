@@ -79,14 +79,17 @@ export class StocksController {
       const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1)
       const limit = Math.min(200, parseInt(String(req.query.limit || '100')) || 100)
       const status = req.query.status as string | undefined
+      const variantId = req.query.variantId as string | undefined
 
       const where: Prisma.StockWhereInput = { productId: parseInt(productId) }
       if (status && ['available', 'sold'].includes(status)) where.status = status
+      if (variantId) where.variantId = variantId === 'none' ? null : parseInt(variantId)
 
       const [total, stocks] = await Promise.all([
         db.stock.count({ where }),
         db.stock.findMany({
           where,
+          include: { variant: { select: { id: true, name: true } } },
           orderBy: { createdAt: 'desc' },
           skip: (page - 1) * limit,
           take: limit,
@@ -105,8 +108,9 @@ export class StocksController {
 
   static async bulkCreate(req: Request, res: Response): Promise<void> {
     try {
-      const { productId, data } = req.body as {
+      const { productId, variantId, data } = req.body as {
         productId: number
+        variantId?: number | string | null
         data: Array<{
           username: string
           password: string
@@ -121,6 +125,7 @@ export class StocksController {
           db.stock.create({
             data: {
               productId: parseInt(String(productId)),
+              variantId: variantId ? parseInt(String(variantId)) : null,
               email: item.email || null,
               passwordEmail: item.password_email ? encrypt(item.password_email) : null,
               username: item.username,
@@ -153,11 +158,12 @@ export class StocksController {
 
   static async create(req: Request, res: Response): Promise<void> {
     try {
-      const { productId, email, passwordEmail, username, password, twoFactorCode } = req.body
+      const { productId, variantId, email, passwordEmail, username, password, twoFactorCode } = req.body
 
       const stock = await db.stock.create({
         data: {
           productId: parseInt(productId),
+          variantId: variantId ? parseInt(variantId) : null,
           email: email || null,
           passwordEmail: passwordEmail ? encrypt(passwordEmail) : null,
           username,

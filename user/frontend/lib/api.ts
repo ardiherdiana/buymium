@@ -1,6 +1,16 @@
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
 
+// Product photos are uploaded and stored on the admin backend (separate domain from
+// this storefront), so relative paths like "/uploads/xxx.jpg" need that origin prefixed.
+const UPLOADS_BASE_URL = process.env.NEXT_PUBLIC_UPLOADS_URL ?? "https://admin.buymium.store"
+
+export function resolveImageUrl(url?: string | null): string | null {
+  if (!url) return null
+  if (/^https?:\/\//.test(url)) return url
+  return `${UPLOADS_BASE_URL}${url}`
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const fetchInit: RequestInit & { next?: { revalidate?: number } } = {
     signal: AbortSignal.timeout(8000),
@@ -27,6 +37,7 @@ export interface Product {
   rating: number
   isVerified: boolean
   tags: string[]
+  imageUrl?: string | null
 }
 
 export interface Testimonial {

@@ -19,6 +19,7 @@ router.use(requireAuth)
 router.get('/index', AccsmarketsController.index)
 router.get('/history', AccsmarketsController.history)
 router.get('/sales-mobile', AccsmarketsController.salesMobile)
+router.get('/export/completed', AccsmarketsController.exportCompleted)
 router.get('/scan/list', async (req: Request, res: Response) => {
   try {
     const sourceIdRaw = req.query.source_id as string | undefined

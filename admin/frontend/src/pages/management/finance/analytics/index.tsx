@@ -4,10 +4,9 @@ import {
   BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts"
-import { DollarSign, Wallet, Receipt, TrendingUp, Percent } from "lucide-react"
+import { DollarSign, Wallet, TrendingUp, Percent } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
@@ -17,18 +16,12 @@ interface Summary {
   revenue: number
   profit: number
   capital: number
-  expenses: number
-  net_profit: number
   margin: number
-  net_margin: number
   comparisons: {
     revenue: Comparison
     profit: Comparison
     capital: Comparison
-    expenses: Comparison
-    net_profit: Comparison
     margin: Comparison
-    net_margin: Comparison
   }
 }
 interface TrendPoint { date: string | number; revenue: number; profit: number }
@@ -107,7 +100,6 @@ export default function AnalyticsPage() {
   const [year, setYear] = useState(String(new Date().getFullYear()))
   const [month, setMonth] = useState(String(new Date().getMonth() + 1))
   const [sourceId, setSourceId] = useState("all")
-  const [tab, setTab] = useState<"income" | "expenses">("income")
 
   const { data, isLoading } = useQuery<AnalyticsData>({
     queryKey: ["management-analytics", year, month, sourceId],
@@ -167,7 +159,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Pendapatan" icon={DollarSign} loading={isLoading}
           value={formatIDR(summary?.revenue ?? 0)}
@@ -179,47 +171,20 @@ export default function AnalyticsPage() {
           comparison={summary?.comparisons.capital}
         />
         <StatCard
-          title="Pengeluaran" icon={Receipt} loading={isLoading}
-          value={formatIDR(summary?.expenses ?? 0)}
-          comparison={summary?.comparisons.expenses}
-          invert
+          title="Profit" icon={TrendingUp} loading={isLoading}
+          value={formatIDR(summary?.profit ?? 0)}
+          valueClass="text-green-600"
+          comparison={summary?.comparisons.profit}
         />
         <StatCard
-          title="Laba Bersih" icon={TrendingUp} loading={isLoading}
-          value={formatIDR(summary?.net_profit ?? 0)}
+          title="Margin" icon={Percent} loading={isLoading}
+          value={`${summary?.margin ?? 0}%`}
           valueClass="text-green-600"
-          comparison={summary?.comparisons.net_profit}
-        />
-        <StatCard
-          title="Margin Bersih" icon={Percent} loading={isLoading}
-          value={`${summary?.net_margin ?? 0}%`}
-          valueClass="text-green-600"
-          comparison={summary?.comparisons.net_margin}
+          comparison={summary?.comparisons.margin}
         />
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-border">
-        <div className="flex gap-6">
-          {(["income", "expenses"] as const).map((t) => (
-            <Button
-              key={t}
-              variant="ghost"
-              onClick={() => setTab(t)}
-              className={`h-auto rounded-none pb-3 pt-0 text-sm font-medium capitalize border-b-2 -mb-px px-0 hover:bg-transparent ${
-                tab === t
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t === "income" ? "Pendapatan" : "Pengeluaran"}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      {tab === "income" && (
-        <div className="space-y-4">
+      <div className="space-y-4">
           {/* Charts row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Sales Volume */}
@@ -336,20 +301,7 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
           )}
-        </div>
-      )}
-
-      {tab === "expenses" && (
-        <div className="space-y-4">
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Total Pengeluaran: <span className="font-semibold text-foreground">{formatIDR(summary?.expenses ?? 0)}</span>
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      </div>
     </div>
   )
 }

@@ -9,6 +9,7 @@ export const CreateProductSchema = z.object({
   price: z.union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/, 'Price must be a non-negative number')]),
   sectionId: z.string().optional().nullable(),
   tags: z.array(z.string()).optional(),
+  imageUrl: z.string().optional().nullable(),
 })
 
 export const UpdateProductSchema = z.object({
@@ -22,8 +23,20 @@ export const UpdateProductSchema = z.object({
   tags: z.array(z.string()).optional(),
   inStock: z.union([z.number().int().nonnegative(), z.string().regex(/^\d+$/)]).optional(),
   isVerified: z.boolean().optional(),
+  imageUrl: z.string().nullable().optional(),
 }).refine(data => Object.keys(data).length > 0, {
   message: 'At least one field must be provided for update',
+})
+
+const ProductVariantSchema = z.object({
+  name: z.string().min(1, 'Nama opsi wajib diisi'),
+  price: z.union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/, 'Price must be a non-negative number')]),
+  isActive: z.boolean().optional(),
+})
+
+export const ReplaceProductVariantsSchema = z.object({
+  variantLabel: z.string().min(1).max(100).nullable().optional(),
+  variants: z.array(ProductVariantSchema).max(50, 'Maksimal 50 opsi variasi'),
 })
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
@@ -62,8 +75,11 @@ export const UpdateBankAccountSchema = z.object({
 
 // ─── Stocks ───────────────────────────────────────────────────────────────────
 
+const OptionalVariantId = z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable()
+
 export const CreateStockSchema = z.object({
   productId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/, 'productId must be a positive integer')]),
+  variantId: OptionalVariantId,
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
   email: z.string().email().optional().nullable(),
@@ -81,6 +97,7 @@ const BulkStockItemSchema = z.object({
 
 export const BulkStockSchema = z.object({
   productId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/, 'productId must be a positive integer')]),
+  variantId: OptionalVariantId,
   data: z.array(BulkStockItemSchema).min(1, 'data must be a non-empty array'),
 })
 

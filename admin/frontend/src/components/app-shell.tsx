@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   ShoppingCart, Package, Users, Layers, Star,
-  BarChart3, ShoppingBag, TrendingUp, Receipt, PieChart, UserSquare, Database,
+  BarChart3, ShoppingBag, TrendingUp, PieChart, UserSquare, Database,
   LayoutDashboard, Plus, Trash2, Sun, Moon,
 } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
@@ -41,9 +41,9 @@ const ECOMMERCE_NAV: NavGroup[] = [
     items: [
       { label: "Pesanan", href: "/ecommerce/orders", icon: ShoppingCart },
       { label: "Produk", href: "/ecommerce/products", icon: Package },
-      { label: "Pengguna", href: "/ecommerce/users", icon: Users },
       { label: "Upload Stok", href: "/ecommerce/stocks", icon: Layers },
       { label: "Testimoni", href: "/ecommerce/testimonials", icon: Star },
+      { label: "Pengguna", href: "/ecommerce/users", icon: Users },
     ],
   },
 ]
@@ -68,7 +68,6 @@ const MANAGEMENT_NAV: NavGroup[] = [
     group: "Finance",
     items: [
       { label: "Penjualan", href: "/finance/sales", icon: TrendingUp },
-      { label: "Pengeluaran", href: "/finance/expenses", icon: Receipt },
       { label: "Analitik", href: "/finance/analytics", icon: PieChart },
     ],
   },

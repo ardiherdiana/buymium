@@ -196,6 +196,47 @@ export class AccountsController {
     }
   }
 
+  public static async exportCompleted(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const where: Prisma.AccountWhereInput = {
+        isSold: false,
+        accountStatus: 'completed',
+        username: { not: null },
+      }
+
+      if (req.query.source_id && req.query.source_id !== 'all') {
+        where.sourceId = parseInt(req.query.source_id as string)
+      }
+
+      if (req.query.phone_model && req.query.phone_model !== 'all') {
+        where.phoneModel = req.query.phone_model as string
+      }
+
+      if (req.query.target_followers && req.query.target_followers !== 'all') {
+        where.targetFollowers = parseInt(req.query.target_followers as string)
+      }
+
+      if (req.query.search) {
+        where.OR = [
+          { email: { contains: req.query.search as string } },
+          { username: { contains: req.query.search as string } },
+          { loginApp: { contains: req.query.search as string } },
+        ]
+      }
+
+      const accounts = await prisma.account.findMany({
+        where,
+        select: { username: true, targetFollowers: true },
+        orderBy: [{ targetFollowers: 'asc' }, { orderIndex: 'asc' }, { id: 'asc' }],
+      })
+
+      res.json({ accounts })
+    } catch (error) {
+      logger.error('Error in AccountsController.exportCompleted:', error)
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to export accounts' })
+    }
+  }
+
   public static async salesMobile(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const selectedAccountIds = (req.query.account_ids as string) ?? ''

@@ -61,6 +61,8 @@ model Product {
   isVerified  Boolean @default(false) @map("is_verified")
   tags        String  @default("[]") @db.VarChar(1000)
   sectionId   Int?    @map("section_id")
+  imageUrl     String? @db.VarChar(500) @map("image_url")
+  variantLabel String? @db.VarChar(100) @map("variant_label")
   createdAt   DateTime @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt   DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
@@ -68,10 +70,29 @@ model Product {
   orders       Order[]
   stocks       Stock[]
   testimonials Testimonial[]
+  variants     ProductVariant[]
 
   @@index([inStock])
   @@index([sectionId])
   @@map("products")
+}
+
+// Price variations for a product (e.g. "1 Bulan", "3 Bulan", "Lifetime")
+model ProductVariant {
+  id        Int      @id @default(autoincrement())
+  productId Int      @map("product_id")
+  name      String   @db.VarChar(100)
+  price     Float
+  order     Int      @default(0)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stocks  Stock[]
+
+  @@index([productId])
+  @@map("product_variants")
 }
 
 model ProductSection {
@@ -144,16 +165,19 @@ model Stock {
   password       String  @db.Text
   twoFactorCode  String? @db.Text          @map("two_factor_code")
   orderId        Int?    @map("order_id")
+  variantId      Int?    @map("variant_id")
   status         String  @default("available") @db.VarChar(50)
   createdAt      DateTime @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt      DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  order   Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order   Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
 
   @@index([productId])
   @@index([status])
   @@index([orderId])
+  @@index([variantId])
   @@map("stocks")
 }
 
@@ -232,7 +256,6 @@ model Source {
   accounts Account[]
   accsmarkets Accsmarket[]
   sales Sale[]
-  expenses Expense[]
 
   @@map("sources")
 }
@@ -268,7 +291,7 @@ model Account {
 
 model Customer {
   id              Int       @id @default(autoincrement())
-  usernameSh      String?   @db.VarChar(255) @map("username_shopee")
+  usernameSh      String?   @unique @db.VarChar(255) @map("username_shopee")
   nomorHp         String?   @db.VarChar(20) @map("nomor_hp")
   createdBy       Int?      @map("created_by")
   createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
@@ -278,7 +301,6 @@ model Customer {
   sales     Sale[]
 
   @@index([createdAt])
-  @@index([usernameSh])
   @@map("customers")
 }
 
@@ -352,34 +374,6 @@ model SaleLine {
   @@index([accountId])
   @@index([accsmarketId])
   @@map("sale_lines")
-}
-
-model ExpenseCategory {
-  id              Int       @id @default(autoincrement())
-  name            String    @db.VarChar(255)
-  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
-
-  expenses Expense[]
-
-  @@map("expense_categories")
-}
-
-model Expense {
-  id              Int       @id @default(autoincrement())
-  categoryId      Int       @map("category_id")
-  amount          Float
-  expenseDate     DateTime  @map("expense_date")
-  sourceId        Int?      @map("source_id")
-  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
-
-  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  source   Source?         @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-
-  @@index([categoryId])
-  @@index([sourceId])
-  @@index([expenseDate])
-  @@map("expenses")
 }
 
 model Testimonial {

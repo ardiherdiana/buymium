@@ -234,6 +234,69 @@ describe('PATCH /api/products/:id', () => {
   })
 })
 
+describe('PUT /api/products/:id/variants', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('returns 401 without auth', async () => {
+    const res = await request(app)
+      .put('/api/products/1/variants')
+      .send({ variants: [] })
+    expect(res.status).toBe(401)
+  })
+
+  it('replaces variants, sets variantLabel and returns the new list', async () => {
+    mockDb.$transaction.mockResolvedValueOnce([])
+    mockDb.productVariant.findMany.mockResolvedValueOnce([
+      { id: 1, productId: 1, name: '1.000+ Followers', price: 25000, order: 0, isActive: true },
+      { id: 2, productId: 1, name: '2.000+ Followers', price: 65000, order: 1, isActive: true },
+    ])
+
+    const res = await request(app)
+      .put('/api/products/1/variants')
+      .set('Authorization', authHeader)
+      .send({
+        variantLabel: 'Jumlah',
+        variants: [
+          { name: '1.000+ Followers', price: 25000 },
+          { name: '2.000+ Followers', price: 65000 },
+        ],
+      })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data).toHaveLength(2)
+    expect(mockDb.$transaction).toHaveBeenCalled()
+    // First transaction op updates the product's variantLabel
+    const txOps = mockDb.$transaction.mock.calls[0][0]
+    expect(txOps).toHaveLength(4) // product.update + deleteMany + 2 creates
+  })
+
+  it('clears variantLabel and deletes all variants when the list is empty (toggle off)', async () => {
+    mockDb.$transaction.mockResolvedValueOnce([])
+    mockDb.productVariant.findMany.mockResolvedValueOnce([])
+
+    const res = await request(app)
+      .put('/api/products/1/variants')
+      .set('Authorization', authHeader)
+      .send({ variantLabel: 'Jumlah', variants: [] })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data).toHaveLength(0)
+    const txOps = mockDb.$transaction.mock.calls[0][0]
+    expect(txOps).toHaveLength(2) // product.update (clears label) + deleteMany, no creates
+  })
+
+  it('returns 400 when a variant is missing a name', async () => {
+    const res = await request(app)
+      .put('/api/products/1/variants')
+      .set('Authorization', authHeader)
+      .send({ variants: [{ price: 1000 }] })
+
+    expect(res.status).toBe(400)
+  })
+})
+
 describe('DELETE /api/products/:id', () => {
   beforeEach(() => {
     vi.clearAllMocks()

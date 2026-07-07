@@ -49,6 +49,7 @@ model Product {
   rating       Float           @default(0)
   isVerified   Boolean         @default(false) @map("is_verified")
   tags         String          @default("[]") @db.VarChar(1000)
+  imageUrl     String?         @db.VarChar(500) @map("image_url")
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
 

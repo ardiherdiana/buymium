@@ -32,7 +32,6 @@ const AccsmarketSalesMobilePage = lazy(() => import("@/pages/management/stock/ac
 // Finance
 const SalesPage = lazy(() => import("@/pages/management/finance/sales/index"))
 const SaleDetailPage = lazy(() => import("@/pages/management/finance/sales/show"))
-const ExpensesPage = lazy(() => import("@/pages/management/finance/expenses/index"))
 const AnalyticsPage = lazy(() => import("@/pages/management/finance/analytics/index"))
 
 // Master
@@ -91,7 +90,6 @@ export default function App() {
             <Route path="/stock/accsmarket/sales-mobile" element={<S><AccsmarketSalesMobilePage /></S>} />
             <Route path="/finance/sales" element={<S><SalesPage /></S>} />
             <Route path="/finance/sales/:id" element={<S><SaleDetailPage /></S>} />
-            <Route path="/finance/expenses" element={<S><ExpensesPage /></S>} />
             <Route path="/finance/analytics" element={<S><AnalyticsPage /></S>} />
             <Route path="/master/customers" element={<S><CustomersPage /></S>} />
             <Route path="/master/sources" element={<S><SourcesPage /></S>} />

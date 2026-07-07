@@ -15,6 +15,7 @@ const requireAuth = (req: Request, res: Response, next: NextFunction) => {
 router.use(requireAuth)
 
 router.get('/', CustomersController.index)
+router.get('/check-duplicate', CustomersController.checkDuplicate)
 router.get('/:id', CustomersController.show)
 router.post('/', validate(CreateCustomerSchema), CustomersController.store)
 router.put('/:id', validate(UpdateCustomerSchema), CustomersController.update)

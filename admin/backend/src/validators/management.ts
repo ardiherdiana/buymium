@@ -50,15 +50,19 @@ export const UpdateAccsmarketSchema = CreateAccsmarketSchema.partial()
 // Fields from CustomersController.store / .update
 
 export const CreateCustomerSchema = z.object({
-  username_shopee: z.string({ required_error: 'username_shopee is required' }).min(1, 'username_shopee is required'),
-  nomor_hp: z.string().optional().nullable(),
+  username_shopee: z.string().min(1).optional().nullable(),
+  nomor_hp: z.string().min(1).optional().nullable(),
   source_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable(),
+}).refine((data) => !!data.username_shopee?.trim() || !!data.nomor_hp?.trim(), {
+  message: 'username_shopee atau nomor_hp wajib diisi salah satu',
 })
 
 export const UpdateCustomerSchema = z.object({
-  username_shopee: z.string({ required_error: 'username_shopee is required' }).min(1, 'username_shopee is required'),
-  nomor_hp: z.string().optional().nullable(),
+  username_shopee: z.string().min(1).optional().nullable(),
+  nomor_hp: z.string().min(1).optional().nullable(),
   source_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable(),
+}).refine((data) => !!data.username_shopee?.trim() || !!data.nomor_hp?.trim(), {
+  message: 'username_shopee atau nomor_hp wajib diisi salah satu',
 })
 
 // ─── Sales ────────────────────────────────────────────────────────────────────
@@ -81,22 +85,6 @@ export const CreateSaleSchema = z.object({
   items: z.array(SaleItemSchema).optional(),
 })
 
-// ─── Expenses ─────────────────────────────────────────────────────────────────
-// Fields from ExpensesController.store / .update
-
-export const CreateExpenseSchema = z.object({
-  amount: z.union([z.number().positive('Amount must be positive'), z.string().regex(/^\d+(\.\d+)?$/)]),
-  expense_date: z.string().min(1, 'expense_date is required'),
-  category_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]),
-  source_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable(),
-})
-
-export const UpdateExpenseSchema = CreateExpenseSchema.partial().extend({
-  amount: z.union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)]).optional(),
-  expense_date: z.string().min(1).optional(),
-  category_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional(),
-})
-
 // ─── Sources ──────────────────────────────────────────────────────────────────
 // Fields from SourcesController.store / .update
 // Note: sources also accept a file upload via multer — body fields only
@@ -114,15 +102,3 @@ export const UpdateSourceSchema = z.object({
   is_accsmarket: z.union([z.boolean(), z.string()]).optional(),
 })
 
-// ─── Expense Categories ───────────────────────────────────────────────────────
-// Fields from ExpenseCategoriesController.store / .update
-
-export const CreateExpenseCategorySchema = z.object({
-  name: z.string().min(1, 'name is required'),
-  description: z.string().optional().nullable(),
-})
-
-export const UpdateExpenseCategorySchema = z.object({
-  name: z.string().min(1, 'name is required'),
-  description: z.string().optional().nullable(),
-})

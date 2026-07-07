@@ -12,13 +12,14 @@ import {
   ChevronRight,
   KeyRound,
   User,
+  ImageOff,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useSidebar } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
-import type { Product } from "@/lib/api"
+import { resolveImageUrl, type Product } from "@/lib/api"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
 const PAGE_SIZE = 10
@@ -160,6 +161,19 @@ export default function DashboardProdukPage() {
       </button>
 
       <div className="space-y-4">
+        {/* Photo */}
+        <div className="aspect-square w-full max-w-sm overflow-hidden rounded-xl border border-border bg-muted flex items-center justify-center">
+          {resolveImageUrl(product.imageUrl) ? (
+            <img
+              src={resolveImageUrl(product.imageUrl)!}
+              alt={product.title}
+              className="size-full object-cover"
+            />
+          ) : (
+            <ImageOff className="size-10 text-muted-foreground/50" />
+          )}
+        </div>
+
         {/* Title */}
         <div>
           <div className="mb-2 flex items-start gap-3">

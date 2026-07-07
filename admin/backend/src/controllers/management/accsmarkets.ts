@@ -224,6 +224,46 @@ export const AccsmarketsController = {
     }
   },
 
+  async exportCompleted(req: Request, res: Response) {
+    try {
+      const where: Prisma.AccsmarketWhereInput = {
+        isSold: false,
+        accountStatus: 'completed',
+        username: { not: null },
+      }
+
+      if (req.query.source_id && req.query.source_id !== 'all') {
+        where.sourceId = parseInt(req.query.source_id as string)
+      }
+
+      if (req.query.year && req.query.year !== 'all') {
+        where.year = req.query.year as string
+      }
+
+      if (req.query.followers && req.query.followers !== 'all') {
+        where.targetFollowers = parseInt(req.query.followers as string)
+      }
+
+      if (req.query.search) {
+        where.OR = [
+          { email: { contains: req.query.search as string } },
+          { username: { contains: req.query.search as string } },
+        ]
+      }
+
+      const accsmarkets = await prisma.accsmarket.findMany({
+        where,
+        select: { username: true, targetFollowers: true, year: true, source: { select: { name: true } } },
+        orderBy: [{ targetFollowers: 'asc' }, { year: 'asc' }, { orderIndex: 'asc' }, { id: 'asc' }],
+      })
+
+      res.json({ accsmarkets })
+    } catch (error) {
+      logger.error('Error in AccsmarketsController.exportCompleted:', error)
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to export accsmarkets' })
+    }
+  },
+
   async salesMobile(req: Request, res: Response) {
     try {
       const selectedAccountIds = req.query.account_ids as string

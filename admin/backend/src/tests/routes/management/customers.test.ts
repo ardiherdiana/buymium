@@ -134,14 +134,25 @@ describe('POST /api/management/customers', () => {
     prismaInstance = new PrismaClient() as MockedObject<PrismaClient>
   })
 
-  it('returns 400 when username_shopee is missing', async () => {
+  it('returns 400 when both username_shopee and nomor_hp are missing', async () => {
+    const res = await request(app)
+      .post('/api/management/customers')
+      .set('Authorization', authHeader)
+      .send({})
+
+    expect(res.status).toBe(400)
+  })
+
+  it('allows creating a customer with only nomor_hp (no username_shopee)', async () => {
+    prismaInstance.customer.findFirst.mockResolvedValueOnce(null)
+    prismaInstance.customer.create.mockResolvedValueOnce(mockCustomer)
+
     const res = await request(app)
       .post('/api/management/customers')
       .set('Authorization', authHeader)
       .send({ nomor_hp: '08123456789' })
 
-    expect(res.status).toBe(400)
-    expect(res.body.error).toMatch(/username_shopee is required/i)
+    expect(res.status).toBe(201)
   })
 
   it('returns 400 when customer with username already exists in same source', async () => {
@@ -179,14 +190,26 @@ describe('PUT /api/management/customers/:id', () => {
     prismaInstance = new PrismaClient() as MockedObject<PrismaClient>
   })
 
-  it('returns 400 when username_shopee is missing', async () => {
+  it('returns 400 when both username_shopee and nomor_hp are missing', async () => {
+    const res = await request(app)
+      .put('/api/management/customers/1')
+      .set('Authorization', authHeader)
+      .send({})
+
+    expect(res.status).toBe(400)
+  })
+
+  it('allows updating a customer with only nomor_hp (no username_shopee)', async () => {
+    prismaInstance.customer.findFirst.mockResolvedValueOnce(null)
+    const updated = { ...mockCustomer, usernameSh: null, nomorHp: '08111' }
+    prismaInstance.customer.update.mockResolvedValueOnce(updated)
+
     const res = await request(app)
       .put('/api/management/customers/1')
       .set('Authorization', authHeader)
       .send({ nomor_hp: '08111' })
 
-    expect(res.status).toBe(400)
-    expect(res.body.error).toMatch(/username_shopee is required/i)
+    expect(res.status).toBe(200)
   })
 
   it('returns 200 with updated customer', async () => {

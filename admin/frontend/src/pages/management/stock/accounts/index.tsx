@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Search, RefreshCw, Sheet, Users, ArrowLeft, Heart, Target, CheckCircle2, Trash2, Copy, ScanLine, ShoppingCart } from "lucide-react"
+import { Search, RefreshCw, Sheet, Users, ArrowLeft, Heart, Target, CheckCircle2, Trash2, Copy, ScanLine, ShoppingCart, ClipboardList } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -58,6 +58,12 @@ const STATUS_OPTIONS = [
 ]
 
 const PAGE_SIZE = 100
+
+function formatFollowersLabel(value: number): string {
+  if (value >= 1000 && value % 1000 === 0) return `${value / 1000}K`
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`
+  return String(value)
+}
 
 
 export default function AccountsPage() {
@@ -142,6 +148,42 @@ export default function AccountsPage() {
     navigator.clipboard.writeText(lines.join("\n\n"))
     alert.success("Disalin", `${accs.length} akun disalin ke clipboard`)
   }
+
+  // ── Copy available stock (all completed accounts, grouped by target) ──────
+  const copyStockMutation = useMutation({
+    mutationFn: () =>
+      api.get("/management/accounts/export/completed", {
+        params: {
+          source_id: sourceId !== "all" ? sourceId : undefined,
+          phone_model: phoneModel !== "all" ? phoneModel : undefined,
+          target_followers: targetFollowers !== "all" ? targetFollowers : undefined,
+          search: search || undefined,
+        },
+      }).then((r) => r.data as { accounts: { username: string | null; targetFollowers: number | null }[] }),
+    onSuccess: (result) => {
+      const accs = result.accounts.filter((a) => a.username)
+      if (!accs.length) {
+        alert.error("Kosong", "Tidak ada akun selesai yang tersedia")
+        return
+      }
+      const groups = new Map<number, string[]>()
+      for (const acc of accs) {
+        const target = acc.targetFollowers ?? 0
+        if (!groups.has(target)) groups.set(target, [])
+        groups.get(target)!.push(acc.username as string)
+      }
+      const sortedTargets = [...groups.keys()].sort((a, b) => a - b)
+      const currentYear = new Date().getFullYear()
+      const blocks = sortedTargets.map((target) => {
+        const label = formatFollowersLabel(target)
+        const usernames = groups.get(target)!
+        return `=== AKUN ${label} FOLLOWERS ${currentYear} (${usernames.length} Stok) ===\n${usernames.join("\n")}`
+      })
+      navigator.clipboard.writeText(blocks.join("\n\n"))
+      alert.success("Disalin", `${accs.length} akun stok disalin ke clipboard`)
+    },
+    onError: () => alert.error("Gagal", "Gagal mengambil stok akun"),
+  })
 
   // ── Delete selected ────────────────────────────────────────────────────────
   const handleBulkDelete = async () => {
@@ -241,10 +283,10 @@ export default function AccountsPage() {
         {/* Mobile: compact single-line rows */}
         <div className="grid grid-cols-2 gap-2 sm:hidden">
           {[
-            { label: "Total Akun", value: totalCount, icon: Users, color: "text-blue-600" },
+            { label: "Total Akun", value: totalCount.toLocaleString("id-ID"), icon: Users, color: "text-blue-600" },
             { label: "Total Followers", value: (stats?.total_followers ?? 0).toLocaleString("id-ID"), icon: Heart, color: "text-red-500" },
             { label: "Target Followers", value: (stats?.target_followers ?? 0).toLocaleString("id-ID"), icon: Target, color: "text-blue-600" },
-            { label: "Selesai", value: `${completedCount}/${totalCount}`, icon: CheckCircle2, color: "text-emerald-600" },
+            { label: "Selesai", value: `${completedCount.toLocaleString("id-ID")}/${totalCount.toLocaleString("id-ID")}`, icon: CheckCircle2, color: "text-emerald-600" },
           ].map(({ label, value, icon: Icon, color }) => (
             <Card key={label}>
               <CardContent className="p-3 flex items-center justify-between gap-2">
@@ -263,7 +305,7 @@ export default function AccountsPage() {
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Akun</p>
-                <p className="text-2xl font-bold mt-1">{totalCount}</p>
+                <p className="text-2xl font-bold mt-1">{totalCount.toLocaleString("id-ID")}</p>
                 <p className="text-xs text-muted-foreground">Akun aktif</p>
               </div>
               <div className="size-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
@@ -300,7 +342,7 @@ export default function AccountsPage() {
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Akun Selesai</p>
-                <p className="text-2xl font-bold mt-1">{completedCount}/{totalCount}</p>
+                <p className="text-2xl font-bold mt-1">{completedCount.toLocaleString("id-ID")}/{totalCount.toLocaleString("id-ID")}</p>
                 <p className="text-xs text-muted-foreground">Akun selesai</p>
               </div>
               <div className="size-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
@@ -363,6 +405,15 @@ export default function AccountsPage() {
           >
             <Sheet className={`size-4 ${syncProgress.status === "syncing" ? "animate-spin" : ""}`} />
             {syncProgress.status === "syncing" ? "Menyinkronkan..." : "Sync Sheets"}
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full col-span-2 gap-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50"
+            onClick={() => copyStockMutation.mutate()}
+            disabled={copyStockMutation.isPending}
+          >
+            <ClipboardList className="size-4" />
+            {copyStockMutation.isPending ? "Menyalin..." : "Salin Stok"}
           </Button>
         </div>
 

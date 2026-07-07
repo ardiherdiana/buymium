@@ -25,6 +25,7 @@ import api from "@/lib/api"
 interface Stock {
   id: number
   product?: { id: number; title: string }
+  variant?: { id: number; name: string } | null
   username: string
   email?: string
   password: string
@@ -37,9 +38,15 @@ interface StocksResponse {
   meta: { total: number; page: number; limit: number; totalPages: number }
 }
 
+interface ProductVariant {
+  id: number
+  name: string
+}
+
 interface Product {
   id: number
   title: string
+  variants?: ProductVariant[]
 }
 
 const PAGE_SIZE = 100
@@ -72,6 +79,7 @@ function UploadPage() {
   const queryClient = useQueryClient()
 
   const [productId, setProductId] = useState("")
+  const [variantId, setVariantId] = useState("")
   const [delimiter, setDelimiter] = useState("|")
   const [raw, setRaw] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -82,14 +90,21 @@ function UploadPage() {
   })
 
   const products = productsData?.data ?? []
+  const selectedProduct = products.find((p) => String(p.id) === productId)
+  const variants = selectedProduct?.variants ?? []
   const parsed = parseBulkLines(raw, delimiter)
 
   const handleSubmit = async () => {
     if (!productId) { alert.error("Validasi", "Pilih produk terlebih dahulu"); return }
+    if (variants.length > 0 && !variantId) { alert.error("Validasi", "Pilih opsi variasi terlebih dahulu"); return }
     if (parsed.length === 0) { alert.error("Validasi", "Tidak ada data valid yang ditemukan"); return }
     setIsLoading(true)
     try {
-      await api.post("/stocks/bulk", { productId: parseInt(productId), data: parsed })
+      await api.post("/stocks/bulk", {
+        productId: parseInt(productId),
+        variantId: variantId ? parseInt(variantId) : undefined,
+        data: parsed,
+      })
       alert.success("Berhasil", `${parsed.length} stok berhasil disimpan`)
       setRaw("")
       queryClient.invalidateQueries({ queryKey: ["stocks"] })
@@ -115,7 +130,7 @@ function UploadPage() {
 
               <div className="space-y-1.5">
                 <Label>Pilih Produk</Label>
-                <Select value={productId} onValueChange={setProductId}>
+                <Select value={productId} onValueChange={(v) => { setProductId(v); setVariantId("") }}>
                   <SelectTrigger className="w-full h-9">
                     <SelectValue placeholder="-- Pilih Produk --" />
                   </SelectTrigger>
@@ -128,6 +143,24 @@ function UploadPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {variants.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>Pilih Opsi Variasi</Label>
+                  <Select value={variantId} onValueChange={setVariantId}>
+                    <SelectTrigger className="w-full h-9">
+                      <SelectValue placeholder="-- Pilih Opsi --" />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      {variants.map((v) => (
+                        <SelectItem key={v.id} value={String(v.id)}>
+                          {v.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label>Pemisah Kolom (Delimiter)</Label>
@@ -241,6 +274,7 @@ function ProductStockTable({ productId }: { productId: string }) {
               <TableRow>
                 <TableHead>Username</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Opsi</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Ditambahkan</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
@@ -248,14 +282,15 @@ function ProductStockTable({ productId }: { productId: string }) {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <LoadingRow colSpan={5} />
+                <LoadingRow colSpan={6} />
               ) : !data?.data?.length ? (
-                <EmptyRow colSpan={5} message="Tidak ada stok ditemukan" />
+                <EmptyRow colSpan={6} message="Tidak ada stok ditemukan" />
               ) : (
                 data.data.map((stock) => (
                   <TableRow key={stock.id}>
                     <TableCell className="font-mono text-xs">{stock.username}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{stock.email || "-"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{stock.variant?.name ?? "-"}</TableCell>
                     <TableCell>
                       <Badge variant={stock.status === "sold" ? "outline" : "completed"}>
                         {stock.status === "sold" ? "Terjual" : "Tersedia"}
@@ -300,6 +335,9 @@ function ProductStockTable({ productId }: { productId: string }) {
                   <div className="min-w-0 space-y-0.5">
                     <p className="font-mono text-sm font-medium truncate">{stock.username}</p>
                     <p className="font-mono text-xs text-muted-foreground truncate">{stock.email || "-"}</p>
+                    {stock.variant && (
+                      <p className="text-xs text-muted-foreground truncate">Opsi: {stock.variant.name}</p>
+                    )}
                   </div>
                   <Badge variant={stock.status === "sold" ? "outline" : "completed"} className="shrink-0">
                     {stock.status === "sold" ? "Terjual" : "Tersedia"}

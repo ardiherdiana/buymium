@@ -23,6 +23,7 @@ router.use(requireAuth)
 router.get('/', AccountsController.index)
 router.get('/index', AccountsController.index)
 router.get('/sales-mobile', AccountsController.salesMobile)
+router.get('/export/completed', AccountsController.exportCompleted)
 router.get('/scan/list', async (req: Request, res: Response) => {
   try {
     const sourceId = req.query.source_id as string

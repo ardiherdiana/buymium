@@ -13,8 +13,10 @@ export const SalesController = {
       const limit = 15
       const searchQuery = req.query.search as string
       const sourceFilter = req.query.source as string
+      const dateFromQuery = req.query.date_from as string
+      const dateToQuery = req.query.date_to as string
 
-      // Current month bounds in Asia/Jakarta (UTC+7)
+      // Date range bounds in Asia/Jakarta (UTC+7)
       const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000
       const nowUtc = new Date()
       const jakartaNow = new Date(nowUtc.getTime() + JAKARTA_OFFSET_MS)
@@ -22,14 +24,24 @@ export const SalesController = {
       const jakartaMonth = jakartaNow.getUTCMonth()
       const jakartaDay = jakartaNow.getUTCDate()
 
-      // startOfMonth 00:00:00 Jakarta → UTC
-      const startOfMonth = new Date(Date.UTC(jakartaYear, jakartaMonth, 1) - JAKARTA_OFFSET_MS)
-      // endOfToday 23:59:59.999 Jakarta → UTC
-      const endOfDay = new Date(Date.UTC(jakartaYear, jakartaMonth, jakartaDay, 23, 59, 59, 999) - JAKARTA_OFFSET_MS)
+      // Parse "YYYY-MM-DD" as a Jakarta local date, converted to its UTC instant
+      const parseJakartaDate = (dateStr: string, endOfDay: boolean): Date => {
+        const [y, m, d] = dateStr.split('-').map(Number)
+        return endOfDay
+          ? new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) - JAKARTA_OFFSET_MS)
+          : new Date(Date.UTC(y, m - 1, d) - JAKARTA_OFFSET_MS)
+      }
 
-      // Base where: current month + optional source
+      const rangeStart = dateFromQuery
+        ? parseJakartaDate(dateFromQuery, false)
+        : new Date(Date.UTC(jakartaYear, jakartaMonth, 1) - JAKARTA_OFFSET_MS)
+      const rangeEnd = dateToQuery
+        ? parseJakartaDate(dateToQuery, true)
+        : new Date(Date.UTC(jakartaYear, jakartaMonth, jakartaDay, 23, 59, 59, 999) - JAKARTA_OFFSET_MS)
+
+      // Base where: selected date range + optional source
       const buildWhere = (extra: Prisma.SaleWhereInput = {}): Prisma.SaleWhereInput => {
-        const w: Prisma.SaleWhereInput = { createdAt: { gte: startOfMonth, lte: endOfDay }, ...extra }
+        const w: Prisma.SaleWhereInput = { createdAt: { gte: rangeStart, lte: rangeEnd }, ...extra }
         if (sourceFilter) w.sourceId = parseInt(sourceFilter)
         return w
       }
@@ -45,8 +57,8 @@ export const SalesController = {
       const totalProfit = aggregates._sum.totalProfit || 0
       const totalCapital = totalSalePrice - totalProfit
 
-      // --- Chart data (all current month sales, source-filtered) ---
-      const allMonthSales = await prisma.sale.findMany({
+      // --- Chart data (all sales within the selected range, source-filtered) ---
+      const rangeSales = await prisma.sale.findMany({
         where: buildWhere(),
         select: {
           createdAt: true,
@@ -58,16 +70,25 @@ export const SalesController = {
         orderBy: { createdAt: 'asc' },
       })
 
-      const daysInMonth = new Date(jakartaYear, jakartaMonth + 1, 0).getDate()
       type DayEntry = { label: string; sales: number; amount: number; profit: number }
       const byDate = new Map<string, DayEntry>()
 
-      for (let d = 1; d <= daysInMonth; d++) {
-        const key = `${jakartaYear}-${String(jakartaMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-        byDate.set(key, { label: String(d), sales: 0, amount: 0, profit: 0 })
+      // Walk the selected range day-by-day in Jakarta local time
+      const jakartaRangeStart = new Date(rangeStart.getTime() + JAKARTA_OFFSET_MS)
+      const jakartaRangeEnd = new Date(rangeEnd.getTime() + JAKARTA_OFFSET_MS)
+      const cursor = new Date(Date.UTC(
+        jakartaRangeStart.getUTCFullYear(), jakartaRangeStart.getUTCMonth(), jakartaRangeStart.getUTCDate()
+      ))
+      const lastDay = new Date(Date.UTC(
+        jakartaRangeEnd.getUTCFullYear(), jakartaRangeEnd.getUTCMonth(), jakartaRangeEnd.getUTCDate()
+      ))
+      while (cursor <= lastDay) {
+        const key = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}-${String(cursor.getUTCDate()).padStart(2, '0')}`
+        byDate.set(key, { label: String(cursor.getUTCDate()), sales: 0, amount: 0, profit: 0 })
+        cursor.setUTCDate(cursor.getUTCDate() + 1)
       }
 
-      for (const sale of allMonthSales) {
+      for (const sale of rangeSales) {
         const jDate = new Date(sale.createdAt.getTime() + JAKARTA_OFFSET_MS)
         const key = `${jDate.getUTCFullYear()}-${String(jDate.getUTCMonth() + 1).padStart(2, '0')}-${String(jDate.getUTCDate()).padStart(2, '0')}`
         const entry = byDate.get(key)

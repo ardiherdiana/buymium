@@ -1,10 +1,37 @@
 ﻿import { Router } from 'express'
+import multer from 'multer'
+import path from 'path'
+import crypto from 'crypto'
 import { requireAdmin } from '../../middleware/auth'
 import { validate } from '../../middleware/validate'
-import { CreateProductSchema, UpdateProductSchema } from '../../validators/ecommerce'
+import { CreateProductSchema, UpdateProductSchema, ReplaceProductVariantsSchema } from '../../validators/ecommerce'
 import { ProductsController } from '../../controllers/ecommerce/products'
 
+const uuidv4 = () => crypto.randomUUID()
+
 const router = Router()
+
+const imageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, path.join(process.cwd(), 'uploads')),
+    filename: (_req, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname)}`),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp']
+    if (allowed.includes(file.mimetype)) cb(null, true)
+    else cb(new Error('File harus berupa gambar JPG/PNG/WEBP'))
+  },
+})
+
+// POST /api/admin/products/upload-image - Upload a product photo, returns its relative URL
+router.post('/upload-image', requireAdmin, imageUpload.single('image'), (req, res) => {
+  if (!req.file) {
+    res.status(400).json({ success: false, error: 'File gambar wajib diunggah' })
+    return
+  }
+  res.status(201).json({ url: `/uploads/${req.file.filename}` })
+})
 
 /**
  * @openapi
@@ -143,6 +170,9 @@ router.post('/', requireAdmin, validate(CreateProductSchema), ProductsController
  */
 // PATCH /api/admin/products/:id - Update product
 router.patch('/:id', requireAdmin, validate(UpdateProductSchema), ProductsController.update)
+
+// PUT /api/admin/products/:id/variants - Replace all price variants for a product
+router.put('/:id/variants', requireAdmin, validate(ReplaceProductVariantsSchema), ProductsController.replaceVariants)
 
 // DELETE /api/admin/products/:id - Delete product
 router.delete('/:id', requireAdmin, ProductsController.destroy)

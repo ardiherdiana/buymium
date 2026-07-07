@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ShieldCheck, Star, Search } from "lucide-react"
+import { ShieldCheck, Star, Search, ImageOff } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { Product } from "@/lib/api"
+import { resolveImageUrl, type Product } from "@/lib/api"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
 
@@ -23,11 +23,19 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 function ProductCard({ product, onClick }: { product: Product; onClick: () => void }) {
+  const imageUrl = resolveImageUrl(product.imageUrl)
   return (
     <div
       onClick={onClick}
       className="group cursor-pointer rounded-xl border border-border bg-card p-4 transition-shadow hover:shadow-md"
     >
+      <div className="mb-3 aspect-square w-full overflow-hidden rounded-lg bg-muted flex items-center justify-center">
+        {imageUrl ? (
+          <img src={imageUrl} alt={product.title} className="size-full object-cover" />
+        ) : (
+          <ImageOff className="size-8 text-muted-foreground/50" />
+        )}
+      </div>
       <div className="mb-2 flex items-start justify-between gap-2">
         <h3 className="text-sm font-medium leading-snug group-hover:text-primary line-clamp-2">
           {product.title}
@@ -36,9 +44,6 @@ function ProductCard({ product, onClick }: { product: Product; onClick: () => vo
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
         )}
       </div>
-      <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
-        {product.description}
-      </p>
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold">
           {product.price > 0
@@ -91,7 +96,7 @@ export default function DashboardProdukListPage() {
         <Skeleton className="h-9 w-full max-w-sm" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Skeleton key={i} className="h-36 w-full" />
+            <Skeleton key={i} className="h-64 w-full" />
           ))}
         </div>
       </div>

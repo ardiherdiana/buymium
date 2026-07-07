@@ -37,9 +37,6 @@ export const AnalyticsController = {
         comparisonLabel = `vs ${monthName}`
       }
 
-      const expenseStartDate = year === 'all' ? new Date(2000, 0, 1) : new Date(parseInt(year), 0, 1)
-      const expenseEndDate = year === 'all' ? new Date(new Date().getFullYear() + 1, 0, 0) : new Date(parseInt(year), 11, 31)
-
       const sourceFilter = sourceId !== 'all' ? parseInt(sourceId) : null
 
       // Sales Trend
@@ -97,30 +94,6 @@ export const AnalyticsController = {
           })
           current.setDate(current.getDate() + 1)
         }
-      }
-
-      // Expense Trend (Always monthly)
-      const expensesTrendData = await prisma.expense.findMany({
-        where: {
-          expenseDate: { gte: expenseStartDate, lte: expenseEndDate },
-          ...(sourceFilter && { sourceId: sourceFilter }),
-        },
-        select: { expenseDate: true, amount: true },
-      })
-
-      const expensesTrendMap = new Map<number, number>()
-      expensesTrendData.forEach((exp) => {
-        const month = exp.expenseDate.getMonth() + 1
-        expensesTrendMap.set(month, (expensesTrendMap.get(month) || 0) + exp.amount)
-      })
-
-      const expenseTrend: { date: string; value: number }[] = []
-      for (let i = 1; i <= 12; i++) {
-        const date = new Intl.DateTimeFormat('en', { month: 'short' }).format(new Date(2000, i - 1))
-        expenseTrend.push({
-          date,
-          value: expensesTrendMap.get(i) || 0,
-        })
       }
 
       // Sales Count Trend
@@ -184,26 +157,6 @@ export const AnalyticsController = {
         total: item._sum.totalSalePrice || 0,
       }))
 
-      // Expenses by Category
-      const expensesByCategoryData = await prisma.expense.findMany({
-        where: {
-          expenseDate: { gte: startDate, lte: endDate },
-          ...(sourceFilter && { sourceId: sourceFilter }),
-        },
-        include: { category: true },
-      })
-
-      const expensesByCategory = new Map<string, number>()
-      expensesByCategoryData.forEach((exp) => {
-        const name = exp.category?.name || 'Uncategorized'
-        expensesByCategory.set(name, (expensesByCategory.get(name) || 0) + exp.amount)
-      })
-
-      const expensesByCategoryArray = Array.from(expensesByCategory).map(([name, value]) => ({
-        name,
-        value,
-      }))
-
       // Summary Stats
       const filteredSales = await prisma.sale.aggregate({
         where: {
@@ -216,17 +169,6 @@ export const AnalyticsController = {
       const totalRevenue = filteredSales._sum.totalSalePrice || 0
       const totalProfit = filteredSales._sum.totalProfit || 0
       const totalCapital = totalRevenue - totalProfit
-
-      const totalExpenses = await prisma.expense.aggregate({
-        where: {
-          expenseDate: { gte: startDate, lte: endDate },
-          ...(sourceFilter && { sourceId: sourceFilter }),
-        },
-        _sum: { amount: true },
-      })
-
-      const totalExpensesAmount = totalExpenses._sum.amount || 0
-      const netProfit = totalProfit - totalExpensesAmount
 
       // Profit by Source
       const profitBySourceData = await prisma.sale.groupBy({
@@ -256,20 +198,14 @@ export const AnalyticsController = {
         revenue: ComparisonEntry
         profit: ComparisonEntry
         capital: ComparisonEntry
-        expenses: ComparisonEntry
-        net_profit: ComparisonEntry
         margin: ComparisonEntry
-        net_margin: ComparisonEntry
       }
       // Comparisons
       let comparisons: Comparisons = {
         revenue: { change: 0, label: '' },
         profit: { change: 0, label: '' },
         capital: { change: 0, label: '' },
-        expenses: { change: 0, label: '' },
-        net_profit: { change: 0, label: '' },
         margin: { change: 0, label: '' },
-        net_margin: { change: 0, label: '' },
       }
 
       if (prevStartDate && prevEndDate) {
@@ -285,17 +221,6 @@ export const AnalyticsController = {
         const prevProfit = prevSalesAgg._sum.totalProfit || 0
         const prevCapital = prevRevenue - prevProfit
 
-        const prevExpensesAgg = await prisma.expense.aggregate({
-          where: {
-            expenseDate: { gte: prevStartDate, lte: prevEndDate },
-            ...(sourceFilter && { sourceId: sourceFilter }),
-          },
-          _sum: { amount: true },
-        })
-
-        const prevExpenses = prevExpensesAgg._sum.amount || 0
-        const prevNetProfit = prevProfit - prevExpenses
-
         const calculateChange = (current: number, previous: number) => {
           if (previous === 0) return current > 0 ? 100 : 0
           return Math.round(((current - previous) / previous) * 1000) / 10
@@ -305,19 +230,10 @@ export const AnalyticsController = {
           revenue: { change: calculateChange(totalRevenue, prevRevenue), label: comparisonLabel },
           profit: { change: calculateChange(totalProfit, prevProfit), label: comparisonLabel },
           capital: { change: calculateChange(totalCapital, prevCapital), label: comparisonLabel },
-          expenses: { change: calculateChange(totalExpensesAmount, prevExpenses), label: comparisonLabel },
-          net_profit: { change: calculateChange(netProfit, prevNetProfit), label: comparisonLabel },
           margin: {
             change: calculateChange(
               totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
               prevRevenue > 0 ? (prevProfit / prevRevenue) * 100 : 0
-            ),
-            label: comparisonLabel,
-          },
-          net_margin: {
-            change: calculateChange(
-              totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
-              prevRevenue > 0 ? (prevNetProfit / prevRevenue) * 100 : 0
             ),
             label: comparisonLabel,
           },
@@ -328,10 +244,8 @@ export const AnalyticsController = {
 
       res.json({
         trendData,
-        expenseTrend,
         salesCountTrend,
         salesByPlatform,
-        expensesByCategory: expensesByCategoryArray,
         profitBySource,
         sources,
         filters: {
@@ -343,10 +257,7 @@ export const AnalyticsController = {
           revenue: totalRevenue,
           profit: totalProfit,
           capital: totalCapital,
-          expenses: totalExpensesAmount,
-          net_profit: netProfit,
           margin: totalRevenue > 0 ? Math.round((totalProfit / totalRevenue) * 1000) / 10 : 0,
-          net_margin: totalRevenue > 0 ? Math.round((netProfit / totalRevenue) * 1000) / 10 : 0,
           comparisons,
         },
       })

@@ -108,7 +108,7 @@ export default async function Page() {
           </div>
           <h1 className="mb-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
             Platform Terpercaya<br />
-            <span className="text-primary">Jual Beli Akun Instagram</span>
+            <span className="text-primary">Beli Akun Instagram</span>
           </h1>
           <p className="mb-2 text-lg text-muted-foreground">
             Akun Instagram Berkualitas. Harga Terjangkau.

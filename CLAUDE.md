@@ -4,14 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Buymium is a monorepo with four separate applications sharing one MySQL database:
+Buymium consists of four independent applications (no npm workspaces/turborepo — just sibling folders, each with its own `package.json` and lockfile) connecting to the same MySQL database:
 
 - `admin/backend` — Express.js API on port 5001 (management, analytics, Google Sheets sync, social auto-posting)
 - `admin/frontend` — Vite + React 19 SPA on port 5173 (admin dashboard)
 - `user/backend` — Express.js API on port 5000 (storefront, payments, Google OAuth)
 - `user/frontend` — Next.js 16 app on port 3000 (customer-facing store, Indonesian language)
 
-Both backends use the same `DATABASE_URL` and share the Prisma schema.
+Both backends use the same `DATABASE_URL` (same MySQL server) but each has its **own separate `prisma/schema.prisma`** — they are not shared. The admin schema is a superset covering more domain models (`Customer`, `Source`, `Account`, `Accsmarket`, `Sale`/`SaleLine`, `AutopostingPost`/`AutopostingSchedule`, `ProductSection`) alongside the common models. The user schema only has the core storefront models (`Role`, `User`, `Product`, `Order`, `BankAccount`, `Stock`, `Channel`, `Testimonial`). When changing a shared model (e.g. `Product`, `Order`, `Stock`), update and migrate both schemas.
+
+Note: the expense-tracking feature (`ExpenseCategory`/`Expense` models, `management/finance/expenses` controllers/routes/page) was removed — finance now only covers sales/analytics. Don't resurrect references to it.
 
 ## Commands
 
@@ -21,14 +23,17 @@ Each app is run independently from its own directory.
 ```bash
 npm run dev          # tsx watch src/index.ts
 npm run build        # tsc
-npm run test         # vitest run (no DB needed — Prisma is mocked)
-npm run test:watch   # vitest watch
+npm run lint          # eslint src/
+npm run test:run     # vitest run — single pass (no DB needed — Prisma is mocked)
+npm run test         # vitest watch mode
 npm run test:coverage
 npx vitest run src/tests/routes/auth.test.ts  # run a single test file
 npx prisma migrate dev
 npx prisma studio
-npx prisma db seed
+npm run seed         # tsx prisma/seed.ts
 ```
+
+Note: `admin/backend` has no `typecheck` script — type errors surface via `npm run build` (`tsc`). It also has `test:smoke` and `test:load:*` (k6) scripts.
 
 ### Admin Frontend (`admin/frontend/`)
 ```bash
@@ -42,9 +47,14 @@ npm run typecheck    # tsc --noEmit
 ```bash
 npm run dev          # tsx watch src/index.ts
 npm run build        # tsc
-npm run test         # vitest run
-npx prisma migrate dev
+npm run test:run     # vitest run — single pass
+npm run test         # vitest watch mode
+npx prisma migrate dev  # db:migrate
+npm run db:seed
+npm run db:studio
+npm run db:reset     # prisma migrate reset --force && seed
 ```
+Note: `user/backend` has no `lint` or `typecheck` script — type errors surface via `npm run build`.
 
 ### User Frontend (`user/frontend/`)
 ```bash
@@ -53,6 +63,7 @@ npm run build        # next build
 npm run lint
 npm run typecheck    # tsc --noEmit
 ```
+Note: `user/frontend` has no test script/suite.
 
 ## Architecture
 
@@ -70,15 +81,15 @@ The admin backend also has k6 load test scripts (`.js`) under `src/tests/load/` 
 
 **Admin backend** (`/api/`):
 - `auth` — login, refresh, logout
-- `management` — dashboard, customers, sources, finance (sales, expenses, analytics), stock (accounts, accsmarket)
-- `ecommerce` — orders, products, users, testimonials
+- `management` — dashboard, customers, sources, finance (sales, analytics), stock (accounts, accsmarket), problems, users
+- `ecommerce` — orders, products, users, testimonials, sections, stats
 - `autoposting` — social media scheduling
-- `roles` — role management
+- `roles` — role management (note: there's both a top-level `routes/roles.ts` and `routes/management/roles.ts` — check which is mounted before adding to either)
 - Swagger docs at `/api/docs`
 
 **User backend** (`/api/`):
 - `auth` — login, Google OAuth, registration, password reset
-- `products`, `orders`, `stocks`, `bank-accounts`, `testimonials`, `sitemap`
+- `products`, `orders`, `stocks`, `bank-accounts`, `testimonials`, `sitemap`, `admin`
 - Static file serving at `/api/uploads`
 
 ### Frontend Routing
@@ -93,6 +104,8 @@ The admin backend also has k6 load test scripts (`.js`) under `src/tests/load/` 
 - `/masuk` — login; `/auth/callback` — Google OAuth
 - `/dashboard/pesanan`, `/dashboard/produk`, `/dashboard/profil` — user dashboard
 - `/lupa-password`, `/reset-password` — password reset
+- `/links`, `/kontak`, `/syarat` — link-in-bio page, contact, terms & conditions
+
 
 ### User Backend Structure
 Unlike the admin backend (controllers + services), the user backend uses a flat `models/` + `routes/` pattern with no separate service layer. Business logic lives directly in route handlers under `user/backend/src/routes/`. Additional directories: `validators/` for request validation schemas, `config/` for app configuration, `utils/` for shared helpers.
@@ -111,9 +124,14 @@ Unlike the admin backend (controllers + services), the user backend uses a flat 
 - User: Redux Toolkit for global state; Next.js built-in caching for server state
 
 ### Database
-Prisma 5 with MySQL. Key models: `User`, `Role`, `Product`, `Order`, `Stock`, `BankAccount`, `Customer`, `Channel`, `AutopostingPost`/`AutopostingSchedule`, `Testimonial`.
+Prisma 5 with MySQL, two independent schemas (see note above). Common models across both: `User`, `Role`, `Product`, `Order`, `Stock`, `BankAccount`, `Channel`, `Testimonial`. Admin-only models: `Customer`, `Source`, `Account`, `Accsmarket`, `Sale`/`SaleLine`, `AutopostingPost`/`AutopostingSchedule`, `ProductSection`.
 
 The `db/` directory contains raw SQL scripts (schema, production data, fix scripts) used outside Prisma migrations.
+
+## Repo Root
+
+- `openapi.yaml` — documents the external SocialBu API (used by `admin/backend/src/services/socialbu.ts`), not Buymium's own API. Admin backend's own API is documented via Swagger at `/api/docs`.
+- Admin frontend uses `@` as a path alias for `./src` (e.g. `@/lib/api`, `@/components/ui/button`).
 
 ## Environment Setup
 

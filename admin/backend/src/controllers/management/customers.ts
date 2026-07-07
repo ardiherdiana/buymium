@@ -144,18 +144,46 @@ export const CustomersController = {
     }
   },
 
+  async checkDuplicate(req: Request, res: Response) {
+    try {
+      const usernameShopee = (req.query.username_shopee as string || '').trim().toLowerCase()
+      const excludeId = req.query.exclude_id ? parseInt(req.query.exclude_id as string) : undefined
+
+      if (!usernameShopee) {
+        return res.json({ exists: false })
+      }
+
+      const existing = await prisma.customer.findFirst({
+        where: {
+          usernameSh: usernameShopee,
+          ...(excludeId ? { id: { not: excludeId } } : {}),
+        },
+        select: { id: true, usernameSh: true, nomorHp: true },
+      })
+
+      res.json({
+        exists: !!existing,
+        customer: existing ? { id: existing.id, username_shopee: existing.usernameSh, nomor_hp: existing.nomorHp } : null,
+      })
+    } catch (error) {
+      logger.error('Error checking customer duplicate:', error)
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+    }
+  },
+
   async store(req: Request, res: Response) {
     try {
       const { username_shopee, nomor_hp } = req.body
       const userId = req.user?.userId
+      const usernameSh = username_shopee ? String(username_shopee).trim().toLowerCase() : null
 
-      if (!username_shopee) {
-        return res.status(400).json({ error: 'username_shopee is required' })
+      if (!usernameSh && !nomor_hp) {
+        return res.status(400).json({ error: 'username_shopee atau nomor_hp wajib diisi salah satu' })
       }
 
       const customer = await prisma.customer.create({
         data: {
-          usernameSh: username_shopee,
+          usernameSh,
           nomorHp: nomor_hp || null,
           createdBy: userId,
         },
@@ -163,6 +191,9 @@ export const CustomersController = {
 
       res.status(201).json({ success: true, customer })
     } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return res.status(409).json({ error: 'Username Shopee sudah terdaftar untuk pelanggan lain' })
+      }
       logger.error('Error creating customer:', error)
       res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to create customer' })
     }
@@ -172,21 +203,25 @@ export const CustomersController = {
     try {
       const { id } = req.params
       const { username_shopee, nomor_hp } = req.body
+      const usernameSh = username_shopee ? String(username_shopee).trim().toLowerCase() : null
 
-      if (!username_shopee) {
-        return res.status(400).json({ error: 'username_shopee is required' })
+      if (!usernameSh && !nomor_hp) {
+        return res.status(400).json({ error: 'username_shopee atau nomor_hp wajib diisi salah satu' })
       }
 
       const customer = await prisma.customer.update({
         where: { id: parseInt(id) },
         data: {
-          usernameSh: username_shopee,
+          usernameSh,
           nomorHp: nomor_hp || null,
         },
       })
 
       res.json({ success: true, customer })
     } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return res.status(409).json({ error: 'Username Shopee sudah terdaftar untuk pelanggan lain' })
+      }
       logger.error('Error updating customer:', error)
       res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to update customer' })
     }

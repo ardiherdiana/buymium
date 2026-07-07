@@ -6,8 +6,6 @@ import accsmarketsRouter from './accsmarkets'
 import customersRouter from './customers'
 import dashboardRouter from './dashboard'
 import analyticsRouter from './analytics'
-import expenseCategoriesRouter from './expenseCategories'
-import expensesRouter from './expenses'
 import rolesRouter from './roles'
 import usersRouter from './users'
 import sourcesRouter from './sources'
@@ -24,8 +22,6 @@ router.use('/accsmarkets', accsmarketsRouter)
 router.use('/customers', customersRouter)
 router.use('/dashboard', dashboardRouter)
 router.use('/analytics', analyticsRouter)
-router.use('/expense-categories', expenseCategoriesRouter)
-router.use('/expenses', expensesRouter)
 router.use('/roles', rolesRouter)
 router.use('/users', usersRouter)
 router.use('/sources', sourcesRouter)

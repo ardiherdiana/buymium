@@ -43,6 +43,7 @@ const mockPrismaInstance = {
     update: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
+    groupBy: vi.fn(),
   },
   productSection: {
     findUnique: vi.fn(),
@@ -50,6 +51,14 @@ const mockPrismaInstance = {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+  },
+  productVariant: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
   },
   channel: {
     findUnique: vi.fn(),
@@ -83,21 +92,6 @@ const mockPrismaInstance = {
     findUnique: vi.fn(),
     findMany: vi.fn(),
     count: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-  },
-  expense: {
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
-    count: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-  },
-  expenseCategory: {
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
@@ -159,13 +153,12 @@ vi.mock('@prisma/client', () => {
     order = mockPrismaInstance.order
     stock = mockPrismaInstance.stock
     productSection = mockPrismaInstance.productSection
+    productVariant = mockPrismaInstance.productVariant
     channel = mockPrismaInstance.channel
     autopostingPost = mockPrismaInstance.autopostingPost
     autopostingSchedule = mockPrismaInstance.autopostingSchedule
     role = mockPrismaInstance.role
     source = mockPrismaInstance.source
-    expense = mockPrismaInstance.expense
-    expenseCategory = mockPrismaInstance.expenseCategory
     account = mockPrismaInstance.account
     accsmarket = mockPrismaInstance.accsmarket
     sale = mockPrismaInstance.sale

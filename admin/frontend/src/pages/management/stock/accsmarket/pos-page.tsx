@@ -55,7 +55,7 @@ export default function AccsmarketPosPage() {
   const { data } = useQuery<AccsmarketsResponse>({
     queryKey: ["accsmarket-pos-items", initialIds],
     queryFn: () =>
-      api.get("/management/accsmarkets/index", { params: { account_ids: initialIds.join(",") } }).then((r) => r.data),
+      api.get("/management/accsmarkets/sales-mobile", { params: { account_ids: initialIds.join(",") } }).then((r) => r.data),
     enabled: initialIds.length > 0,
   })
 
@@ -140,14 +140,12 @@ export default function AccsmarketPosPage() {
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
             Akun Dipilih ({selected.length})
           </h2>
-          <div className="flex-1 overflow-y-auto pr-1">
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1">
             {selected.length === 0 ? (
               <div className="flex items-center justify-center h-40 rounded-lg border border-dashed text-muted-foreground text-sm">
                 Tidak ada akun dipilih
               </div>
-            ) : (
-            <div className="grid grid-cols-2 gap-2">
-            {selected.map((acc) => {
+            ) : selected.map((acc) => {
               const profit = unitPrice - (acc.capital ?? 0)
               return (
                 <div key={acc.id} className="rounded-lg border bg-card p-4 flex items-start justify-between gap-3">
@@ -161,7 +159,7 @@ export default function AccsmarketPosPage() {
                       )}
                       {acc.year && <span className="text-xs text-muted-foreground shrink-0">{acc.year}</span>}
                     </div>
-                    <div className="flex gap-4 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
                       <span>Capital: {acc.capital != null ? formatIDR(acc.capital) : "-"}</span>
                       <span>Followers: {acc.currentFollowers?.toLocaleString("id-ID") ?? "-"} / {acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</span>
                     </div>
@@ -181,8 +179,6 @@ export default function AccsmarketPosPage() {
                 </div>
               )
             })}
-            </div>
-            )}
           </div>
         </div>
 

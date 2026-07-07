@@ -164,6 +164,25 @@ describe('POST /api/stocks', () => {
     expect(res.status).toBe(201)
     expect(res.body.id).toBe(20)
   })
+
+  it('assigns the stock to a price variant (opsi) when variantId is provided', async () => {
+    mockDb.stock.create.mockResolvedValueOnce({ ...mockStock, id: 21, variantId: 5 })
+
+    const res = await request(app)
+      .post('/api/stocks')
+      .set('Authorization', authHeader)
+      .send({
+        productId: 1,
+        variantId: 5,
+        username: 'newuser',
+        password: 'newpass',
+      })
+
+    expect(res.status).toBe(201)
+    expect(mockDb.stock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ variantId: 5 }) })
+    )
+  })
 })
 
 describe('POST /api/stocks/bulk', () => {

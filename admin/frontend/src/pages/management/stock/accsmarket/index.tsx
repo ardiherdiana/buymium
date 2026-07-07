@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Search, RefreshCw, Sheet, Users, ArrowLeft, Heart, CheckCircle2, Trash2, Copy, ScanLine, ShoppingCart } from "lucide-react"
+import { Search, RefreshCw, Sheet, Users, ArrowLeft, Heart, CheckCircle2, Trash2, Copy, ScanLine, ShoppingCart, ClipboardList } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -57,6 +57,11 @@ const STATUS_OPTIONS = [
 
 const PAGE_SIZE = 100
 
+function formatFollowersLabel(value: number): string {
+  if (value >= 1000 && value % 1000 === 0) return `${value / 1000}K`
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`
+  return String(value)
+}
 
 export default function AccsmarketPage() {
   const queryClient = useQueryClient()
@@ -188,6 +193,7 @@ export default function AccsmarketPage() {
     const lines = accs.map((acc, i) => {
       const parts: string[] = []
       if (acc.email) parts.push(`Email: ${acc.email}`)
+      if (acc.passwordEmail) parts.push(`Password Email: ${acc.passwordEmail}`)
       if (acc.username) parts.push(`Username: ${acc.username}`)
       if (acc.password) parts.push(`Password: ${acc.password}`)
       if (acc.twoFactorAuth) parts.push(`2FA: ${acc.twoFactorAuth}`)
@@ -196,6 +202,58 @@ export default function AccsmarketPage() {
     navigator.clipboard.writeText(lines.join("\n\n"))
     alert.success("Disalin", `${accs.length} akun disalin ke clipboard`)
   }
+
+  // ── Copy available stock (all completed accounts, grouped by target + year + source) ─
+  const copyStockMutation = useMutation({
+    mutationFn: () =>
+      api.get("/management/accsmarkets/export/completed", {
+        params: {
+          source_id: sourceId !== "all" ? sourceId : undefined,
+          year: year !== "all" ? year : undefined,
+          followers: followers !== "all" ? followers : undefined,
+          search: search || undefined,
+        },
+      }).then((r) => r.data as {
+        accsmarkets: { username: string | null; targetFollowers: number | null; year: string | null; source: { name: string } | null }[]
+      }),
+    onSuccess: (result) => {
+      const accs = result.accsmarkets.filter((a) => a.username)
+      if (!accs.length) {
+        alert.error("Kosong", "Tidak ada akun selesai yang tersedia")
+        return
+      }
+      const sourceLabel = (name: string | null | undefined) => {
+        const lower = (name ?? "").trim().toLowerCase()
+        if (lower === "2fa") return "2FA NO EMAIL"
+        if (lower === "hotmail") return "HOTMAIL"
+        return name ? name.toUpperCase() : ""
+      }
+      const groups = new Map<string, { label: string; usernames: string[] }>()
+      for (const acc of accs) {
+        const target = acc.targetFollowers ?? 0
+        const yr = acc.year ?? ""
+        const src = sourceLabel(acc.source?.name)
+        const key = `${target}|${yr}|${src}`
+        if (!groups.has(key)) groups.set(key, { label: `${formatFollowersLabel(target)}|${yr}|${src}`, usernames: [] })
+        groups.get(key)!.usernames.push(acc.username as string)
+      }
+      const sortedKeys = [...groups.keys()].sort((a, b) => {
+        const [targetA, yearA] = a.split("|")
+        const [targetB, yearB] = b.split("|")
+        return Number(targetA) - Number(targetB) || yearA.localeCompare(yearB)
+      })
+      const blocks = sortedKeys.map((key) => {
+        const { label, usernames } = groups.get(key)!
+        const [followersLabel, yr, src] = label.split("|")
+        const yearSuffix = yr ? ` ${yr}` : ""
+        const sourceSuffix = src ? ` ${src}` : ""
+        return `=== AKUN ${followersLabel} FOLLOWERS${yearSuffix}${sourceSuffix} (${usernames.length} Stok) ===\n${usernames.join("\n")}`
+      })
+      navigator.clipboard.writeText(blocks.join("\n\n"))
+      alert.success("Disalin", `${accs.length} akun stok disalin ke clipboard`)
+    },
+    onError: () => alert.error("Gagal", "Gagal mengambil stok akun"),
+  })
 
   // ── Delete selected ────────────────────────────────────────────────────────
   const handleBulkDelete = async () => {
@@ -249,8 +307,8 @@ export default function AccsmarketPage() {
         {/* Mobile: compact */}
         <div className="grid grid-cols-2 gap-2 sm:hidden">
           {[
-            { label: "Total Akun", value: stats?.total_accounts ?? 0, icon: Users, color: "text-blue-600" },
-            { label: "Akun Aktif", value: stats?.completed_accounts ?? 0, icon: CheckCircle2, color: "text-emerald-600" },
+            { label: "Total Akun", value: (stats?.total_accounts ?? 0).toLocaleString("id-ID"), icon: Users, color: "text-blue-600" },
+            { label: "Akun Aktif", value: (stats?.completed_accounts ?? 0).toLocaleString("id-ID"), icon: CheckCircle2, color: "text-emerald-600" },
             { label: "Total Followers", value: (stats?.total_followers ?? 0).toLocaleString("id-ID"), icon: Heart, color: "text-red-500" },
           ].map(({ label, value, icon: Icon, color }) => (
             <Card key={label}>
@@ -270,7 +328,7 @@ export default function AccsmarketPage() {
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Akun</p>
-                <p className="text-2xl font-bold mt-1">{stats?.total_accounts ?? 0}</p>
+                <p className="text-2xl font-bold mt-1">{(stats?.total_accounts ?? 0).toLocaleString("id-ID")}</p>
                 <p className="text-xs text-muted-foreground">Semua akun</p>
               </div>
               <div className="size-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
@@ -282,7 +340,7 @@ export default function AccsmarketPage() {
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Akun Aktif</p>
-                <p className="text-2xl font-bold mt-1">{stats?.completed_accounts ?? 0}</p>
+                <p className="text-2xl font-bold mt-1">{(stats?.completed_accounts ?? 0).toLocaleString("id-ID")}</p>
                 <p className="text-xs text-muted-foreground">Akun selesai</p>
               </div>
               <div className="size-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
@@ -346,6 +404,15 @@ export default function AccsmarketPage() {
             <Sheet className={`size-4 ${syncProgress.status === "syncing" ? "animate-spin" : ""}`} />
             {syncProgress.status === "syncing" ? "Menyinkronkan..." : "Sync Sheets"}
           </Button>
+          <Button
+            variant="outline"
+            className="w-full col-span-2 gap-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50"
+            onClick={() => copyStockMutation.mutate()}
+            disabled={copyStockMutation.isPending}
+          >
+            <ClipboardList className="size-4" />
+            {copyStockMutation.isPending ? "Menyalin..." : "Salin Stok"}
+          </Button>
         </div>
 
         {/* Desktop: table */}
@@ -358,6 +425,7 @@ export default function AccsmarketPage() {
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                   </TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Password Email</TableHead>
                   <TableHead>Username</TableHead>
                   <TableHead>Password</TableHead>
                   <TableHead>Saat Ini</TableHead>
@@ -370,8 +438,8 @@ export default function AccsmarketPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading || isFetching ? <LoadingRow colSpan={11} /> : !accsmarkets.length ? (
-                  <EmptyRow colSpan={11} message="Tidak ada akun ditemukan." />
+                {isLoading || isFetching ? <LoadingRow colSpan={12} /> : !accsmarkets.length ? (
+                  <EmptyRow colSpan={12} message="Tidak ada akun ditemukan." />
                 ) : (
                   accsmarkets.map((acc) => (
                     <TableRow key={acc.id} className={selectedIds.includes(acc.id) ? "bg-muted/40" : ""}>
@@ -379,6 +447,7 @@ export default function AccsmarketPage() {
                         <Checkbox checked={selectedIds.includes(acc.id)} onCheckedChange={() => toggleOne(acc.id)} />
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{acc.email ?? "-"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{acc.passwordEmail ?? "-"}</TableCell>
                       <TableCell className="font-medium text-sm">{acc.username ?? "-"}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{acc.password ?? "-"}</TableCell>
                       <TableCell>{acc.currentFollowers?.toLocaleString("id-ID") ?? "-"}</TableCell>

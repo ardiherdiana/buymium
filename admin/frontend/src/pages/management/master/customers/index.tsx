@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Search, Pencil, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -43,6 +43,8 @@ export default function CustomersPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState<CustomerForm>(emptyForm)
+  const [duplicate, setDuplicate] = useState<{ id: number; username_shopee: string } | null>(null)
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false)
 
   const { data, isLoading } = useQuery<CustomersResponse>({
     queryKey: ["management-customers", page, search],
@@ -77,6 +79,24 @@ export default function CustomersPage() {
     onError: () => alert.error("Gagal", "Gagal menghapus pelanggan"),
   })
 
+  useEffect(() => {
+    const username = form.username_shopee.trim()
+    if (!username) {
+      setDuplicate(null)
+      return
+    }
+    setCheckingDuplicate(true)
+    const timeout = setTimeout(() => {
+      api.get("/management/customers/check-duplicate", {
+        params: { username_shopee: username, exclude_id: editingId ?? undefined },
+      })
+        .then((r) => setDuplicate(r.data?.exists ? r.data.customer : null))
+        .catch(() => setDuplicate(null))
+        .finally(() => setCheckingDuplicate(false))
+    }, 400)
+    return () => clearTimeout(timeout)
+  }, [form.username_shopee, editingId])
+
   const handleDelete = async (c: Customer) => {
     const ok = await alert.confirm("Hapus Pelanggan", `Hapus pelanggan "${c.username_shopee}"?`)
     if (ok) deleteMutation.mutate(c.id)
@@ -88,23 +108,29 @@ export default function CustomersPage() {
       username_shopee: c.username_shopee,
       nomor_hp: c.nomor_hp ?? "",
     })
+    setDuplicate(null)
     setModalOpen(true)
   }
 
   const handleAdd = () => {
     setEditingId(null)
     setForm(emptyForm)
+    setDuplicate(null)
     setModalOpen(true)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.username_shopee.trim()) {
-      alert.error("Validasi", "Username Shopee wajib diisi")
+    if (!form.username_shopee.trim() && !form.nomor_hp.trim()) {
+      alert.error("Validasi", "Username Shopee atau Nomor HP wajib diisi salah satu")
+      return
+    }
+    if (duplicate) {
+      alert.error("Validasi", "Username Shopee ini sudah dipakai pelanggan lain")
       return
     }
     saveMutation.mutate({
-      username_shopee: form.username_shopee,
+      username_shopee: form.username_shopee.trim() || undefined,
       nomor_hp: form.nomor_hp || undefined,
     })
   }
@@ -240,8 +266,16 @@ export default function CustomersPage() {
               placeholder="shopee_customer"
               value={form.username_shopee}
               onChange={(e) => setForm((f) => ({ ...f, username_shopee: e.target.value }))}
-              required
+              className={duplicate ? "border-destructive focus-visible:ring-destructive" : undefined}
             />
+            {checkingDuplicate && (
+              <p className="text-xs text-muted-foreground">Memeriksa...</p>
+            )}
+            {!checkingDuplicate && duplicate && (
+              <p className="text-xs text-destructive">
+                Pelanggan sudah ada dengan username ini (ID #{duplicate.id})
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <label className="text-sm font-medium">Nomor HP</label>
@@ -260,7 +294,7 @@ export default function CustomersPage() {
             >
               Batal
             </Button>
-            <Button type="submit" className="flex-1" disabled={saveMutation.isPending}>
+            <Button type="submit" className="flex-1" disabled={saveMutation.isPending || checkingDuplicate || !!duplicate}>
               {saveMutation.isPending ? "Menyimpan..." : "Simpan"}
             </Button>
           </div>
