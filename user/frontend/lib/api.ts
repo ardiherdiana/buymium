@@ -28,6 +28,14 @@ export interface Stats {
   avgRating: number
 }
 
+export interface ProductVariant {
+  id: number
+  name: string
+  price: number
+  targetFollowers: number | null
+  availableStock: number
+}
+
 export interface Product {
   id: number
   title: string
@@ -36,8 +44,8 @@ export interface Product {
   price: number
   rating: number
   isVerified: boolean
-  tags: string[]
   imageUrl?: string | null
+  variants?: ProductVariant[]
 }
 
 export interface Testimonial {

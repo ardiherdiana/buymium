@@ -15,7 +15,6 @@ const mockProduct = {
   price: 50000,
   rating: 4.5,
   isVerified: true,
-  tags: '["streaming","entertainment"]',
   sectionId: 'streaming',
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -35,17 +34,6 @@ describe('GET /api/products', () => {
     expect(res.body.meta.total).toBe(3)
     expect(res.body.meta.page).toBe(1)
     expect(Array.isArray(res.body.data)).toBe(true)
-  })
-
-  it('returns 200 with parsed tags as array', async () => {
-    mockDb.product.count.mockResolvedValue(1)
-    mockDb.product.findMany.mockResolvedValue([mockProduct])
-
-    const res = await request(app).get('/api/products')
-
-    expect(res.status).toBe(200)
-    expect(Array.isArray(res.body.data[0].tags)).toBe(true)
-    expect(res.body.data[0].tags).toEqual(['streaming', 'entertainment'])
   })
 
   it('supports pagination query params', async () => {
@@ -81,7 +69,6 @@ describe('GET /api/products/:id', () => {
     expect(res.status).toBe(200)
     expect(res.body.id).toBe(1)
     expect(res.body.title).toBe('Netflix Premium')
-    expect(Array.isArray(res.body.tags)).toBe(true)
   })
 
   it('returns 404 when product not found', async () => {

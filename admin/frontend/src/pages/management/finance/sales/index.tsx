@@ -27,6 +27,8 @@ interface Sale {
   totalSalePrice: number
   totalProfit: number
   createdAt: string
+  origin: "storefront" | "manual"
+  buyer?: { name: string; email: string }
 }
 interface ChartPoint { label: string; sales: number; amount: number; profit: number }
 interface Stats { totalSales: number; totalCapital: number; totalSalePrice: number; totalProfit: number }
@@ -63,6 +65,20 @@ function StatCard({ title, value, icon: Icon, valueClass, loading }: {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+const buyerLabel = (sale: Sale) => sale.buyer?.name ?? sale.customer?.usernameSh ?? "-"
+
+function OriginBadge({ origin }: { origin: Sale["origin"] }) {
+  return origin === "storefront" ? (
+    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+      Storefront
+    </span>
+  ) : (
+    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+      Manual
+    </span>
   )
 }
 
@@ -248,7 +264,12 @@ export default function SalesPage() {
                     {((pagination?.page ?? 1) - 1) * (pagination?.limit ?? 20) + idx + 1}
                   </TableCell>
                   <TableCell className="font-mono text-xs">{sale.salesNumber}</TableCell>
-                  <TableCell>{sale.customer?.usernameSh ?? "-"}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      {buyerLabel(sale)}
+                      <OriginBadge origin={sale.origin} />
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                       {sale.source?.name ?? "-"}
@@ -289,7 +310,10 @@ export default function SalesPage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-mono text-xs text-muted-foreground">{sale.salesNumber}</p>
-                  <p className="font-medium text-sm">{sale.customer?.usernameSh ?? "-"}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-medium text-sm">{buyerLabel(sale)}</p>
+                    <OriginBadge origin={sale.origin} />
+                  </div>
                 </div>
                 <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 shrink-0">
                   {sale.source?.name ?? "-"}

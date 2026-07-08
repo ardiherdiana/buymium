@@ -14,12 +14,11 @@ import { useAlert } from "@/stores/alertStore"
 import api from "@/lib/api"
 import { formatIDR, getProofImageUrl } from "@/lib/config"
 
-interface Stock {
+interface InventoryItem {
   id: number
-  username: string
-  email?: string
-  password: string
-  status: string
+  username: string | null
+  email: string | null
+  password: string | null
 }
 
 interface OrderDetail {
@@ -34,7 +33,7 @@ interface OrderDetail {
   notes?: string
   createdAt: string
   bankAccount?: { bankName: string; accountNumber: string; accountHolder: string }
-  stocks: Stock[]
+  inventoryItems: InventoryItem[]
   relatedOrders: OrderDetail[]
 }
 
@@ -201,7 +200,7 @@ export default function OrderDetailPage() {
         </CardContent>
       </Card>
 
-      {order.stocks.length > 0 && (
+      {order.inventoryItems.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Akun Terkirim</CardTitle>
@@ -217,7 +216,7 @@ export default function OrderDetailPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {order.stocks.map((stock) => (
+                {order.inventoryItems.map((stock) => (
                   <TableRow key={stock.id}>
                     <TableCell className="font-mono text-xs">{stock.username}</TableCell>
                     <TableCell className="font-mono text-xs">{stock.email || "-"}</TableCell>
@@ -229,7 +228,7 @@ export default function OrderDetailPage() {
           </CardContent>
           {/* Mobile: cards */}
           <CardContent className="sm:hidden p-4 space-y-3">
-            {order.stocks.map((stock) => (
+            {order.inventoryItems.map((stock) => (
               <div key={stock.id} className="rounded-md border p-3 space-y-1.5">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Username</span>

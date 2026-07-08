@@ -57,18 +57,6 @@ function ProductCard({ product, onClick }: { product: Product; onClick: () => vo
           <StarRating rating={product.rating} />
         </div>
       )}
-      {product.tags.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {product.tags.slice(0, 3).map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border border-border px-1.5 py-0.5 text-xs text-muted-foreground"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

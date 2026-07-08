@@ -4,73 +4,82 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Save, Loader2, Plus, Trash2, ImagePlus, X, ShieldCheck, Star, ImageOff } from "lucide-react"
+import { Save, Loader2, ImagePlus, X, ShieldCheck, Star, ImageOff, Search, Trash2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAlert } from "@/stores/alertStore"
 import api from "@/lib/api"
 
 const variantSchema = z.object({
-  name: z.string().min(1, "Nama opsi wajib diisi"),
+  name: z.string().min(1),
   price: z.number().min(0),
+  targetFollowers: z.number().nullable(),
+  count: z.number().optional(),
 })
 
 const schema = z.object({
   title: z.string().min(1, "Judul wajib diisi"),
   description: z.string().optional(),
-  tags: z.string().optional(),
   imageUrl: z.string().optional(),
   price: z.number().min(0),
-  inStock: z.number().min(0).optional(),
   rating: z.number().min(0).max(5).optional(),
   isVerified: z.boolean().default(false),
   isActive: z.boolean().default(true),
-  hasVariants: z.boolean().default(false),
-  variantLabel: z.string().optional(),
   variants: z.array(variantSchema).optional(),
+  sourceId: z.number({ error: "Source wajib dipilih" }),
 })
 
 type FormData = {
   title: string
   description?: string
-  tags?: string
   imageUrl?: string
   price: number
-  inStock?: number
   rating?: number
   isVerified: boolean
   isActive: boolean
-  hasVariants: boolean
-  variantLabel?: string
-  variants?: { name: string; price: number }[]
+  variants?: { name: string; price: number; targetFollowers: number | null; count?: number }[]
+  sourceId: number
+}
+
+interface SourceOption {
+  id: number
+  name: string
+  is_accsmarket: boolean
+  product?: { id: number; title: string } | null
 }
 
 interface ProductVariant {
   id: number
   name: string
   price: number
+  targetFollowers?: number | null
   availableStock?: number
+}
+
+interface VariantCandidate {
+  targetFollowers: number
+  count: number
+  suggestedName: string
 }
 
 interface Product {
   id: number
   title: string
   description?: string
-  tags?: string
   imageUrl?: string
   price: number
   inStock?: number
   rating?: number
   isVerified?: boolean
   isActive?: boolean
-  variantLabel?: string
   variants?: ProductVariant[]
+  sourceId?: number | null
+  source?: { id: number; name: string } | null
 }
 
 export default function ProductFormPage() {
@@ -81,6 +90,13 @@ export default function ProductFormPage() {
   const alert = useAlert()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [selectedSource, setSelectedSource] = useState<SourceOption | null>(null)
+  const [sourceSearch, setSourceSearch] = useState("")
+  const [sourceResults, setSourceResults] = useState<SourceOption[]>([])
+  const [showSourceDropdown, setShowSourceDropdown] = useState(false)
+  const [detectingVariants, setDetectingVariants] = useState(false)
+  const sourceDropdownRef = useRef<HTMLDivElement>(null)
+  const sourceInputWrapRef = useRef<HTMLDivElement>(null)
 
   const { data: product, isLoading } = useQuery<Product>({
     queryKey: ["product", id],
@@ -101,50 +117,101 @@ export default function ProductFormPage() {
     defaultValues: {
       title: "",
       description: "",
-      tags: "",
       imageUrl: "",
       price: 0,
-      inStock: 0,
       rating: 0,
       isVerified: false,
       isActive: true,
-      hasVariants: false,
-      variantLabel: "",
       variants: [],
     },
   })
 
-  const { fields: variantFields, append: appendVariant, remove: removeVariant } = useFieldArray({
+  const { fields: variantFields, replace: replaceVariants, remove: removeVariant } = useFieldArray({
     control,
     name: "variants",
   })
 
+  // Auto-detects price-tier candidates (distinct targetFollowers among "Selesai" accounts)
+  // for the selected Source, and merges in any price already saved for that tier.
+  async function loadVariantCandidates(sourceId: number, existing: ProductVariant[] = []) {
+    setDetectingVariants(true)
+    try {
+      const res = await api.get(`/products/sources/${sourceId}/detect-variants`)
+      const candidates: VariantCandidate[] = res.data?.data ?? []
+      replaceVariants(
+        candidates.map((c) => {
+          const match = existing.find((v) => v.targetFollowers === c.targetFollowers)
+          return {
+            name: match?.name ?? c.suggestedName,
+            price: match?.price ?? 0,
+            targetFollowers: c.targetFollowers,
+            count: c.count,
+          }
+        })
+      )
+    } catch {
+      replaceVariants([])
+    } finally {
+      setDetectingVariants(false)
+    }
+  }
+
   useEffect(() => {
     if (product) {
-      const rawTags = product.tags
-      let tagsStr = ""
-      try {
-        const parsed = JSON.parse(rawTags ?? "[]")
-        tagsStr = Array.isArray(parsed) ? parsed.join(", ") : String(rawTags ?? "")
-      } catch {
-        tagsStr = rawTags ?? ""
-      }
       reset({
         title: product.title,
         description: product.description ?? "",
-        tags: tagsStr,
         imageUrl: product.imageUrl ?? "",
         price: product.price,
-        inStock: product.inStock ?? 0,
         rating: product.rating ?? 0,
         isVerified: product.isVerified ?? false,
         isActive: product.isActive ?? true,
-        hasVariants: (product.variants ?? []).length > 0,
-        variantLabel: product.variantLabel ?? "",
-        variants: (product.variants ?? []).map((v) => ({ name: v.name, price: v.price })),
+        variants: [],
+        sourceId: product.sourceId ?? undefined,
       })
+      setSelectedSource(product.source ? { id: product.source.id, name: product.source.name, is_accsmarket: false } : null)
+      // Show already-saved variants as-is; only re-detect from the Source when the admin
+      // explicitly clicks "Refresh" (auto-fetching on every visit kept resurrecting opsi
+      // that were intentionally deleted).
+      replaceVariants(
+        (product.variants ?? []).map((v) => ({
+          name: v.name,
+          price: v.price,
+          targetFollowers: v.targetFollowers ?? null,
+          count: v.availableStock,
+        }))
+      )
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product, reset])
+
+  function handleRefreshVariants() {
+    if (!selectedSource) return
+    const currentVariants = (watch("variants") ?? []).map((v, i) => ({
+      id: i,
+      name: v.name,
+      price: v.price,
+      targetFollowers: v.targetFollowers,
+    }))
+    loadVariantCandidates(selectedSource.id, currentVariants)
+  }
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      api.get("/management/sources", { params: { search: sourceSearch, limit: 20 } })
+        .then((r) => setSourceResults(r.data?.sources ?? []))
+        .catch(() => {})
+    }, 250)
+    return () => clearTimeout(t)
+  }, [sourceSearch])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (sourceDropdownRef.current && !sourceDropdownRef.current.contains(e.target as Node)) setShowSourceDropdown(false)
+    }
+    if (showSourceDropdown) document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [showSourceDropdown])
 
   const handlePickImage = () => fileInputRef.current?.click()
 
@@ -170,15 +237,11 @@ export default function ProductFormPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const { variants, hasVariants, variantLabel, ...rest } = data
-      const tagsArray = rest.tags
-        ? rest.tags.split(",").map((t) => t.trim()).filter(Boolean)
-        : []
-      const activeVariants = hasVariants ? (variants ?? []).filter((v) => v.name.trim()) : []
+      const { variants, ...rest } = data
+      const activeVariants = variants ?? []
 
       const payload = {
         ...rest,
-        tags: tagsArray,
         // Keep the base price meaningful for listings even when variants carry the real prices
         price: activeVariants.length > 0 ? Math.min(...activeVariants.map((v) => v.price)) : rest.price,
       }
@@ -189,7 +252,7 @@ export default function ProductFormPage() {
 
       const productId = isEdit ? id : res.data.id
       await api.put(`/products/${productId}/variants`, {
-        variantLabel: hasVariants ? (variantLabel || null) : null,
+        variantLabel: null,
         variants: activeVariants,
       })
 
@@ -205,15 +268,11 @@ export default function ProductFormPage() {
   })
 
   const priceValue = watch("price")
-  const inStockValue = watch("inStock")
   const imageUrl = watch("imageUrl")
-  const hasVariants = watch("hasVariants")
   const ratingValue = watch("rating")
-  const watchedVariants = watch("variants")
-  const activeVariants = hasVariants ? (watchedVariants ?? []).filter((v) => v.name?.trim()) : []
-  const activeVariantCount = activeVariants.length
-  const previewPrice = activeVariantCount > 0 ? Math.min(...activeVariants.map((v) => v.price || 0)) : priceValue
-  const tagList = (watch("tags") ?? "").split(",").map((t) => t.trim()).filter(Boolean)
+  const watchedVariants = watch("variants") ?? []
+  const activeVariantCount = watchedVariants.length
+  const previewPrice = activeVariantCount > 0 ? Math.min(...watchedVariants.map((v) => v.price || 0)) : priceValue
 
   if (isEdit && isLoading) {
     return (
@@ -232,15 +291,9 @@ export default function ProductFormPage() {
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_320px] gap-6 items-start">
         {/* Left column */}
         <div className="space-y-4">
-          {/* Photo card */}
+          {/* Photo + title + description card */}
           <Card>
-            <CardHeader className="pb-3 pt-4 px-5">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <span className="size-5 rounded bg-purple-600 text-white flex items-center justify-center text-xs">🖼️</span>
-                Foto Produk
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-5">
+            <CardContent className="p-5 space-y-4">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -290,12 +343,7 @@ export default function ProductFormPage() {
                   <p className="text-xs text-muted-foreground mt-1">JPG, PNG, atau WEBP, maks 5MB</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
 
-          {/* Title & Description card */}
-          <Card>
-            <CardContent className="p-5 space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="title">Nama Produk</Label>
                 <Input
@@ -304,15 +352,6 @@ export default function ProductFormPage() {
                   placeholder="Ketik nama produk yang menarik..."
                 />
                 {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="tags">Tag / Kata Kunci <span className="text-muted-foreground font-normal">(pisahkan dengan koma)</span></Label>
-                <Input
-                  id="tags"
-                  {...register("tags")}
-                  placeholder="pilih kategori yang relevan: netflix, premium, lifetime..."
-                />
               </div>
 
               <div className="space-y-1.5">
@@ -327,49 +366,112 @@ export default function ProductFormPage() {
             </CardContent>
           </Card>
 
-          {/* Variation toggle card */}
+          {/* Inventory source + price variations + rating card */}
           <Card>
-            <CardContent className="p-5 space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <Label htmlFor="hasVariants" className="cursor-pointer">Aktifkan Variasi</Label>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Aktifkan untuk membuat beberapa pilihan harga, mis. berdasarkan jumlah followers atau durasi.
-                  </p>
+            <CardContent className="p-5 space-y-5">
+              <div className="space-y-2">
+                <Label>Souce</Label>
+                <div ref={sourceDropdownRef} className="relative">
+                  {selectedSource ? (
+                    <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+                      <span className="text-sm font-medium">{selectedSource.name}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={() => {
+                          setSelectedSource(null)
+                          setValue("sourceId", undefined as unknown as number, { shouldValidate: true })
+                          replaceVariants([])
+                        }}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div ref={sourceInputWrapRef} className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Cari source..."
+                          value={sourceSearch}
+                          onChange={(e) => setSourceSearch(e.target.value)}
+                          onFocus={() => setShowSourceDropdown(true)}
+                          className="pl-9"
+                        />
+                      </div>
+                      {showSourceDropdown && (() => {
+                        const rect = sourceInputWrapRef.current?.getBoundingClientRect()
+                        return (
+                          <div
+                            className="fixed z-50 rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto"
+                            style={{ top: (rect?.bottom ?? 0) + 4, left: rect?.left ?? 0, width: rect?.width ?? "auto" }}
+                          >
+                            {sourceResults.length === 0 ? (
+                              <p className="px-3 py-2 text-xs text-muted-foreground">Tidak ada source ditemukan</p>
+                            ) : (
+                              sourceResults.map((s) => {
+                                const linkedElsewhere = !!s.product && s.product.id !== (product?.id ?? -1)
+                                return (
+                                  <button
+                                    key={s.id}
+                                    type="button"
+                                    disabled={linkedElsewhere}
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between"
+                                    onClick={() => {
+                                      setSelectedSource(s)
+                                      setValue("sourceId", s.id, { shouldValidate: true })
+                                      setShowSourceDropdown(false)
+                                      loadVariantCandidates(s.id)
+                                    }}
+                                  >
+                                    <span>{s.name}</span>
+                                    {linkedElsewhere && <span className="text-xs text-muted-foreground">sudah dipakai</span>}
+                                  </button>
+                                )
+                              })
+                            )}
+                          </div>
+                        )
+                      })()}
+                    </>
+                  )}
                 </div>
-                <Switch
-                  id="hasVariants"
-                  checked={hasVariants}
-                  onCheckedChange={(v) => setValue("hasVariants", v)}
-                />
+                {errors.sourceId && <p className="text-xs text-destructive">{errors.sourceId.message}</p>}
               </div>
 
-              {hasVariants && (
-                <div className="space-y-3 pt-1 border-t">
-                  <div className="space-y-1.5 pt-3">
-                    <Label htmlFor="variantLabel">Variasi</Label>
-                    <Input
-                      id="variantLabel"
-                      {...register("variantLabel")}
-                      placeholder='Nama variasi, mis. "Jumlah"'
-                    />
+              {selectedSource && (
+                <div className="space-y-2 border-t pt-4">
+                  <div className="flex items-center justify-between">
+                    <Label>Variasi Harga</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={handleRefreshVariants}
+                      disabled={detectingVariants}
+                    >
+                      <RefreshCw className={`size-3.5 ${detectingVariants ? "animate-spin" : ""}`} />
+                      Refresh
+                    </Button>
                   </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Opsi</Label>
+                  {detectingVariants ? (
+                    <Skeleton className="h-16 w-full" />
+                  ) : variantFields.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Tidak ada tingkatan followers terdeteksi di Source ini — produk akan pakai Harga Satuan di bawah.
+                    </p>
+                  ) : (
                     <div className="space-y-2">
                       {variantFields.map((field, index) => {
                         const variantPrice = watch(`variants.${index}.price`)
                         return (
-                          <div key={field.id} className="flex items-start gap-2">
-                            <div className="flex-1 space-y-1.5">
-                              <Input
-                                {...register(`variants.${index}.name`)}
-                                placeholder='Nama opsi, mis. "1.000+ Followers"'
-                              />
-                              {errors.variants?.[index]?.name && (
-                                <p className="text-xs text-destructive">{errors.variants[index]?.name?.message}</p>
-                              )}
+                          <div key={field.id} className="flex items-center gap-2">
+                            <div className="flex-1 text-sm">
+                              {field.name}
+                              <span className="ml-1.5 text-xs text-muted-foreground">({field.count ?? 0} akun tersedia)</span>
                             </div>
                             <div className="w-40 space-y-1.5">
                               <Input
@@ -387,7 +489,8 @@ export default function ProductFormPage() {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="size-9 text-destructive hover:text-destructive shrink-0"
+                              className="size-8 shrink-0 text-destructive hover:text-destructive"
+                              title="Jangan jadikan variasi"
                               onClick={() => removeVariant(index)}
                             >
                               <Trash2 className="size-4" />
@@ -396,33 +499,12 @@ export default function ProductFormPage() {
                         )
                       })}
                     </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full gap-2"
-                      onClick={() => appendVariant({ name: "", price: 0 })}
-                    >
-                      <Plus className="size-4" />
-                      Tambah Opsi
-                    </Button>
-                  </div>
+                  )}
                 </div>
               )}
-            </CardContent>
-          </Card>
 
-          {/* Pricing card (fallback price when no variations) */}
-          {!hasVariants && (
-            <Card>
-              <CardHeader className="pb-3 pt-4 px-5">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <span className="size-5 rounded bg-blue-600 text-white flex items-center justify-center text-xs">💰</span>
-                  Harga & Inventaris
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-5 pb-5 space-y-4">
-                <div className="space-y-1.5">
+              {variantFields.length === 0 && (
+                <div className="space-y-1.5 border-t pt-4">
                   <Label htmlFor="price">Harga Satuan (IDR)</Label>
                   <Input
                     id="price"
@@ -437,14 +519,14 @@ export default function ProductFormPage() {
                   />
                   {errors.price && <p className="text-xs text-destructive">{errors.price.message}</p>}
                 </div>
+              )}
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="rating">Rating (0.0 - 5.0)</Label>
-                  <Input id="rating" type="number" step="0.1" min="0" max="5" {...register("rating", { valueAsNumber: true })} placeholder="0.0" />
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              <div className="space-y-1.5 border-t pt-4">
+                <Label htmlFor="rating">Rating (0.0 - 5.0)</Label>
+                <Input id="rating" type="number" step="0.1" min="0" max="5" {...register("rating", { valueAsNumber: true })} placeholder="0.0" />
+              </div>
+            </CardContent>
+          </Card>
 
           <div className="flex items-center gap-2">
             <Checkbox
@@ -474,7 +556,7 @@ export default function ProductFormPage() {
         </div>
 
         {/* Right column: mobile preview */}
-        <div className="space-y-3 sm:sticky sm:top-4">
+        <div className="space-y-3 sm:sticky sm:top-4 sm:self-start">
           <Card>
             <CardHeader className="pb-3 pt-4 px-5">
               <CardTitle className="text-sm">Preview Tampilan Mobile</CardTitle>
@@ -505,11 +587,11 @@ export default function ProductFormPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold">
                           {previewPrice > 0
-                            ? `${hasVariants && activeVariantCount > 1 ? "Mulai " : ""}Rp ${previewPrice.toLocaleString("id-ID")}`
+                            ? `${activeVariantCount > 1 ? "Mulai " : ""}Rp ${previewPrice.toLocaleString("id-ID")}`
                             : "Hubungi kami"}
                         </span>
                         <span className="text-[10px] text-muted-foreground">
-                          {hasVariants ? `${activeVariantCount} opsi` : `${inStockValue ?? 0} stok`}
+                          {activeVariantCount > 0 ? `${activeVariantCount} opsi` : "stok otomatis"}
                         </span>
                       </div>
                       {!!ratingValue && (
@@ -519,18 +601,6 @@ export default function ProductFormPage() {
                               key={s}
                               className={`size-3 ${s <= Math.round(ratingValue) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`}
                             />
-                          ))}
-                        </div>
-                      )}
-                      {tagList.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {tagList.slice(0, 3).map((tag) => (
-                            <span
-                              key={tag}
-                              className="rounded-full border border-border px-1.5 py-0.5 text-[9px] text-muted-foreground"
-                            >
-                              {tag}
-                            </span>
                           ))}
                         </div>
                       )}

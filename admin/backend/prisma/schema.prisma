@@ -59,16 +59,16 @@ model Product {
   price       Float   @default(0)
   rating      Float   @default(0)
   isVerified  Boolean @default(false) @map("is_verified")
-  tags        String  @default("[]") @db.VarChar(1000)
   sectionId   Int?    @map("section_id")
   imageUrl     String? @db.VarChar(500) @map("image_url")
   variantLabel String? @db.VarChar(100) @map("variant_label")
+  sourceId    Int?    @unique @map("source_id")
   createdAt   DateTime @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt   DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
   section      ProductSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  source       Source?         @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   orders       Order[]
-  stocks       Stock[]
   testimonials Testimonial[]
   variants     ProductVariant[]
 
@@ -77,19 +77,20 @@ model Product {
   @@map("products")
 }
 
-// Price variations for a product (e.g. "1 Bulan", "3 Bulan", "Lifetime")
+// Price tiers for a source-linked product, auto-detected from distinct Account/Accsmarket
+// targetFollowers values (e.g. 1000, 2000) within the linked Source; admin only fills in price.
 model ProductVariant {
-  id        Int      @id @default(autoincrement())
-  productId Int      @map("product_id")
-  name      String   @db.VarChar(100)
-  price     Float
-  order     Int      @default(0)
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+  id              Int      @id @default(autoincrement())
+  productId       Int      @map("product_id")
+  name            String   @db.VarChar(100)
+  price           Float
+  targetFollowers Int?     @map("target_followers")
+  order           Int      @default(0)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt       DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  stocks  Stock[]
 
   @@index([productId])
   @@map("product_variants")
@@ -122,13 +123,16 @@ model Order {
   confirmedAt     DateTime? @db.DateTime(3) @map("confirmed_at")
   adminNote       String?   @db.Text @map("admin_note")
   bankAccountId   Int?      @map("bank_account_id")
+  inventoryRefs   String?   @db.Text @map("inventory_refs")
   createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
   bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
-  stocks      Stock[]
+  reservedAccounts    Account[]
+  reservedAccsmarkets Accsmarket[]
+  sale                Sale?
 
   @@index([userId])
   @@index([productId])
@@ -153,32 +157,6 @@ model BankAccount {
 
   @@index([isActive])
   @@map("bank_accounts")
-}
-
-// Stock model - for tracking account credentials
-model Stock {
-  id             Int     @id @default(autoincrement())
-  productId      Int     @map("product_id")
-  email          String? @db.VarChar(255)
-  passwordEmail  String? @db.Text          @map("password_email")
-  username       String  @db.VarChar(255)
-  password       String  @db.Text
-  twoFactorCode  String? @db.Text          @map("two_factor_code")
-  orderId        Int?    @map("order_id")
-  variantId      Int?    @map("variant_id")
-  status         String  @default("available") @db.VarChar(50)
-  createdAt      DateTime @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt      DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
-
-  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  order   Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-
-  @@index([productId])
-  @@index([status])
-  @@index([orderId])
-  @@index([variantId])
-  @@map("stocks")
 }
 
 // Autoposting Module Models
@@ -256,6 +234,7 @@ model Source {
   accounts Account[]
   accsmarkets Accsmarket[]
   sales Sale[]
+  product  Product?
 
   @@map("sources")
 }
@@ -274,11 +253,13 @@ model Account {
   phoneModel      String?   @db.VarChar(255) @map("phone_model")
   sourceId        Int?      @map("source_id")
   isSold          Boolean   @default(false) @map("is_sold")
+  reservedOrderId Int?      @map("reserved_order_id")
   createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  source    Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  saleLines SaleLine[]
+  source        Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  reservedOrder Order?      @relation(fields: [reservedOrderId], references: [id], onDelete: SetNull)
+  saleLines     SaleLine[]
 
   @@index([email])
   @@index([username])
@@ -286,6 +267,7 @@ model Account {
   @@index([sourceId])
   @@index([orderIndex])
   @@index([accountStatus])
+  @@index([reservedOrderId])
   @@map("accounts")
 }
 
@@ -319,11 +301,13 @@ model Accsmarket {
   year            String?   @db.VarChar(255)
   sourceId        Int?      @map("source_id")
   isSold          Boolean   @default(false) @map("is_sold")
+  reservedOrderId Int?      @map("reserved_order_id")
   createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  source    Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  saleLines SaleLine[]
+  source        Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  reservedOrder Order?      @relation(fields: [reservedOrderId], references: [id], onDelete: SetNull)
+  saleLines     SaleLine[]
 
   @@index([email])
   @@index([username])
@@ -331,6 +315,7 @@ model Accsmarket {
   @@index([sourceId])
   @@index([orderIndex])
   @@index([accountStatus])
+  @@index([reservedOrderId])
   @@map("accsmarkets")
 }
 
@@ -342,11 +327,13 @@ model Sale {
   totalProfit     Float     @map("total_profit")
   isShopee        Boolean   @default(false) @map("is_shopee")
   sourceId        Int?      @map("source_id")
+  orderId         Int?      @unique @map("order_id")
   createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   source   Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  order    Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
   saleLines SaleLine[]
 
   @@index([customerId])

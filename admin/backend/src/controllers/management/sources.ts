@@ -9,8 +9,13 @@ export const SourcesController = {
     try {
       const page = parseInt(req.query.page as string) || 1
       const limit = 15
+      const search = req.query.search as string | undefined
+
+      const where = search ? { name: { contains: search } } : {}
 
       const sources = await prisma.source.findMany({
+        where,
+        include: { product: { select: { id: true, title: true } } },
         orderBy: [{ id: 'asc' }],
         skip: (page - 1) * limit,
         take: limit,
@@ -21,11 +26,12 @@ export const SourcesController = {
         name: source.name,
         spreadsheet_id: source.spreadsheetId,
         is_accsmarket: source.isAccsmarket,
+        product: source.product,
         created_at: source.createdAt,
         updated_at: source.updatedAt,
       }))
 
-      const total = await prisma.source.count()
+      const total = await prisma.source.count({ where })
 
       res.json({
         sources: sourcesWithMeta,

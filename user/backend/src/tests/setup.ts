@@ -37,21 +37,33 @@ export const mockDb = {
     count: vi.fn(),
     aggregate: vi.fn(),
   },
-  stock: {
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-    count: vi.fn(),
-    updateMany: vi.fn(),
-  },
   productSection: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+  },
+  productVariant: {
+    findMany: vi.fn(),
+  },
+  account: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(),
+    count: vi.fn(),
+  },
+  accsmarket: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(),
+    count: vi.fn(),
+  },
+  source: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
   },
   $transaction: vi.fn(),
 }
@@ -125,4 +137,6 @@ beforeEach(() => {
       })
     }
   })
+  // Sensible default so tests that don't care about price-tier variants don't have to mock this
+  mockDb.productVariant.findMany.mockResolvedValue([])
 })

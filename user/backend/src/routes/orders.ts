@@ -7,9 +7,9 @@ import db from '../config/database'
 import { requireAuth } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { CreateOrderSchema, CartOrderSchema } from '../validators'
-import { safeDecrypt } from '../utils/encrypt'
 import { userRateLimit } from '../middleware/userRateLimit'
 import { sendOrderCreated, sendProofUploaded } from '../utils/email'
+import { reserveInventory, releaseInventory, countAvailableInventory, getVariantPrice } from '../utils/inventory'
 
 const router = Router()
 
@@ -38,27 +38,30 @@ function generateGroupId(prefix: string, userId: number): string {
   return `BUYMIUM-${prefix}-${userId}-${Date.now()}`
 }
 
-async function reserveStocks(orderId: number, productId: number, stockIds?: number[]): Promise<void> {
-  if (!stockIds?.length) return
-  const valid = await db.stock.findMany({
-    where: { id: { in: stockIds }, productId, status: 'available' },
-  })
-  if (valid.length === 0) return
-  await db.stock.updateMany({
-    where: { id: { in: valid.map(s => s.id) } },
-    data: { status: 'reserved', orderId },
-  })
+async function reserveForProduct(orderId: number, productId: number, quantity: number, variantId?: number): Promise<void> {
+  const product = await db.product.findUnique({ where: { id: productId }, select: { sourceId: true } })
+  if (!product?.sourceId) return
+  await reserveInventory(orderId, productId, product.sourceId, quantity, variantId)
 }
 
 router.post('/', requireAuth, userRateLimit, validate(CreateOrderSchema), async (req: Request, res: Response) => {
   const { userId } = req.user!
-  const { productId, quantity = 1, stockIds } = req.body as { productId: number; quantity: number; stockIds?: number[] }
+  const { productId, quantity = 1, variantId } = req.body as { productId: number; quantity: number; variantId?: number }
 
   const product = await db.product.findUnique({ where: { id: productId } })
   if (!product) { res.status(404).json({ error: 'Produk tidak ditemukan' }); return }
-  if (product.inStock < quantity) { res.status(400).json({ error: 'Stok tidak mencukupi' }); return }
 
-  const subtotal = Math.round(product.price * quantity)
+  let unitPrice = product.price
+  if (variantId) {
+    const variantPrice = await getVariantPrice(productId, variantId)
+    if (variantPrice === null) { res.status(400).json({ error: 'Variasi tidak valid' }); return }
+    unitPrice = variantPrice
+  }
+
+  const available = product.sourceId ? await countAvailableInventory(product.id, product.sourceId, variantId) : 0
+  if (available < quantity) { res.status(400).json({ error: 'Stok tidak mencukupi' }); return }
+
+  const subtotal = Math.round(unitPrice * quantity)
   const totalPrice = subtotal + SERVICE_FEE
   const groupId = generateGroupId('SO', userId)
 
@@ -66,7 +69,7 @@ router.post('/', requireAuth, userRateLimit, validate(CreateOrderSchema), async 
     data: { userId, productId, quantity, totalPrice, status: 'pending', groupId },
   })
 
-  await reserveStocks(order.id, productId, stockIds)
+  await reserveForProduct(order.id, productId, quantity, variantId)
 
   const user = await db.user.findUnique({ where: { id: userId } })
   if (user?.email) {
@@ -78,13 +81,23 @@ router.post('/', requireAuth, userRateLimit, validate(CreateOrderSchema), async 
 
 router.post('/cart', requireAuth, userRateLimit, validate(CartOrderSchema), async (req: Request, res: Response) => {
   const { userId } = req.user!
-  const { items } = req.body as { items: { productId: number; quantity: number; stockIds?: number[] }[] }
+  const { items } = req.body as { items: { productId: number; quantity: number; variantId?: number }[] }
 
   const products = await Promise.all(items.map(it => db.product.findUnique({ where: { id: it.productId } })))
+  const unitPrices: number[] = []
   for (let i = 0; i < items.length; i++) {
     if (!products[i]) { res.status(404).json({ error: `Produk ${items[i].productId} tidak ditemukan` }); return }
-    if (products[i]!.inStock < items[i].quantity) {
-      res.status(400).json({ error: `Stok "${products[i]!.title.slice(0, 30)}" tidak mencukupi` }); return
+    const p = products[i]!
+    let unitPrice = p.price
+    if (items[i].variantId) {
+      const variantPrice = await getVariantPrice(p.id, items[i].variantId!)
+      if (variantPrice === null) { res.status(400).json({ error: 'Variasi tidak valid' }); return }
+      unitPrice = variantPrice
+    }
+    unitPrices.push(unitPrice)
+    const available = p.sourceId ? await countAvailableInventory(p.id, p.sourceId, items[i].variantId) : 0
+    if (available < items[i].quantity) {
+      res.status(400).json({ error: `Stok "${p.title.slice(0, 30)}" tidak mencukupi` }); return
     }
   }
 
@@ -92,7 +105,7 @@ router.post('/cart', requireAuth, userRateLimit, validate(CartOrderSchema), asyn
 
   const orders = await Promise.all(
     items.map((it, i) => {
-      const subtotal = Math.round(products[i]!.price * it.quantity)
+      const subtotal = Math.round(unitPrices[i] * it.quantity)
       const totalPrice = subtotal + (i === 0 ? SERVICE_FEE : 0)
       return db.order.create({
         data: { userId, productId: it.productId, quantity: it.quantity, totalPrice, status: 'pending', groupId },
@@ -100,7 +113,7 @@ router.post('/cart', requireAuth, userRateLimit, validate(CartOrderSchema), asyn
     })
   )
 
-  await Promise.all(items.map((it, i) => reserveStocks(orders[i].id, it.productId, it.stockIds)))
+  await Promise.all(items.map((it, i) => reserveForProduct(orders[i].id, it.productId, it.quantity, it.variantId)))
 
   const totalAll = orders.reduce((s, o) => s + o.totalPrice, 0)
   const totalQty = items.reduce((s, it) => s + it.quantity, 0)
@@ -191,10 +204,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   if (expiredOrders.length > 0) {
     const ids = expiredOrders.map(o => o.id)
     await db.order.updateMany({ where: { id: { in: ids } }, data: { status: 'cancelled' } })
-    await db.stock.updateMany({
-      where: { orderId: { in: ids }, status: 'reserved' },
-      data: { status: 'available', orderId: null },
-    })
+    await releaseInventory(ids)
   }
 
   const orders = await db.order.findMany({
@@ -222,10 +232,7 @@ router.post('/:id/cancel', requireAuth, async (req: Request, res: Response) => {
   }
 
   await db.order.update({ where: { id: orderId }, data: { status: 'cancelled' } })
-  await db.stock.updateMany({
-    where: { orderId, status: 'reserved' },
-    data: { status: 'available', orderId: null },
-  })
+  await releaseInventory([orderId])
 
   res.json({ message: 'Pesanan berhasil dibatalkan' })
 })
@@ -264,11 +271,19 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
 
   const order = await db.order.findFirst({
     where: { id: orderId, userId, status: 'paid' },
-    include: { stocks: true, product: true },
+    include: { product: true },
   })
 
   if (!order) { res.status(403).json({ error: 'Tidak diizinkan' }); return }
-  if (!order.stocks.length) { res.status(404).json({ error: 'Gagal mengambil data akun. Silakan hubungi admin.' }); return }
+
+  type InventoryRef = { type: 'account' | 'accsmarket'; id: number }
+  const inventoryRefs: InventoryRef[] = (() => {
+    try { return order.inventoryRefs ? JSON.parse(order.inventoryRefs) : [] } catch { return [] }
+  })()
+
+  if (inventoryRefs.length === 0) {
+    res.status(404).json({ error: 'Gagal mengambil data akun. Silakan hubungi admin.' }); return
+  }
 
   let textContent = `PESANAN: ${order.groupId ?? order.id}\n`
   textContent += `PRODUK: ${order.product.title}\n`
@@ -276,15 +291,31 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
   textContent += `TANGGAL: ${new Date(order.createdAt).toLocaleString('id-ID')}\n`
   textContent += `==========================================\n\n`
 
-  order.stocks.forEach((stock, index) => {
-    textContent += `AKUN #${index + 1}\n`
-    textContent += `Email: ${stock.email || 'N/A'}\n`
-    textContent += `Password Email: ${safeDecrypt(stock.passwordEmail) || 'N/A'}\n`
-    textContent += `Username: ${stock.username || 'N/A'}\n`
-    textContent += `Password: ${safeDecrypt(stock.password) || 'N/A'}\n`
-    textContent += `2FA: ${safeDecrypt(stock.twoFactorCode) || 'N/A'}\n`
+  const accountIds = inventoryRefs.filter(r => r.type === 'account').map(r => r.id)
+  const accsmarketIds = inventoryRefs.filter(r => r.type === 'accsmarket').map(r => r.id)
+  const [accounts, accsmarkets] = await Promise.all([
+    accountIds.length ? db.account.findMany({ where: { id: { in: accountIds } } }) : [],
+    accsmarketIds.length ? db.accsmarket.findMany({ where: { id: { in: accsmarketIds } } }) : [],
+  ])
+  let index = 0
+  for (const acc of accounts) {
+    index += 1
+    textContent += `AKUN #${index}\n`
+    textContent += `Email: ${acc.email || 'N/A'}\n`
+    textContent += `Username: ${acc.username || 'N/A'}\n`
+    textContent += `Password: ${acc.password || 'N/A'}\n`
     textContent += `------------------------------------------\n`
-  })
+  }
+  for (const acc of accsmarkets) {
+    index += 1
+    textContent += `AKUN #${index}\n`
+    textContent += `Email: ${acc.email || 'N/A'}\n`
+    textContent += `Password Email: ${acc.passwordEmail || 'N/A'}\n`
+    textContent += `Username: ${acc.username || 'N/A'}\n`
+    textContent += `Password: ${acc.password || 'N/A'}\n`
+    textContent += `2FA: ${acc.twoFactorAuth || 'N/A'}\n`
+    textContent += `------------------------------------------\n`
+  }
 
   const fileName = `${order.groupId ?? order.id}.txt`
   res.setHeader('Content-Type', 'text/plain')

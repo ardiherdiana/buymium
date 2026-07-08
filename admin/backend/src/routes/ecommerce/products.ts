@@ -78,6 +78,9 @@ router.post('/upload-image', requireAdmin, imageUpload.single('image'), (req, re
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
+// GET /api/admin/products/sources/:sourceId/detect-variants - Auto-detect price-tier candidates for a Source
+router.get('/sources/:sourceId/detect-variants', requireAdmin, ProductsController.detectVariants)
+
 // GET /api/admin/products - List products
 router.get('/', requireAdmin, ProductsController.index)
 

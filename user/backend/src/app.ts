@@ -8,7 +8,6 @@ import authRoutes from './routes/auth'
 import productRoutes from './routes/products'
 import orderRoutes from './routes/orders'
 import adminRoutes from './routes/admin'
-import stockRoutes from './routes/stocks'
 import bankAccountRoutes from './routes/bankAccounts'
 import sitemapRoutes from './routes/sitemap'
 import testimonialRoutes from './routes/testimonials'
@@ -76,7 +75,6 @@ app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/admin', adminRoutes)
-app.use('/api/stocks', stockRoutes)
 app.use('/api/bank-accounts', bankAccountRoutes)
 app.use('/sitemap.xml', sitemapRoutes)
 app.use('/api/testimonials', testimonialRoutes)

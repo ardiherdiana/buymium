@@ -13,6 +13,7 @@ import {
   KeyRound,
   User,
   ImageOff,
+  Users,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -29,6 +30,7 @@ interface StockPreview {
   username: string | null
   emailDomain: string | null
   hasTwoFactor: boolean
+  targetFollowers: number | null
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -60,6 +62,7 @@ export default function DashboardProdukPage() {
   const [buying, setBuying] = useState(false)
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null)
 
   useEffect(() => {
     fetch(`${API_BASE}/products/${id}`)
@@ -97,16 +100,21 @@ export default function DashboardProdukPage() {
     })
   }
 
+  function selectVariant(variantId: number | null) {
+    setSelectedVariantId(variantId)
+    setSelected(new Set())
+    setPage(1)
+  }
+
   async function handleBuy() {
     if (!token || !product) return
     setBuying(true)
-    const stockIds = selected.size > 0 ? Array.from(selected) : undefined
-    const quantity = stockIds ? stockIds.length : 1
+    const quantity = selected.size > 0 ? selected.size : 1
     try {
       const res = await fetch(`${API_BASE}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ productId: product.id, quantity, stockIds }),
+        body: JSON.stringify({ productId: product.id, quantity, variantId: selectedVariantId ?? undefined }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -142,13 +150,26 @@ export default function DashboardProdukPage() {
     )
   }
 
-  const totalPages = Math.ceil(stocks.length / PAGE_SIZE)
-  const pagedStocks = stocks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const variants = product.variants ?? []
+  const selectedVariant = variants.find((v) => v.id === selectedVariantId) ?? null
+
+  const filteredStocks = selectedVariant
+    ? stocks.filter((s) => s.targetFollowers === selectedVariant.targetFollowers)
+    : stocks
+  const totalPages = Math.ceil(filteredStocks.length / PAGE_SIZE)
+  const pagedStocks = filteredStocks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const pageAllChecked = pagedStocks.length > 0 && pagedStocks.every((s) => selected.has(s.id))
   const pageIndeterminate = !pageAllChecked && pagedStocks.some((s) => selected.has(s.id))
 
   const selectedCount = selected.size
-  const totalPrice = product.price * (selectedCount || 1)
+  const unitPrice = selectedVariant ? selectedVariant.price : product.price
+  const totalPrice = unitPrice * (selectedCount || 1)
+  const availableForDisplay = selectedVariant ? selectedVariant.availableStock : product.inStock
+
+  const priceRange = variants.length > 0
+    ? { min: Math.min(...variants.map((v) => v.price)), max: Math.max(...variants.map((v) => v.price)) }
+    : null
+  const needsVariantSelection = variants.length > 0 && !selectedVariant
 
   return (
     <div className="w-full pb-32">
@@ -161,60 +182,52 @@ export default function DashboardProdukPage() {
       </button>
 
       <div className="space-y-4">
-        {/* Photo */}
-        <div className="aspect-square w-full max-w-sm overflow-hidden rounded-xl border border-border bg-muted flex items-center justify-center">
-          {resolveImageUrl(product.imageUrl) ? (
-            <img
-              src={resolveImageUrl(product.imageUrl)!}
-              alt={product.title}
-              className="size-full object-cover"
-            />
-          ) : (
-            <ImageOff className="size-10 text-muted-foreground/50" />
-          )}
-        </div>
-
-        {/* Title */}
-        <div>
-          <div className="mb-2 flex items-start gap-3">
-            <h1 className="text-2xl font-bold leading-snug">{product.title}</h1>
-            {product.isVerified && (
-              <span className="mt-1 flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                <ShieldCheck className="size-3" />
-                Terverifikasi
-              </span>
+        {/* Photo + title/description side by side */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div className="aspect-square w-full max-w-xs shrink-0 overflow-hidden rounded-xl border border-border bg-muted flex items-center justify-center sm:w-64 sm:max-w-none">
+            {resolveImageUrl(product.imageUrl) ? (
+              <img
+                src={resolveImageUrl(product.imageUrl)!}
+                alt={product.title}
+                className="size-full object-cover"
+              />
+            ) : (
+              <ImageOff className="size-10 text-muted-foreground/50" />
             )}
           </div>
-          {product.rating > 0 && <StarRating rating={product.rating} />}
-          {product.tags.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {product.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
 
-        {/* Description */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <h2 className="mb-2 font-semibold">Deskripsi Produk</h2>
-          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-            {product.description || "Tidak ada deskripsi."}
-          </p>
+          <div className="flex-1 space-y-4">
+            {/* Title */}
+            <div>
+              <div className="mb-2 flex items-start gap-3">
+                <h1 className="text-2xl font-bold leading-snug">{product.title}</h1>
+                {product.isVerified && (
+                  <span className="mt-1 flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    <ShieldCheck className="size-3" />
+                    Terverifikasi
+                  </span>
+                )}
+              </div>
+              {product.rating > 0 && <StarRating rating={product.rating} />}
+            </div>
+
+            {/* Description */}
+            <div className="rounded-xl border border-border bg-card p-5">
+              <h2 className="mb-2 font-semibold">Deskripsi Produk</h2>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+                {product.description || "Tidak ada deskripsi."}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Stock count + guarantees */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-4 text-sm">
           <div className="flex items-center gap-2">
             <Package className="size-4 text-muted-foreground" />
-            {product.inStock > 0 ? (
+            {availableForDisplay > 0 ? (
               <>
-                <span className="font-medium text-green-600 dark:text-green-400">{product.inStock} unit</span>
+                <span className="font-medium text-green-600 dark:text-green-400">{availableForDisplay} unit</span>
                 <span className="text-muted-foreground">tersedia</span>
               </>
             ) : (
@@ -234,8 +247,31 @@ export default function DashboardProdukPage() {
           </div>
         </div>
 
+        {/* Follower-tier filter tabs */}
+        {variants.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {variants.map((v) => {
+              const isActive = v.id === selectedVariantId
+              return (
+                <button
+                  key={v.id}
+                  onClick={() => selectVariant(isActive ? null : v.id)}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isActive
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  }`}
+                >
+                  <Users className="size-3.5" />
+                  {v.name}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* Account list with checkboxes */}
-        {stocks.length > 0 && (
+        {filteredStocks.length > 0 && (
           <div className="rounded-xl border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <div className="flex items-center gap-3">
@@ -251,7 +287,7 @@ export default function DashboardProdukPage() {
                 {selectedCount > 0 ? (
                   <span className="text-primary font-medium">{selectedCount} dipilih</span>
                 ) : (
-                  `${stocks.length} akun tersedia`
+                  `${filteredStocks.length} akun tersedia`
                 )}
               </span>
             </div>
@@ -273,6 +309,12 @@ export default function DashboardProdukPage() {
                     <User className="size-3 shrink-0 text-muted-foreground" />
                     <span className="flex-1 text-sm">{stock.username ?? "—"}</span>
                   </div>
+                  {stock.targetFollowers != null && (
+                    <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                      <Users className="size-3" />
+                      {stock.targetFollowers.toLocaleString("id-ID")}+ Followers
+                    </span>
+                  )}
                   {stock.hasTwoFactor && (
                     <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                       <KeyRound className="size-3" />
@@ -313,11 +355,23 @@ export default function DashboardProdukPage() {
               {selectedCount > 0 ? `${selectedCount} akun dipilih` : "Harga per akun"}
             </p>
             <p className="text-xl font-bold">
-              {product.price > 0 ? `Rp ${totalPrice.toLocaleString("id")}` : "Hubungi kami"}
+              {needsVariantSelection && priceRange ? (
+                priceRange.min === priceRange.max
+                  ? `Rp ${priceRange.min.toLocaleString("id")}`
+                  : `Rp ${priceRange.min.toLocaleString("id")} - Rp ${priceRange.max.toLocaleString("id")}`
+              ) : unitPrice > 0 ? (
+                `Rp ${totalPrice.toLocaleString("id")}`
+              ) : (
+                "Hubungi kami"
+              )}
             </p>
           </div>
 
-          {product.inStock > 0 ? (
+          {needsVariantSelection ? (
+            <Button size="lg" disabled variant="outline" className="shrink-0">
+              Pilih tingkatan dulu
+            </Button>
+          ) : availableForDisplay > 0 ? (
             <Button size="lg" onClick={handleBuy} disabled={buying} className="shrink-0">
               <ShoppingCart className="size-4" />
               {buying ? "Memproses..." : selectedCount > 0 ? `Beli ${selectedCount} Akun` : "Beli Sekarang"}

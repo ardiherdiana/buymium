@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
-import { Search, Plus, Pencil, Trash2, Eye } from "lucide-react"
+import { Search, Plus, Pencil, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -18,10 +18,14 @@ interface Product {
   id: number
   title: string
   price: number
-  stocks?: { id: number }[]
-  variants?: { id: number }[]
-  isActive: boolean
+  variants?: { id: number; availableStock?: number }[]
   imageUrl?: string
+  source?: { id: number; name: string } | null
+}
+
+function totalStock(product: Product): number | null {
+  if (!product.variants?.length) return null
+  return product.variants.reduce((sum, v) => sum + (v.availableStock ?? 0), 0)
 }
 
 interface ProductsResponse {
@@ -89,11 +93,11 @@ export default function ProductsPage() {
           <Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[40%]">Produk</TableHead>
+                <TableHead className="w-[30%]">Produk</TableHead>
+                <TableHead className="w-[20%]">Source</TableHead>
                 <TableHead className="w-[15%]">Harga</TableHead>
-                <TableHead className="w-[10%]">Stok</TableHead>
-                <TableHead className="w-[10%]">Status</TableHead>
-                <TableHead className="w-[10%] text-right">Aksi</TableHead>
+                <TableHead className="w-[15%]">Stok</TableHead>
+                <TableHead className="w-[15%] text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -107,6 +111,9 @@ export default function ProductsPage() {
                     <TableCell className="max-w-0">
                       <span className="font-medium truncate block">{product.title}</span>
                     </TableCell>
+                    <TableCell className="text-sm text-muted-foreground truncate">
+                      {product.source?.name ?? "-"}
+                    </TableCell>
                     <TableCell className="font-medium">
                       {formatIDR(product.price)}
                       {!!product.variants?.length && (
@@ -115,23 +122,9 @@ export default function ProductsPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell>{product.stocks?.length ?? 0}</TableCell>
-                    <TableCell>
-                      <Badge variant={product.isActive ? "completed" : "outline"}>
-                        {product.isActive ? "Aktif" : "Nonaktif"}
-                      </Badge>
-                    </TableCell>
+                    <TableCell>{totalStock(product) ?? "-"}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8"
-                          onClick={() => navigate(`/ecommerce/products/${product.id}/stocks`)}
-                          title="Kelola Stok"
-                        >
-                          <Eye className="size-4" />
-                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -177,28 +170,21 @@ export default function ProductsPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 space-y-1">
                     <p className="font-medium text-sm leading-tight truncate">{product.title}</p>
+                    {product.source && (
+                      <Badge variant="outline" className="text-[10px]">Source: {product.source.name}</Badge>
+                    )}
                     <div className="flex items-center gap-3 flex-wrap">
                       <span className="font-semibold text-sm">{formatIDR(product.price)}</span>
-                      <span className="text-xs text-muted-foreground">{product.stocks?.length ?? 0} stok</span>
+                      {totalStock(product) !== null && (
+                        <span className="text-xs text-muted-foreground">{totalStock(product)} stok</span>
+                      )}
                       {!!product.variants?.length && (
                         <span className="text-xs text-muted-foreground">{product.variants.length} opsi</span>
                       )}
                     </div>
                   </div>
-                  <Badge variant={product.isActive ? "completed" : "outline"} className="shrink-0">
-                    {product.isActive ? "Aktif" : "Nonaktif"}
-                  </Badge>
                 </div>
                 <div className="flex items-center justify-end gap-1 pt-2 border-t">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    onClick={() => navigate(`/ecommerce/products/${product.id}/stocks`)}
-                    title="Kelola Stok"
-                  >
-                    <Eye className="size-4" />
-                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"

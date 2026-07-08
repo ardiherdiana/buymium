@@ -40,7 +40,6 @@ model User {
 model Product {
   id           Int             @id @default(autoincrement())
   orders       Order[]
-  stocks       Stock[]
   testimonials Testimonial[]
   title        String          @db.Text
   description  String          @db.Text
@@ -48,12 +47,27 @@ model Product {
   price        Float           @default(0)
   rating       Float           @default(0)
   isVerified   Boolean         @default(false) @map("is_verified")
-  tags         String          @default("[]") @db.VarChar(1000)
   imageUrl     String?         @db.VarChar(500) @map("image_url")
+  sourceId     Int?            @unique @map("source_id")
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
 
   @@map("products")
+}
+
+// Minimal projection of the admin-managed price tiers, used only to restrict which
+// Account/Accsmarket rows count as sellable stock for a source-linked product (see
+// Product.sourceId) - a product with variants only sells the follower tiers it kept.
+model ProductVariant {
+  id              Int     @id @default(autoincrement())
+  productId       Int     @map("product_id")
+  name            String  @db.VarChar(100)
+  price           Float
+  targetFollowers Int?    @map("target_followers")
+  isActive        Boolean @default(true) @map("is_active")
+
+  @@index([productId])
+  @@map("product_variants")
 }
 
 model Order {
@@ -69,10 +83,10 @@ model Order {
   confirmedAt    DateTime?    @map("confirmed_at")
   adminNote      String?      @db.Text @map("admin_note")
   bankAccountId  Int?         @map("bank_account_id")
+  inventoryRefs  String?      @db.Text @map("inventory_refs")
   user           User         @relation(fields: [userId], references: [id])
   product        Product      @relation(fields: [productId], references: [id])
   bankAccount    BankAccount? @relation(fields: [bankAccountId], references: [id])
-  stocks         Stock[]
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
@@ -96,22 +110,49 @@ model BankAccount {
   @@map("bank_accounts")
 }
 
-model Stock {
-  id            Int      @id @default(autoincrement())
-  productId     Int      @map("product_id")
-  product       Product  @relation(fields: [productId], references: [id])
-  email         String?  @db.VarChar(255)
-  passwordEmail String?  @db.Text @map("password_email")
-  username      String   @db.VarChar(255)
-  password      String   @db.Text
-  twoFactorCode String?  @db.Text @map("two_factor_code")
-  orderId       Int?     @map("order_id")
-  order         Order?   @relation(fields: [orderId], references: [id])
-  status        String   @default("available") @db.VarChar(50)
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+// Minimal projections of the admin-only inventory tables (accounts/accsmarkets), used
+// only to reserve/read/deliver stock for Product rows with a sourceId (see Product.sourceId).
+model Account {
+  id              Int      @id @default(autoincrement())
+  email           String?  @db.VarChar(255)
+  username        String?  @db.VarChar(255)
+  password        String?  @db.VarChar(255)
+  accountStatus   String?  @db.VarChar(50) @map("account_status")
+  targetFollowers Int?     @map("target_followers")
+  sourceId        Int?     @map("source_id")
+  isSold          Boolean  @default(false) @map("is_sold")
+  reservedOrderId Int?     @map("reserved_order_id")
 
-  @@map("stocks")
+  @@index([sourceId])
+  @@index([isSold])
+  @@index([reservedOrderId])
+  @@map("accounts")
+}
+
+model Accsmarket {
+  id              Int      @id @default(autoincrement())
+  email           String?  @db.VarChar(255)
+  passwordEmail   String?  @db.VarChar(255) @map("password_email")
+  username        String?  @db.VarChar(255)
+  password        String?  @db.VarChar(255)
+  twoFactorAuth   String?  @db.VarChar(255) @map("two_factor_auth")
+  accountStatus   String?  @db.VarChar(50) @map("account_status")
+  targetFollowers Int?     @map("target_followers")
+  sourceId        Int?     @map("source_id")
+  isSold          Boolean  @default(false) @map("is_sold")
+  reservedOrderId Int?     @map("reserved_order_id")
+
+  @@index([sourceId])
+  @@index([isSold])
+  @@index([reservedOrderId])
+  @@map("accsmarkets")
+}
+
+model Source {
+  id           Int     @id @default(autoincrement())
+  isAccsmarket Boolean @default(false) @map("is_accsmarket")
+
+  @@map("sources")
 }
 
 model Channel {

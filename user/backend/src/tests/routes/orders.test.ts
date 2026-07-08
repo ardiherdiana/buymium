@@ -14,11 +14,13 @@ const mockProduct = {
   price: 50000,
   rating: 4.5,
   isVerified: true,
-  tags: '[]',
   sectionId: null,
+  sourceId: 1,
   createdAt: new Date(),
   updatedAt: new Date(),
 }
+
+const mockSource = { id: 1, isAccsmarket: false }
 
 const mockUser = {
   id: 1,
@@ -76,7 +78,10 @@ describe('POST /api/orders', () => {
     mockDb.product.findUnique.mockResolvedValue(mockProduct)
     mockDb.user.findUnique.mockResolvedValue(mockUser)
     mockDb.order.create.mockResolvedValue({ id: 1, userId: 1, productId: 1, quantity: 1, totalPrice: 52000, status: 'pending', groupId: 'BUYMIUM-SO-1-123' })
-    mockDb.stock.findMany.mockResolvedValue([])
+    mockDb.source.findUnique.mockResolvedValue(mockSource)
+    mockDb.account.count.mockResolvedValue(5)
+    mockDb.account.findMany.mockResolvedValue([{ id: 1 }])
+    mockDb.account.updateMany.mockResolvedValue({ count: 1 })
 
     const res = await request(app)
       .post('/api/orders')
@@ -101,8 +106,10 @@ describe('POST /api/orders', () => {
   })
 
   it('returns 400 when stock is insufficient', async () => {
-    mockDb.product.findUnique.mockResolvedValue({ ...mockProduct, inStock: 1 })
+    mockDb.product.findUnique.mockResolvedValue(mockProduct)
     mockDb.user.findUnique.mockResolvedValue(mockUser)
+    mockDb.source.findUnique.mockResolvedValue(mockSource)
+    mockDb.account.count.mockResolvedValue(1)
 
     const res = await request(app)
       .post('/api/orders')
@@ -247,7 +254,10 @@ describe('POST /api/orders/cart', () => {
     mockDb.user.findUnique.mockResolvedValue(mockUser)
     mockDb.product.findUnique.mockResolvedValue(mockProduct)
     mockDb.order.create.mockResolvedValue({ id: 1, userId: 1, productId: 1, quantity: 1, totalPrice: 52000, status: 'pending', groupId: 'BUYMIUM-CART-1-123' })
-    mockDb.stock.findMany.mockResolvedValue([])
+    mockDb.source.findUnique.mockResolvedValue(mockSource)
+    mockDb.account.count.mockResolvedValue(5)
+    mockDb.account.findMany.mockResolvedValue([{ id: 1 }])
+    mockDb.account.updateMany.mockResolvedValue({ count: 1 })
 
     const res = await request(app)
       .post('/api/orders/cart')
@@ -274,7 +284,9 @@ describe('POST /api/orders/cart', () => {
 
   it('returns 400 when cart product has insufficient stock', async () => {
     mockDb.user.findUnique.mockResolvedValue(mockUser)
-    mockDb.product.findUnique.mockResolvedValue({ ...mockProduct, inStock: 1 })
+    mockDb.product.findUnique.mockResolvedValue(mockProduct)
+    mockDb.source.findUnique.mockResolvedValue(mockSource)
+    mockDb.account.count.mockResolvedValue(1)
 
     const res = await request(app)
       .post('/api/orders/cart')
@@ -313,11 +325,11 @@ describe('GET /api/orders/:id/download', () => {
     expect(res.body.error).toBe('Data tidak ditemukan atau pesanan belum dibayar')
   })
 
-  it('returns 404 when order is paid but has no stocks', async () => {
+  it('returns 404 when order is paid but has no inventory refs', async () => {
     mockDb.order.findFirst.mockResolvedValue({
       ...mockOrder,
       status: 'paid',
-      stocks: [],
+      inventoryRefs: null,
       product: mockProduct,
     })
 
@@ -329,24 +341,19 @@ describe('GET /api/orders/:id/download', () => {
     expect(res.body.error).toBe('Gagal mengambil data akun. Silakan hubungi admin.')
   })
 
-  it('returns text file download when order is paid with stocks', async () => {
-    const paidOrderWithStocks = {
+  it('returns text file download when order is paid with inventory refs', async () => {
+    const paidOrder = {
       ...mockOrder,
       status: 'paid',
       groupId: 'BUYMIUM-1-123',
       product: { ...mockProduct, title: 'Netflix Premium' },
-      stocks: [
-        {
-          id: 1,
-          email: 'account@netflix.com',
-          passwordEmail: null,
-          username: 'netflixuser',
-          password: null,
-          twoFactorCode: null,
-        },
-      ],
+      inventoryRefs: JSON.stringify([{ type: 'account', id: 1 }]),
     }
-    mockDb.order.findFirst.mockResolvedValue(paidOrderWithStocks)
+    mockDb.order.findFirst.mockResolvedValue(paidOrder)
+    mockDb.account.findMany.mockResolvedValue([
+      { id: 1, email: 'account@netflix.com', username: 'netflixuser', password: 'secret' },
+    ])
+    mockDb.accsmarket.findMany.mockResolvedValue([])
 
     const res = await request(app)
       .get('/api/orders/1/download')

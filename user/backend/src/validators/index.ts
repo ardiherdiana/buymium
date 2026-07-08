@@ -43,7 +43,7 @@ export const GoogleAuthSchema = z.object({
 export const CreateOrderSchema = z.object({
   productId: z.number().int().positive(),
   quantity: z.number().int().positive().optional().default(1),
-  stockIds: z.array(z.number().int().positive()).optional(),
+  variantId: z.number().int().positive().optional(),
 })
 
 export const CartOrderSchema = z.object({
@@ -52,24 +52,10 @@ export const CartOrderSchema = z.object({
       z.object({
         productId: z.number().int().positive(),
         quantity: z.number().int().positive(),
-        stockIds: z.array(z.number().int().positive()).optional(),
+        variantId: z.number().int().positive().optional(),
       })
     )
     .min(1),
-})
-
-
-export const StockBulkItemSchema = z.object({
-  email: z.string().optional(),
-  password_email: z.string().optional(),
-  username: z.string().min(1),
-  password: z.string().min(1),
-  two_factor_code: z.string().optional(),
-})
-
-export const StockBulkSchema = z.object({
-  productId: z.number().int().positive(),
-  data: z.array(StockBulkItemSchema).min(1),
 })
 
 
@@ -80,7 +66,6 @@ export const CreateProductSchema = z.object({
   price: z.number().min(0).optional(),
   rating: z.number().min(0).max(5).optional(),
   isVerified: z.boolean().optional(),
-  tags: z.union([z.array(z.string()), z.string()]).optional(),
   sectionId: z.string().optional().nullable(),
 })
 
@@ -91,7 +76,6 @@ export const UpdateProductSchema = z.object({
   price: z.number().min(0).optional(),
   rating: z.number().min(0).max(5).optional(),
   isVerified: z.boolean().optional(),
-  tags: z.union([z.array(z.string()), z.string()]).optional(),
   sectionId: z.string().optional().nullable(),
 })
 

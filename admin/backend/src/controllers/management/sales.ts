@@ -130,6 +130,7 @@ export const SalesController = {
         include: {
           customer: true,
           source: true,
+          order: { include: { user: { select: { id: true, name: true, email: true } } } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -146,6 +147,7 @@ export const SalesController = {
         totalProfit: sale.totalProfit,
         isShopee: sale.isShopee,
         sourceId: sale.sourceId,
+        origin: sale.orderId ? 'storefront' : 'manual',
         createdAt: sale.createdAt,
         updatedAt: sale.updatedAt,
         customer: sale.customer ? {
@@ -155,6 +157,10 @@ export const SalesController = {
         source: sale.source ? {
           id: sale.source.id,
           name: sale.source.name,
+        } : undefined,
+        buyer: sale.order?.user ? {
+          name: sale.order.user.name,
+          email: sale.order.user.email,
         } : undefined,
       }))
 
@@ -189,6 +195,7 @@ export const SalesController = {
         include: {
           customer: true,
           source: true,
+          order: { include: { user: { select: { id: true, name: true, email: true } } } },
           saleLines: {
             include: {
               account: true,
@@ -210,6 +217,7 @@ export const SalesController = {
         total_profit: sale.totalProfit,
         is_shopee: sale.isShopee,
         source_id: sale.sourceId,
+        origin: sale.orderId ? 'storefront' : 'manual',
         status: 'completed',
         created_at: sale.createdAt,
         updated_at: sale.updatedAt,
@@ -221,6 +229,10 @@ export const SalesController = {
         source: sale.source ? {
           id: sale.source.id,
           name: sale.source.name,
+        } : undefined,
+        buyer: sale.order?.user ? {
+          name: sale.order.user.name,
+          email: sale.order.user.email,
         } : undefined,
         sale_lines: sale.saleLines?.map(line => {
           const item = line.account ?? line.accsmarket

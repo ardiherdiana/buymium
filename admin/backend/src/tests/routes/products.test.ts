@@ -17,7 +17,6 @@ const mockProduct = {
   inStock: 10,
   rating: 4.5,
   isVerified: true,
-  tags: '["streaming","entertainment"]',
   sectionId: 'section-1',
   createdAt: new Date().toISOString(),
   section: { title: 'Streaming Services' },
@@ -99,7 +98,6 @@ describe('GET /api/products/:id', () => {
   it('returns 200 with product data', async () => {
     mockDb.product.findUnique.mockResolvedValueOnce({
       ...mockProduct,
-      stocks: [],
       section: { id: 'section-1', title: 'Streaming Services', subtitle: '', order: 0 },
     })
 
@@ -174,7 +172,7 @@ describe('POST /api/products', () => {
         title: 'New Product',
         description: 'A new product',
         price: 75000,
-        tags: ['streaming'],
+        sourceId: 1,
       })
 
     expect(res.status).toBe(201)

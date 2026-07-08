@@ -101,7 +101,7 @@ describe('GET /api/orders/:id', () => {
   it('returns 200 with order detail', async () => {
     const detailedOrder = {
       ...mockOrder,
-      stocks: [{ id: 1, username: 'user1', password: 'pass1' }],
+      inventoryRefs: null,
       product: { ...mockOrder.product, section: { title: 'Streaming' } },
     }
     mockDb.order.findUnique.mockResolvedValueOnce(detailedOrder)
@@ -112,7 +112,7 @@ describe('GET /api/orders/:id', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.id).toBe(1)
-    expect(res.body).toHaveProperty('stocks')
+    expect(res.body).toHaveProperty('inventoryItems')
   })
 
   it('returns 404 when order does not exist', async () => {
@@ -187,8 +187,8 @@ describe('DELETE /api/orders/:id', () => {
     expect(res.status).toBe(401)
   })
 
-  it('deletes related stocks before deleting order', async () => {
-    mockDb.stock.deleteMany.mockResolvedValueOnce({ count: 2 })
+  it('releases reserved inventory before deleting order', async () => {
+    mockDb.order.findUnique.mockResolvedValueOnce(mockOrder)
     mockDb.order.delete.mockResolvedValueOnce(mockOrder)
 
     const res = await request(app)
@@ -197,9 +197,11 @@ describe('DELETE /api/orders/:id', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.message).toMatch(/deleted successfully/i)
-    // Stocks deleted first
-    expect(mockDb.stock.deleteMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { orderId: 1 } })
+    expect(mockDb.account.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { reservedOrderId: 1 } })
+    )
+    expect(mockDb.accsmarket.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { reservedOrderId: 1 } })
     )
     expect(mockDb.order.delete).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 1 } })

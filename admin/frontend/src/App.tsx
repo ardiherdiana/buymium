@@ -13,7 +13,6 @@ const OrdersPage = lazy(() => import("@/pages/ecommerce/OrdersPage"))
 const OrderDetailPage = lazy(() => import("@/pages/ecommerce/OrderDetailPage"))
 const ProductsPage = lazy(() => import("@/pages/ecommerce/ProductsPage"))
 const ProductFormPage = lazy(() => import("@/pages/ecommerce/ProductFormPage"))
-const EcommerceStockPage = lazy(() => import("@/pages/ecommerce/StockPage"))
 const EcommerceUsersPage = lazy(() => import("@/pages/ecommerce/UsersPage"))
 const TestimonialsPage = lazy(() => import("@/pages/ecommerce/TestimonialsPage"))
 
@@ -72,8 +71,6 @@ export default function App() {
             <Route path="/ecommerce/products" element={<S><ProductsPage /></S>} />
             <Route path="/ecommerce/products/add" element={<S><ProductFormPage /></S>} />
             <Route path="/ecommerce/products/:id/edit" element={<S><ProductFormPage /></S>} />
-            <Route path="/ecommerce/products/:id/stocks" element={<S><EcommerceStockPage /></S>} />
-            <Route path="/ecommerce/stocks" element={<S><EcommerceStockPage /></S>} />
             <Route path="/ecommerce/users" element={<S><EcommerceUsersPage /></S>} />
             <Route path="/ecommerce/testimonials" element={<S><TestimonialsPage /></S>} />
           </Route>

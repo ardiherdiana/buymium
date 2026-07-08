@@ -2,27 +2,42 @@ import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import db from '../../config/database'
 
-type ProductWithVariants = { id: number; variants?: { id: number }[] }
+// The "done" account status is stored inconsistently across Account ("Completed") and
+// Accsmarket ("completed") rows - match both casings rather than relying on one.
+const DONE_STATUSES = ['Completed', 'completed']
 
-// Merges the count of available (unsold) stock/credential rows into each product's variants,
-// since variant stock is derived from assigned credentials rather than a manual number.
+type ProductWithVariants = { id: number; sourceId?: number | null; variants?: { id: number; targetFollowers?: number | null }[] }
+
+// Merges the count of available (unsold, status "Selesai") Account/Accsmarket rows into
+// each product's variants, since stock is now always derived from the linked Source rather
+// than a manual number or upload.
 async function attachVariantStock<T extends ProductWithVariants>(products: T[]): Promise<T[]> {
-  const variantIds = products.flatMap((p) => (p.variants ?? []).map((v) => v.id))
-  if (variantIds.length === 0) return products
+  const sourceIds = [...new Set(products.filter((p) => p.sourceId).map((p) => p.sourceId as number))]
+  if (sourceIds.length === 0) return products
 
-  const counts = await db.stock.groupBy({
-    by: ['variantId'],
-    where: { variantId: { in: variantIds }, status: 'available' },
-    _count: true,
-  })
-  const countByVariantId = new Map(counts.map((c) => [c.variantId, c._count]))
+  const sources = await db.source.findMany({ where: { id: { in: sourceIds } } })
+  const isAccsmarketBySourceId = new Map(sources.map((s) => [s.id, s.isAccsmarket]))
 
   for (const product of products) {
-    if (!product.variants) continue
-    product.variants = product.variants.map((v) => ({
-      ...v,
-      availableStock: countByVariantId.get(v.id) ?? 0,
-    })) as typeof product.variants
+    if (!product.variants || !product.sourceId) continue
+    const isAccsmarket = isAccsmarketBySourceId.get(product.sourceId) ?? false
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const table: any = isAccsmarket ? db.accsmarket : db.account
+
+    product.variants = await Promise.all(
+      product.variants.map(async (v) => ({
+        ...v,
+        availableStock: await table.count({
+          where: {
+            sourceId: product.sourceId,
+            targetFollowers: v.targetFollowers ?? null,
+            isSold: false,
+            accountStatus: { in: DONE_STATUSES },
+            reservedOrderId: null,
+          },
+        }),
+      }))
+    ) as typeof product.variants
   }
 
   return products
@@ -52,6 +67,7 @@ export class ProductsController {
           where,
           include: {
             section: { select: { title: true } },
+            source: { select: { id: true, name: true } },
             variants: { orderBy: { order: 'asc' } },
           },
           orderBy: { createdAt: 'desc' },
@@ -77,7 +93,7 @@ export class ProductsController {
         where: { id: parseInt(id) },
         include: {
           section: true,
-          stocks: { where: { status: 'available' } },
+          source: { select: { id: true, name: true } },
           variants: { orderBy: { order: 'asc' } },
         },
       })
@@ -97,7 +113,7 @@ export class ProductsController {
 
   static async create(req: Request, res: Response): Promise<void> {
     try {
-      const { title, description, price, sectionId, tags = [], imageUrl } = req.body
+      const { title, description, price, sectionId, imageUrl, sourceId } = req.body
 
       const product = await db.product.create({
         data: {
@@ -105,11 +121,11 @@ export class ProductsController {
           description,
           price: parseFloat(price),
           sectionId: sectionId || null,
-          tags: JSON.stringify(tags),
           imageUrl: imageUrl || null,
+          sourceId: sourceId ? parseInt(String(sourceId)) : null,
           inStock: 0,
         },
-        include: { section: { select: { title: true } } },
+        include: { section: { select: { title: true } }, source: { select: { id: true, name: true } } },
       })
 
       res.status(201).json(product)
@@ -122,22 +138,22 @@ export class ProductsController {
   static async update(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params
-      const { title, description, price, sectionId, tags, inStock, isVerified, imageUrl } = req.body
+      const { title, description, price, sectionId, inStock, isVerified, imageUrl, sourceId } = req.body
 
       const data: Prisma.ProductUpdateInput = {}
       if (title !== undefined) data.title = title
       if (description !== undefined) data.description = description
       if (price !== undefined) data.price = parseFloat(price)
       if (sectionId !== undefined) data.section = sectionId ? { connect: { id: sectionId } } : { disconnect: true }
-      if (tags !== undefined) data.tags = JSON.stringify(tags)
       if (inStock !== undefined) data.inStock = parseInt(inStock)
       if (isVerified !== undefined) data.isVerified = isVerified
       if (imageUrl !== undefined) data.imageUrl = imageUrl || null
+      if (sourceId !== undefined) data.source = sourceId ? { connect: { id: parseInt(String(sourceId)) } } : { disconnect: true }
 
       const product = await db.product.update({
         where: { id: parseInt(id) },
         data,
-        include: { section: { select: { title: true } } },
+        include: { section: { select: { title: true } }, source: { select: { id: true, name: true } } },
       })
 
       res.json(product)
@@ -152,11 +168,10 @@ export class ProductsController {
       const productId = parseInt(req.params.id)
       const { variantLabel, variants } = req.body as {
         variantLabel?: string | null
-        variants: Array<{ name: string; price: number | string; isActive?: boolean }>
+        variants: Array<{ name: string; price: number | string; targetFollowers?: number | null; isActive?: boolean }>
       }
 
-      // Toggling variations off (empty list) permanently deletes existing opsi for this product;
-      // any credential/stock rows assigned to them fall back to unassigned (variant_id set null by the FK).
+      // Toggling variations off (empty list) permanently deletes existing opsi for this product.
       await db.$transaction([
         db.product.update({
           where: { id: productId },
@@ -169,6 +184,7 @@ export class ProductsController {
               productId,
               name: v.name,
               price: typeof v.price === 'string' ? parseFloat(v.price) : v.price,
+              targetFollowers: v.targetFollowers ?? null,
               order: index,
               isActive: v.isActive ?? true,
             },
@@ -185,6 +201,38 @@ export class ProductsController {
     } catch (err) {
       console.error('[Replace Product Variants Error]', err)
       res.status(500).json({ success: false, error: 'Failed to save product price variants' })
+    }
+  }
+
+  // Auto-detects price-tier candidates for a Source: distinct targetFollowers values among
+  // its unsold, "Selesai"-status Account/Accsmarket rows, so the admin only has to fill in price.
+  static async detectVariants(req: Request, res: Response): Promise<void> {
+    try {
+      const sourceId = parseInt(req.params.sourceId)
+      const source = await db.source.findUnique({ where: { id: sourceId } })
+      if (!source) { res.status(404).json({ success: false, error: 'Source not found' }); return }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const table: any = source.isAccsmarket ? db.accsmarket : db.account
+      const rows = await table.groupBy({
+        by: ['targetFollowers'],
+        where: { sourceId, isSold: false, accountStatus: { in: DONE_STATUSES }, reservedOrderId: null },
+        _count: true,
+      })
+
+      const candidates = rows
+        .filter((r: { targetFollowers: number | null }) => r.targetFollowers !== null)
+        .map((r: { targetFollowers: number | null; _count: number }) => ({
+          targetFollowers: r.targetFollowers,
+          count: r._count,
+          suggestedName: `${(r.targetFollowers as number).toLocaleString('id-ID')}+ Followers`,
+        }))
+        .sort((a: { targetFollowers: number | null }, b: { targetFollowers: number | null }) => (a.targetFollowers ?? 0) - (b.targetFollowers ?? 0))
+
+      res.json({ data: candidates })
+    } catch (err) {
+      console.error('[Detect Variants Error]', err)
+      res.status(500).json({ success: false, error: 'Failed to detect variant candidates' })
     }
   }
 

@@ -23,6 +23,8 @@ interface SaleDetail {
   total_sale_price: number
   total_profit: number
   is_shopee: boolean
+  origin: "storefront" | "manual"
+  buyer?: { name: string; email: string }
   created_at: string
   sale_lines: SaleLine[]
 }
@@ -67,13 +69,32 @@ export default function SaleDetailPage() {
           <CardHeader className="pb-3"><CardTitle className="text-sm font-medium">Info Pelanggan</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Username</span>
-              <span className="font-medium">{sale.customer?.usernameSh ?? "-"}</span>
+              <span className="text-muted-foreground">Asal</span>
+              <span className="font-medium">{sale.origin === "storefront" ? "Storefront" : "Manual"}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Nomor HP</span>
-              <span>{sale.customer?.nomorHp ?? "-"}</span>
-            </div>
+            {sale.origin === "storefront" ? (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Nama</span>
+                  <span className="font-medium">{sale.buyer?.name ?? "-"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Email</span>
+                  <span>{sale.buyer?.email ?? "-"}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Username</span>
+                  <span className="font-medium">{sale.customer?.usernameSh ?? "-"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Nomor HP</span>
+                  <span>{sale.customer?.nomorHp ?? "-"}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Source</span>
               <span>{sale.source?.name ?? "-"}</span>

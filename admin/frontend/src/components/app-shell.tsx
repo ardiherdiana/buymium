@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Outlet, useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
-  ShoppingCart, Package, Users, Layers, Star,
+  ShoppingCart, Package, Users, Star,
   BarChart3, ShoppingBag, TrendingUp, PieChart, UserSquare, Database,
   LayoutDashboard, Plus, Trash2, Sun, Moon,
 } from "lucide-react"
@@ -41,7 +41,6 @@ const ECOMMERCE_NAV: NavGroup[] = [
     items: [
       { label: "Pesanan", href: "/ecommerce/orders", icon: ShoppingCart },
       { label: "Produk", href: "/ecommerce/products", icon: Package },
-      { label: "Upload Stok", href: "/ecommerce/stocks", icon: Layers },
       { label: "Testimoni", href: "/ecommerce/testimonials", icon: Star },
       { label: "Pengguna", href: "/ecommerce/users", icon: Users },
     ],

@@ -8,8 +8,8 @@ export const CreateProductSchema = z.object({
   // price arrives as a number or string (parseFloat is called in the route)
   price: z.union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/, 'Price must be a non-negative number')]),
   sectionId: z.string().optional().nullable(),
-  tags: z.array(z.string()).optional(),
   imageUrl: z.string().optional().nullable(),
+  sourceId: z.union([z.number(), z.string()], { errorMap: () => ({ message: 'Source wajib dipilih' }) }),
 })
 
 export const UpdateProductSchema = z.object({
@@ -20,10 +20,10 @@ export const UpdateProductSchema = z.object({
     z.string().regex(/^\d+(\.\d+)?$/, 'Price must be a non-negative number'),
   ]).optional(),
   sectionId: z.string().nullable().optional(),
-  tags: z.array(z.string()).optional(),
   inStock: z.union([z.number().int().nonnegative(), z.string().regex(/^\d+$/)]).optional(),
   isVerified: z.boolean().optional(),
   imageUrl: z.string().nullable().optional(),
+  sourceId: z.union([z.number(), z.string()]).nullable().optional(),
 }).refine(data => Object.keys(data).length > 0, {
   message: 'At least one field must be provided for update',
 })
@@ -31,6 +31,7 @@ export const UpdateProductSchema = z.object({
 const ProductVariantSchema = z.object({
   name: z.string().min(1, 'Nama opsi wajib diisi'),
   price: z.union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/, 'Price must be a non-negative number')]),
+  targetFollowers: z.number().int().nonnegative().nullable().optional(),
   isActive: z.boolean().optional(),
 })
 
@@ -69,45 +70,6 @@ export const UpdateBankAccountSchema = z.object({
   accountNumber: z.string().min(1).optional(),
   logo: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
-}).refine(data => Object.keys(data).length > 0, {
-  message: 'At least one field must be provided for update',
-})
-
-// ─── Stocks ───────────────────────────────────────────────────────────────────
-
-const OptionalVariantId = z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable()
-
-export const CreateStockSchema = z.object({
-  productId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/, 'productId must be a positive integer')]),
-  variantId: OptionalVariantId,
-  username: z.string().min(1, 'Username is required'),
-  password: z.string().min(1, 'Password is required'),
-  email: z.string().email().optional().nullable(),
-  passwordEmail: z.string().optional().nullable(),
-  twoFactorCode: z.string().optional().nullable(),
-})
-
-const BulkStockItemSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
-  password: z.string().min(1, 'Password is required'),
-  email: z.string().optional(),
-  password_email: z.string().optional(),
-  two_factor_code: z.string().optional(),
-})
-
-export const BulkStockSchema = z.object({
-  productId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/, 'productId must be a positive integer')]),
-  variantId: OptionalVariantId,
-  data: z.array(BulkStockItemSchema).min(1, 'data must be a non-empty array'),
-})
-
-export const UpdateStockSchema = z.object({
-  email: z.string().email().nullable().optional(),
-  passwordEmail: z.string().nullable().optional(),
-  username: z.string().min(1).optional(),
-  password: z.string().min(1).optional(),
-  twoFactorCode: z.string().nullable().optional(),
-  status: z.string().optional(),
 }).refine(data => Object.keys(data).length > 0, {
   message: 'At least one field must be provided for update',
 })
