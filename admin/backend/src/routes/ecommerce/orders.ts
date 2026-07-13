@@ -52,6 +52,9 @@ const router = Router()
  */
 router.get('/', requireAdmin, OrdersController.index)
 
+// GET /api/admin/orders/trend - Daily order counts (must precede /:id)
+router.get('/trend', requireAdmin, OrdersController.trend)
+
 // GET /api/admin/orders/:id - Get order detail
 router.get('/:id', requireAdmin, OrdersController.show)
 

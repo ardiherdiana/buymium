@@ -38,11 +38,13 @@ export interface ProductVariant {
 
 export interface Product {
   id: number
+  slug?: string
   title: string
   description: string
   inStock: number
   price: number
   rating: number
+  soldCount: number
   isVerified: boolean
   imageUrl?: string | null
   variants?: ProductVariant[]
@@ -50,9 +52,10 @@ export interface Product {
 
 export interface Testimonial {
   id: number
-  buyerName: string
-  content: string
+  customerName: string
+  message: string
   rating: number
+  avatar?: string | null
   createdAt: string
   product: { id: number; title: string } | null
 }

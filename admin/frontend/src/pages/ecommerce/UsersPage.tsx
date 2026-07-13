@@ -1,15 +1,58 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Search } from "lucide-react"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { EmptyRow, LoadingRow, Pagination } from "@/components/ui/table-extras"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
+
+interface GrowthPoint {
+  date: string
+  count: number
+}
+
+function UserGrowthChart() {
+  const { data, isLoading } = useQuery<{ data: GrowthPoint[]; total: number }>({
+    queryKey: ["users-growth"],
+    queryFn: () => api.get("/users/growth").then((r) => r.data),
+  })
+
+  const points = data?.data ?? []
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">Pertumbuhan Pengguna Baru — 30 hari terakhir</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground py-8 text-center">Memuat...</p>
+        ) : points.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-8 text-center">Belum ada data</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={points} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--popover-foreground)" }}
+                formatter={(v) => [v as number, "Pengguna Baru"]}
+              />
+              <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} dot={false} name="Pengguna Baru" />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 interface User {
   id: number
@@ -45,6 +88,8 @@ export default function UsersPage() {
         <h1 className="text-2xl font-semibold text-foreground">Pengguna</h1>
         <p className="text-sm text-muted-foreground mt-1">Daftar pembeli terdaftar</p>
       </div>
+
+      <UserGrowthChart />
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />

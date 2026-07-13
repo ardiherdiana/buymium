@@ -23,17 +23,15 @@ interface RecentOrder {
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Menunggu Pembayaran",
-  waiting_confirmation: "Verifikasi",
-  confirmed: "Dikonfirmasi",
-  completed: "Selesai",
+  awaiting_confirmation: "Verifikasi",
+  paid: "Selesai",
   cancelled: "Dibatalkan",
 }
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  waiting_confirmation: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  confirmed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  completed: "bg-primary/10 text-primary",
+  awaiting_confirmation: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  paid: "bg-primary/10 text-primary",
   cancelled: "bg-destructive/10 text-destructive",
 }
 
@@ -126,19 +124,24 @@ export default function DashboardPage() {
               <li key={order.id}>
                 <Link
                   href={`/dashboard/pesanan/${order.id}`}
-                  className="flex items-center justify-between px-5 py-4 hover:bg-muted/30"
+                  className="flex flex-col gap-1.5 px-4 py-4 hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5"
                 >
-                  <div>
-                    <p className="text-sm font-medium">
+                  <div className="min-w-0 sm:flex-1">
+                    <p className="truncate text-sm font-medium">
                       {order.product?.title ?? "Pesanan"}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(order.createdAt).toLocaleDateString("id-ID", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
+                    <div className="flex items-center justify-between gap-2 sm:block">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(order.createdAt).toLocaleDateString("id-ID", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                      <span className="text-sm font-semibold sm:hidden">
+                        Rp{order.totalPrice.toLocaleString("id")}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span
@@ -146,7 +149,7 @@ export default function DashboardPage() {
                     >
                       {STATUS_LABEL[order.status] ?? order.status}
                     </span>
-                    <p className="text-sm font-semibold">
+                    <p className="hidden text-sm font-semibold sm:block">
                       Rp{order.totalPrice.toLocaleString("id")}
                     </p>
                   </div>

@@ -1,8 +1,9 @@
-"use client"
-
-import { useState } from "react"
-import { ChevronDown } from "lucide-react"
-import { cn } from "@/lib/utils"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 
 const FAQS = [
   {
@@ -22,8 +23,16 @@ const FAQS = [
     a: "Data lengkap akun (username, password, email, dan kode 2FA jika ada) langsung tersedia dan bisa di-download dari halaman riwayat pesanan Anda.",
   },
   {
+    q: "Bagaimana cara login ke akun yang saya beli?",
+    a: "Bisa langsung login pakai username dan password nya, ga perlu login gmail. Kalau ada OTP, silakan kunjungi website dengan cari di google dengan kata kunci buymium.store. Masukkan alamat email yang diberikan admin pada kolom yang tersedia — jika sesuai, kode akan otomatis muncul di layar untuk langsung Anda salin.",
+  },
+  {
+    q: "Bagaimana cara menghindari suspend?",
+    a: "Dilarang mengganti email, username, password, dll selama 7 hari setelah login agar menghindari suspend. Anda bisa gunakan akun untuk aktivitas biasa seperti scroll dll agar akun lengket ke perangkat yang baru login.",
+  },
+  {
     q: "Apakah ada garansi jika akun bermasalah?",
-    a: "Ada. Jika akun tidak bisa login saat serah-terima, kami ganti dengan akun setara atau refund penuh. Garansi berlaku 24 jam sejak pembayaran dikonfirmasi.",
+    a: "Ada. Jika akun mengalami suspend/banned/disable, penjual akan memberikan: 1) ganti gratis 1 akun atau gratis isi followers sejumlah yang dipesan, atau 2) dikirim ke akun lain milik pembeli, atau 3) refund 70% cash ke rekening pembeli. Silakan hubungi admin untuk klaim garansi.",
   },
   {
     q: "Apakah ada minimum pembelian?",
@@ -32,29 +41,14 @@ const FAQS = [
 ]
 
 export function FaqAccordion() {
-  const [open, setOpen] = useState<number | null>(null)
-
   return (
-    <div className="divide-y divide-border">
+    <Accordion type="single" collapsible>
       {FAQS.map((faq, i) => (
-        <div key={i}>
-          <button
-            onClick={() => setOpen(open === i ? null : i)}
-            className="flex w-full items-center justify-between gap-4 py-4 text-left text-sm font-medium transition-colors hover:text-primary"
-          >
-            {faq.q}
-            <ChevronDown
-              className={cn(
-                "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
-                open === i && "rotate-180",
-              )}
-            />
-          </button>
-          {open === i && (
-            <p className="pb-4 text-sm text-muted-foreground">{faq.a}</p>
-          )}
-        </div>
+        <AccordionItem key={i} value={String(i)}>
+          <AccordionTrigger>{faq.q}</AccordionTrigger>
+          <AccordionContent>{faq.a}</AccordionContent>
+        </AccordionItem>
       ))}
-    </div>
+    </Accordion>
   )
 }

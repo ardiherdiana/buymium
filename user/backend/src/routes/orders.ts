@@ -9,7 +9,7 @@ import { validate } from '../middleware/validate'
 import { CreateOrderSchema, CartOrderSchema } from '../validators'
 import { userRateLimit } from '../middleware/userRateLimit'
 import { sendOrderCreated, sendProofUploaded } from '../utils/email'
-import { reserveInventory, releaseInventory, countAvailableInventory, getVariantPrice } from '../utils/inventory'
+import { reserveInventory, releaseInventory, countAvailableInventory, getVariantPrice, getOrderVariantLabel } from '../utils/inventory'
 
 const router = Router()
 
@@ -38,15 +38,15 @@ function generateGroupId(prefix: string, userId: number): string {
   return `BUYMIUM-${prefix}-${userId}-${Date.now()}`
 }
 
-async function reserveForProduct(orderId: number, productId: number, quantity: number, variantId?: number): Promise<void> {
+async function reserveForProduct(orderId: number, productId: number, quantity: number, variantId?: number, stockIds?: number[]): Promise<void> {
   const product = await db.product.findUnique({ where: { id: productId }, select: { sourceId: true } })
   if (!product?.sourceId) return
-  await reserveInventory(orderId, productId, product.sourceId, quantity, variantId)
+  await reserveInventory(orderId, productId, product.sourceId, quantity, variantId, stockIds)
 }
 
 router.post('/', requireAuth, userRateLimit, validate(CreateOrderSchema), async (req: Request, res: Response) => {
   const { userId } = req.user!
-  const { productId, quantity = 1, variantId } = req.body as { productId: number; quantity: number; variantId?: number }
+  const { productId, quantity = 1, variantId, stockIds } = req.body as { productId: number; quantity: number; variantId?: number; stockIds?: number[] }
 
   const product = await db.product.findUnique({ where: { id: productId } })
   if (!product) { res.status(404).json({ error: 'Produk tidak ditemukan' }); return }
@@ -69,7 +69,7 @@ router.post('/', requireAuth, userRateLimit, validate(CreateOrderSchema), async 
     data: { userId, productId, quantity, totalPrice, status: 'pending', groupId },
   })
 
-  await reserveForProduct(order.id, productId, quantity, variantId)
+  await reserveForProduct(order.id, productId, quantity, variantId, stockIds)
 
   const user = await db.user.findUnique({ where: { id: userId } })
   if (user?.email) {
@@ -81,7 +81,7 @@ router.post('/', requireAuth, userRateLimit, validate(CreateOrderSchema), async 
 
 router.post('/cart', requireAuth, userRateLimit, validate(CartOrderSchema), async (req: Request, res: Response) => {
   const { userId } = req.user!
-  const { items } = req.body as { items: { productId: number; quantity: number; variantId?: number }[] }
+  const { items } = req.body as { items: { productId: number; quantity: number; variantId?: number; stockIds?: number[] }[] }
 
   const products = await Promise.all(items.map(it => db.product.findUnique({ where: { id: it.productId } })))
   const unitPrices: number[] = []
@@ -113,7 +113,7 @@ router.post('/cart', requireAuth, userRateLimit, validate(CartOrderSchema), asyn
     })
   )
 
-  await Promise.all(items.map((it, i) => reserveForProduct(orders[i].id, it.productId, it.quantity, it.variantId)))
+  await Promise.all(items.map((it, i) => reserveForProduct(orders[i].id, it.productId, it.quantity, it.variantId, it.stockIds)))
 
   const totalAll = orders.reduce((s, o) => s + o.totalPrice, 0)
   const totalQty = items.reduce((s, it) => s + it.quantity, 0)
@@ -187,8 +187,8 @@ router.get('/stats', requireAuth, async (req: Request, res: Response) => {
   const { userId } = req.user!
   const [totalOrders, pendingOrders, completedOrders] = await Promise.all([
     db.order.count({ where: { userId } }),
-    db.order.count({ where: { userId, status: { in: ['pending', 'waiting_confirmation'] } } }),
-    db.order.count({ where: { userId, status: 'completed' } }),
+    db.order.count({ where: { userId, status: { in: ['pending', 'awaiting_confirmation'] } } }),
+    db.order.count({ where: { userId, status: 'paid' } }),
   ])
   res.json({ totalOrders, pendingOrders, completedOrders })
 })
@@ -252,7 +252,8 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
 
   if (!order) { res.status(404).json({ error: 'Pesanan tidak ditemukan' }); return }
 
-  let relatedOrders: unknown[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let relatedOrders: any[] = []
   if (order.groupId?.startsWith('BUYMIUM-CART-')) {
     relatedOrders = await db.order.findMany({
       where: { groupId: order.groupId, userId },
@@ -261,7 +262,19 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     })
   }
 
-  res.json({ ...order, relatedOrders })
+  const variantLabel = await getOrderVariantLabel(order.id, order.productId, order.product.sourceId, order.inventoryRefs)
+  await Promise.all(
+    relatedOrders.map(async (o) => {
+      o.variantLabel = await getOrderVariantLabel(o.id, o.productId, o.product.sourceId, o.inventoryRefs)
+    })
+  )
+
+  const existingTestimonial = await db.testimonial.findUnique({
+    where: { orderId: order.id },
+    select: { rating: true, message: true },
+  })
+
+  res.json({ ...order, variantLabel, relatedOrders, hasTestimonial: !!existingTestimonial, testimonial: existingTestimonial })
 })
 
 router.get('/:id/download', requireAuth, async (req: Request, res: Response) => {
@@ -298,24 +311,57 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
     accsmarketIds.length ? db.accsmarket.findMany({ where: { id: { in: accsmarketIds } } }) : [],
   ])
   let index = 0
+  let hasBuymiumStoreEmail = false
+  let hasHotmailOutlookEmail = false
+  let hasTwoFactor = false
+
   for (const acc of accounts) {
     index += 1
     textContent += `AKUN #${index}\n`
-    textContent += `Email: ${acc.email || 'N/A'}\n`
-    textContent += `Username: ${acc.username || 'N/A'}\n`
-    textContent += `Password: ${acc.password || 'N/A'}\n`
+    if (acc.email) textContent += `Email: ${acc.email}\n`
+    if (acc.username) textContent += `Username: ${acc.username}\n`
+    if (acc.password) textContent += `Password: ${acc.password}\n`
     textContent += `------------------------------------------\n`
+    const email = (acc.email || '').toLowerCase()
+    if (email.endsWith('@buymium.store')) hasBuymiumStoreEmail = true
+    if (email.endsWith('@hotmail.com') || email.endsWith('@outlook.com')) hasHotmailOutlookEmail = true
   }
   for (const acc of accsmarkets) {
     index += 1
     textContent += `AKUN #${index}\n`
-    textContent += `Email: ${acc.email || 'N/A'}\n`
-    textContent += `Password Email: ${acc.passwordEmail || 'N/A'}\n`
-    textContent += `Username: ${acc.username || 'N/A'}\n`
-    textContent += `Password: ${acc.password || 'N/A'}\n`
-    textContent += `2FA: ${acc.twoFactorAuth || 'N/A'}\n`
+    if (acc.email) textContent += `Email: ${acc.email}\n`
+    if (acc.passwordEmail) textContent += `Password Email: ${acc.passwordEmail}\n`
+    if (acc.username) textContent += `Username: ${acc.username}\n`
+    if (acc.password) textContent += `Password: ${acc.password}\n`
+    if (acc.twoFactorAuth) textContent += `2FA: ${acc.twoFactorAuth}\n`
     textContent += `------------------------------------------\n`
+    const email = (acc.email || '').toLowerCase()
+    if (email.endsWith('@buymium.store')) hasBuymiumStoreEmail = true
+    if (email.endsWith('@hotmail.com') || email.endsWith('@outlook.com')) hasHotmailOutlookEmail = true
+    if (acc.twoFactorAuth) hasTwoFactor = true
   }
+  textContent += `CARA LOGIN\n`
+  if (hasBuymiumStoreEmail) {
+    textContent += `- Email @buymium.store: gausah login gmail, akses buymium.store lalu paste email tersebut di sana untuk ambil kode OTP.\n`
+  }
+  if (hasHotmailOutlookEmail) {
+    textContent += `- Email @hotmail.com / @outlook.com: login langsung di hotmail.com atau outlook.com.\n`
+  }
+  if (hasTwoFactor) {
+    textContent += `- 2FA: tetap diambil di website buymium.store tab 2FA.\n`
+  }
+  textContent += `\n`
+
+  textContent += `CARA MENGHINDARI SUSPEND\n`
+  textContent += `- Dilarang mengganti email, username, password, dll selama 7 hari setelah login agar menghindari suspend.\n`
+  textContent += `- Bisa gunakan akun untuk aktivitas biasa seperti scroll dll agar akun lengket ke perangkat yang baru login.\n\n`
+
+  textContent += `KETENTUAN GARANSI\n`
+  textContent += `Jika akun mengalami suspend/banned/disable, penjual akan memberikan:\n`
+  textContent += `1. Ganti gratis 1 akun atau\n`
+  textContent += `2. Gratis isi followers sejumlah yang dipesan dikirim ke akun lain milik pembeli, atau\n`
+  textContent += `3. Refund 70% cash ke rekening pembeli.\n\n`
+  textContent += `Silakan hubungi admin untuk klaim garansi.\n`
 
   const fileName = `${order.groupId ?? order.id}.txt`
   res.setHeader('Content-Type', 'text/plain')

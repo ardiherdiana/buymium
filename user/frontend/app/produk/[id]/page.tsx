@@ -1,10 +1,5 @@
-import { redirect } from "next/navigation"
+import { ProdukDetailContent } from "@/components/produk-detail-content"
 
-export default async function ProdukRedirectPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = await params
-  redirect(`/masuk?redirect=/dashboard/produk/${id}`)
+export default function ProdukDetailPage() {
+  return <ProdukDetailContent />
 }

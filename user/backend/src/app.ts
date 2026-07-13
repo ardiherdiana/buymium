@@ -69,7 +69,10 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
-app.use('/api/uploads', express.static(path.join(process.cwd(), 'uploads')))
+app.use('/api/uploads', (_req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+  next()
+}, express.static(path.join(process.cwd(), 'uploads')))
 
 app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)

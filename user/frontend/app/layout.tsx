@@ -1,4 +1,4 @@
-import { Geist, JetBrains_Mono } from "next/font/google"
+import { Inter, Geist_Mono } from "next/font/google"
 import type { Metadata } from "next"
 
 import "./globals.css"
@@ -7,8 +7,8 @@ import { AuthProvider } from "@/contexts/auth-context"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
-const fontSans = Geist({ subsets: ["latin"], variable: "--font-sans" })
-const fontMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" })
+const fontSans = Inter({ subsets: ["latin"], variable: "--font-sans" })
+const fontMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://buymium.id"),
@@ -63,7 +63,7 @@ export default function RootLayout({
     <html
       lang="id"
       suppressHydrationWarning
-      className={cn("antialiased", fontSans.variable, "font-mono", fontMono.variable)}
+      className={cn("antialiased", fontSans.variable, "font-sans", fontMono.variable)}
     >
       <body>
         <ThemeProvider>

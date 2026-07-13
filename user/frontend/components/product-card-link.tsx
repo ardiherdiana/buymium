@@ -5,10 +5,12 @@ import { useAuth } from "@/contexts/auth-context"
 
 export function ProductCardLink({
   productId,
+  slug,
   children,
   className,
 }: {
   productId: number
+  slug?: string
   children: React.ReactNode
   className?: string
 }) {
@@ -17,11 +19,8 @@ export function ProductCardLink({
 
   function handleClick(e: React.MouseEvent) {
     e.preventDefault()
-    if (user) {
-      router.push(`/dashboard/produk/${productId}`)
-    } else {
-      router.push(`/masuk?redirect=/dashboard/produk/${productId}`)
-    }
+    const path = user ? `/dashboard/produk/${slug ?? productId}` : `/produk/${slug ?? productId}`
+    router.push(path)
   }
 
   return (

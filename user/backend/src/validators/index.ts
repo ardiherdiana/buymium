@@ -22,7 +22,8 @@ export const ForgotPasswordSchema = z.object({
 })
 
 export const ResetPasswordSchema = z.object({
-  token: z.string().min(1),
+  email: z.string().email(),
+  otp: z.string().length(6),
   password: z.string().min(8).max(100),
 })
 
@@ -44,6 +45,7 @@ export const CreateOrderSchema = z.object({
   productId: z.number().int().positive(),
   quantity: z.number().int().positive().optional().default(1),
   variantId: z.number().int().positive().optional(),
+  stockIds: z.array(z.number().int().positive()).optional(),
 })
 
 export const CartOrderSchema = z.object({
@@ -53,6 +55,7 @@ export const CartOrderSchema = z.object({
         productId: z.number().int().positive(),
         quantity: z.number().int().positive(),
         variantId: z.number().int().positive().optional(),
+        stockIds: z.array(z.number().int().positive()).optional(),
       })
     )
     .min(1),

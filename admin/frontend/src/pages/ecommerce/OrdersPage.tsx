@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { Search } from "lucide-react"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dropdown } from "@/components/ui/dropdown-select"
@@ -9,9 +10,53 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { EmptyRow, LoadingRow, Pagination } from "@/components/ui/table-extras"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
+
+interface TrendPoint {
+  date: string
+  total: number
+  paid: number
+}
+
+function OrdersTrendChart() {
+  const { data, isLoading } = useQuery<{ data: TrendPoint[]; total: number }>({
+    queryKey: ["orders-trend"],
+    queryFn: () => api.get("/orders/trend").then((r) => r.data),
+  })
+
+  const points = data?.data ?? []
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">Tren Pesanan Masuk — 30 hari terakhir</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground py-8 text-center">Memuat...</p>
+        ) : points.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-8 text-center">Belum ada data</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={points} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--popover-foreground)" }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => (v === "paid" ? "Lunas" : "Total Pesanan")} />
+              <Line type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} dot={false} name="total" />
+              <Line type="monotone" dataKey="paid" stroke="#22c55e" strokeWidth={2} dot={false} name="paid" />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 interface Order {
   id: number
@@ -32,21 +77,21 @@ interface OrdersResponse {
 const STATUS_OPTIONS = [
   { value: "", label: "Semua Status" },
   { value: "pending", label: "Pending" },
-  { value: "waiting_confirmation", label: "Menunggu Verifikasi" },
+  { value: "awaiting_confirmation", label: "Menunggu Verifikasi" },
   { value: "paid", label: "Lunas" },
   { value: "cancelled", label: "Dibatalkan" },
 ]
 
 const statusVariant: Record<string, "warning" | "blue" | "completed" | "error"> = {
   pending: "warning",
-  waiting_confirmation: "blue",
+  awaiting_confirmation: "blue",
   paid: "completed",
   cancelled: "error",
 }
 
 const statusLabel: Record<string, string> = {
   pending: "Pending",
-  waiting_confirmation: "Menunggu Verifikasi",
+  awaiting_confirmation: "Menunggu Verifikasi",
   paid: "Lunas",
   cancelled: "Dibatalkan",
 }
@@ -73,6 +118,8 @@ export default function OrdersPage() {
         <h1 className="text-2xl font-semibold text-foreground">Pesanan</h1>
         <p className="text-sm text-muted-foreground mt-1">Kelola pesanan pelanggan</p>
       </div>
+
+      <OrdersTrendChart />
 
       {/* Filters — column on mobile (search first), row on sm+ */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">

@@ -6,6 +6,22 @@ import db from '../../config/database'
 // Accsmarket ("completed") rows - match both casings rather than relying on one.
 const DONE_STATUSES = ['Completed', 'completed']
 
+// Accsmarket-backed sources additionally require the account to be at least 2 years
+// old (Account has no `year` field, so this only ever applies to Accsmarket rows).
+function eligibilityWhere(sourceId: number, isAccsmarket: boolean): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    sourceId,
+    isSold: false,
+    accountStatus: { in: DONE_STATUSES },
+    reservedOrderId: null,
+  }
+  if (isAccsmarket) {
+    const cutoffYear = new Date().getFullYear() - 2
+    base.year = { lte: String(cutoffYear) }
+  }
+  return base
+}
+
 type ProductWithVariants = { id: number; sourceId?: number | null; variants?: { id: number; targetFollowers?: number | null }[] }
 
 // Merges the count of available (unsold, status "Selesai") Account/Accsmarket rows into
@@ -29,11 +45,8 @@ async function attachVariantStock<T extends ProductWithVariants>(products: T[]):
         ...v,
         availableStock: await table.count({
           where: {
-            sourceId: product.sourceId,
+            ...eligibilityWhere(product.sourceId as number, isAccsmarket),
             targetFollowers: v.targetFollowers ?? null,
-            isSold: false,
-            accountStatus: { in: DONE_STATUSES },
-            reservedOrderId: null,
           },
         }),
       }))
@@ -216,7 +229,7 @@ export class ProductsController {
       const table: any = source.isAccsmarket ? db.accsmarket : db.account
       const rows = await table.groupBy({
         by: ['targetFollowers'],
-        where: { sourceId, isSold: false, accountStatus: { in: DONE_STATUSES }, reservedOrderId: null },
+        where: eligibilityWhere(sourceId, source.isAccsmarket),
         _count: true,
       })
 

@@ -20,17 +20,15 @@ interface Order {
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Menunggu Pembayaran",
-  waiting_confirmation: "Menunggu Verifikasi",
-  confirmed: "Dikonfirmasi",
-  completed: "Selesai",
+  awaiting_confirmation: "Menunggu Verifikasi",
+  paid: "Selesai",
   cancelled: "Dibatalkan",
 }
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  waiting_confirmation: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  confirmed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  completed: "bg-primary/10 text-primary",
+  awaiting_confirmation: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  paid: "bg-primary/10 text-primary",
   cancelled: "bg-destructive/10 text-destructive",
 }
 
@@ -38,8 +36,8 @@ const TABS = ["Semua", "Menunggu", "Selesai", "Dibatalkan"] as const
 type Tab = (typeof TABS)[number]
 
 function tabToStatus(tab: Tab): string[] {
-  if (tab === "Menunggu") return ["pending", "waiting_confirmation", "confirmed"]
-  if (tab === "Selesai") return ["completed"]
+  if (tab === "Menunggu") return ["pending", "awaiting_confirmation"]
+  if (tab === "Selesai") return ["paid"]
   if (tab === "Dibatalkan") return ["cancelled"]
   return []
 }
@@ -49,6 +47,27 @@ export default function PesananPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<Tab>("Semua")
+  const [downloadingId, setDownloadingId] = useState<number | null>(null)
+
+  async function handleDownload(orderId: number) {
+    if (!token) return
+    setDownloadingId(orderId)
+    try {
+      const res = await fetch(`${API_BASE}/orders/${orderId}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `buymium-order-${orderId}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloadingId(null)
+    }
+  }
   useEffect(() => {
     if (!token) return
     setLoading(true)
@@ -128,7 +147,7 @@ export default function PesananPage() {
                 <div className="flex items-center justify-between px-4 py-3">
                   <p className="text-sm font-medium">{order.product?.title ?? "Produk"}</p>
                   <p className="text-sm text-muted-foreground">
-                    {order.quantity}x · Rp{(order.product?.price ?? 0).toLocaleString("id")}
+                    {order.quantity}x · Rp{Math.round(order.totalPrice / order.quantity).toLocaleString("id")}
                   </p>
                 </div>
               </div>
@@ -139,16 +158,15 @@ export default function PesananPage() {
                   Total: Rp{order.totalPrice.toLocaleString("id")}
                 </p>
                 <div className="flex items-center gap-2">
-                  {order.status === "completed" && (
-                    <Button size="sm" variant="outline" asChild>
-                      <a
-                        href={`${API_BASE}/orders/${order.id}/download`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <Download className="size-3.5" />
-                        Download
-                      </a>
+                  {order.status === "paid" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDownload(order.id)}
+                      disabled={downloadingId === order.id}
+                    >
+                      <Download className="size-3.5" />
+                      Download
                     </Button>
                   )}
                   <Link

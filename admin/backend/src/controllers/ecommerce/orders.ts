@@ -13,6 +13,14 @@ type ItemToUpdate = {
   sourceId?: number | null
   source?: { id: number; spreadsheetId?: string | null } | null
   isSold?: boolean
+  capital?: number | null
+}
+
+// Matches the format the admin panel's manual POS sale flow generates client-side
+// (see admin/frontend pos-page.tsx), so storefront and manual sales share one numbering scheme.
+function generateSalesNumber(): string {
+  const date = new Date().toISOString().split('T')[0].replace(/-/g, '')
+  return `BUYMIUM${date}-${Date.now().toString().slice(-3)}`
 }
 
 // Fulfills an order whose product is backed by management inventory (Account/Accsmarket,
@@ -34,22 +42,27 @@ async function fulfillFromInventory(order: { id: number; quantity: number; total
   })
   if (reserved.length === 0) return []
 
+  const unitSalePrice = Math.floor(order.totalPrice / reserved.length)
+  const totalCapital = reserved.reduce((s: number, row: { capital?: number | null }) => s + (row.capital ?? 0), 0)
+  const totalProfit = order.totalPrice - totalCapital
+
   const sale = await db.sale.create({
     data: {
-      salesNumber: `SO-${order.id}`,
+      salesNumber: generateSalesNumber(),
       orderId: order.id,
       sourceId,
       totalSalePrice: order.totalPrice,
-      totalProfit: 0,
+      totalProfit,
     },
   })
 
   await db.$transaction(
-    reserved.map((row: { id: number }) =>
-      isAccsmarket
-        ? db.saleLine.create({ data: { saleId: sale.id, accsmarketId: row.id, unitSalePrice: 0, price: 0, profit: 0 } })
-        : db.saleLine.create({ data: { saleId: sale.id, accountId: row.id, unitSalePrice: 0, price: 0, profit: 0 } })
-    )
+    reserved.map((row: { id: number; capital?: number | null }) => {
+      const profit = unitSalePrice - (row.capital ?? 0)
+      return isAccsmarket
+        ? db.saleLine.create({ data: { saleId: sale.id, accsmarketId: row.id, unitSalePrice, price: unitSalePrice, profit } })
+        : db.saleLine.create({ data: { saleId: sale.id, accountId: row.id, unitSalePrice, price: unitSalePrice, profit } })
+    })
   )
 
   await table.updateMany({
@@ -75,6 +88,14 @@ async function resolveInventoryRefs(inventoryRefsJson: string | null): Promise<u
   const [accounts, accsmarkets] = await Promise.all([
     accountIds.length ? db.account.findMany({ where: { id: { in: accountIds } } }) : [],
     accsmarketIds.length ? db.accsmarket.findMany({ where: { id: { in: accsmarketIds } } }) : [],
+  ])
+  return [...accounts, ...accsmarkets]
+}
+
+async function resolveReservedInventory(orderId: number): Promise<unknown[]> {
+  const [accounts, accsmarkets] = await Promise.all([
+    db.account.findMany({ where: { reservedOrderId: orderId } }),
+    db.accsmarket.findMany({ where: { reservedOrderId: orderId } }),
   ])
   return [...accounts, ...accsmarkets]
 }
@@ -122,6 +143,43 @@ export class OrdersController {
     }
   }
 
+  static async trend(req: Request, res: Response): Promise<void> {
+    try {
+      const end = req.query.end ? new Date(String(req.query.end)) : new Date()
+      const start = req.query.start ? new Date(String(req.query.start)) : new Date(end.getTime() - 29 * 86400000)
+      end.setHours(23, 59, 59, 999)
+      start.setHours(0, 0, 0, 0)
+
+      const orders = await db.order.findMany({
+        where: { createdAt: { gte: start, lte: end } },
+        select: { createdAt: true, status: true },
+      })
+
+      const counts = new Map<string, { total: number; paid: number }>()
+      for (const o of orders) {
+        const key = o.createdAt.toISOString().slice(0, 10)
+        const entry = counts.get(key) ?? { total: 0, paid: 0 }
+        entry.total += 1
+        if (o.status === 'paid') entry.paid += 1
+        counts.set(key, entry)
+      }
+
+      const days: { date: string; total: number; paid: number }[] = []
+      const cursor = new Date(start)
+      while (cursor <= end) {
+        const key = cursor.toISOString().slice(0, 10)
+        const entry = counts.get(key) ?? { total: 0, paid: 0 }
+        days.push({ date: key, total: entry.total, paid: entry.paid })
+        cursor.setDate(cursor.getDate() + 1)
+      }
+
+      res.json({ data: days, total: orders.length })
+    } catch (err) {
+      console.error('[Order Trend Error]', err)
+      res.status(500).json({ success: false, error: 'Failed to fetch order trend' })
+    }
+  }
+
   static async show(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params
@@ -148,7 +206,9 @@ export class OrdersController {
         })
       }
 
-      const inventoryItems = await resolveInventoryRefs(order.inventoryRefs)
+      const inventoryItems = order.inventoryRefs
+        ? await resolveInventoryRefs(order.inventoryRefs)
+        : await resolveReservedInventory(order.id)
 
       res.json({ ...order, relatedOrders, inventoryItems })
     } catch (err) {

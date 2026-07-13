@@ -6,9 +6,39 @@ import { countAvailableInventory, listInventoryPreview, getProductVariants } fro
 
 const router = Router()
 
+function slugify(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
+// Products have no dedicated slug column - the public URL slug is derived from the title
+// on the fly, so lookup by slug means scanning all products and matching the derived value.
+async function findProductByIdOrSlug(idOrSlug: string): Promise<Product | null> {
+  if (/^\d+$/.test(idOrSlug)) {
+    return db.product.findUnique({ where: { id: parseInt(idOrSlug) } })
+  }
+  const products = await db.product.findMany()
+  return products.find((p) => slugify(p.title) === idOrSlug) ?? null
+}
+
 async function parseProduct(p: Product) {
   const inStock = p.sourceId ? await countAvailableInventory(p.id, p.sourceId) : p.inStock
-  return { ...p, inStock }
+  const [ratingAgg, soldAgg] = await Promise.all([
+    db.testimonial.aggregate({
+      where: { productId: p.id, isPublished: true, rating: { gte: 4 } },
+      _avg: { rating: true },
+    }),
+    db.order.aggregate({
+      where: { productId: p.id, status: 'paid' },
+      _sum: { quantity: true },
+    }),
+  ])
+  const rating = ratingAgg._avg.rating ? parseFloat(ratingAgg._avg.rating.toFixed(1)) : 0
+  const soldCount = soldAgg._sum.quantity ?? 0
+  return { ...p, slug: slugify(p.title), inStock, rating, soldCount }
 }
 
 router.get('/', async (req: Request, res: Response) => {
@@ -37,45 +67,41 @@ router.get('/', async (req: Request, res: Response) => {
 })
 
 router.get('/stats', async (_req: Request, res: Response) => {
-  const [totalListings, stockAgg, ratingAgg] = await Promise.all([
-    db.product.count(),
-    db.product.aggregate({ _sum: { inStock: true } }),
-    db.product.aggregate({ _avg: { rating: true } }),
+  const [products, ratingAgg] = await Promise.all([
+    db.product.findMany({ select: { id: true, sourceId: true, inStock: true } }),
+    db.testimonial.aggregate({ where: { isPublished: true, rating: { gte: 4 } }, _avg: { rating: true } }),
   ])
 
+  const stocks = await Promise.all(
+    products.map((p) => (p.sourceId ? countAvailableInventory(p.id, p.sourceId) : p.inStock))
+  )
+  const totalStock = stocks.reduce((sum, n) => sum + n, 0)
+
   res.json({
-    totalListings,
-    totalStock: stockAgg._sum.inStock ?? 0,
+    totalListings: products.length,
+    totalStock,
     avgRating: ratingAgg._avg.rating ? parseFloat(ratingAgg._avg.rating.toFixed(1)) : 0,
   })
 })
 
 router.get('/:id/stocks', async (req: Request, res: Response) => {
-  const id = parseInt(String(req.params.id))
-  if (isNaN(id)) { res.status(400).json({ error: 'ID tidak valid' }); return }
-
-  const product = await db.product.findUnique({ where: { id }, select: { sourceId: true } })
+  const product = await findProductByIdOrSlug(String(req.params.id))
   if (!product) { res.status(404).json({ error: 'Produk tidak ditemukan' }); return }
   if (!product.sourceId) { res.json([]); return }
 
-  const rows = await listInventoryPreview(id, product.sourceId)
-  res.json(rows.map((s: { id: number; username: string | null; email: string | null; targetFollowers: number | null }) => ({
+  const rows = await listInventoryPreview(product.id, product.sourceId)
+  res.json(rows.map((s: { id: number; username: string | null; email: string | null; targetFollowers: number | null; year?: string | null }) => ({
     id: s.id,
     username: s.username,
     emailDomain: s.email ? '@' + s.email.split('@')[1] : null,
     hasTwoFactor: false,
     targetFollowers: s.targetFollowers,
+    year: s.year ?? null,
   })))
 })
 
 router.get('/:id', async (req: Request, res: Response) => {
-  const id = parseInt(String(req.params.id))
-  if (isNaN(id)) {
-    res.status(400).json({ error: 'ID tidak valid' })
-    return
-  }
-
-  const product = await db.product.findUnique({ where: { id } })
+  const product = await findProductByIdOrSlug(String(req.params.id))
 
   if (!product) {
     res.status(404).json({ error: 'Produk tidak ditemukan' })
@@ -83,7 +109,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 
   const parsed = await parseProduct(product)
-  const variants = product.sourceId ? await getProductVariants(id, product.sourceId) : []
+  const variants = product.sourceId ? await getProductVariants(product.id, product.sourceId) : []
   res.json({ ...parsed, variants })
 })
 

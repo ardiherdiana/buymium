@@ -6,8 +6,7 @@ import { signToken, signRefreshToken, verifyToken, requireAuth, type JwtPayload 
 import { securityLogger } from '../utils/securityLogger'
 import { validate } from '../middleware/validate'
 import { LoginSchema, GoogleAuthSchema, RegisterSchema, OtpVerifySchema, ForgotPasswordSchema, ResetPasswordSchema, UpdateProfileSchema, ChangePasswordSchema } from '../validators'
-import { sendOtpEmail, sendResetPasswordEmail } from '../utils/email'
-import crypto from 'crypto'
+import { sendOtpEmail, sendResetPasswordOtpEmail } from '../utils/email'
 
 const router = Router()
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
@@ -29,18 +28,18 @@ setInterval(() => {
   }
 }, 60_000)
 
-// In-memory reset token store: token -> { userId, email, expiresAt }
+// In-memory reset OTP store: email -> { userId, otp, expiresAt }
 interface PendingReset {
   userId: number
-  email: string
+  otp: string
   expiresAt: number
 }
 const pendingResets = new Map<string, PendingReset>()
 
 setInterval(() => {
   const now = Date.now()
-  for (const [token, entry] of pendingResets.entries()) {
-    if (entry.expiresAt < now) pendingResets.delete(token)
+  for (const [email, entry] of pendingResets.entries()) {
+    if (entry.expiresAt < now) pendingResets.delete(email)
   }
 }, 60_000)
 
@@ -136,32 +135,35 @@ router.post('/forgot-password', validate(ForgotPasswordSchema), async (req: Requ
   const user = await db.user.findUnique({ where: { email } })
   // Always respond OK to prevent email enumeration
   if (!user || !user.password) {
-    res.json({ message: 'Jika email terdaftar, link reset akan dikirim.' })
+    res.json({ message: 'Jika email terdaftar, kode OTP akan dikirim.' })
     return
   }
 
-  const token = crypto.randomBytes(32).toString('hex')
-  pendingResets.set(token, { userId: user.id, email: user.email, expiresAt: Date.now() + 30 * 60 * 1000 })
+  const otp = Math.floor(100000 + Math.random() * 900000).toString()
+  pendingResets.set(email, { userId: user.id, otp, expiresAt: Date.now() + 10 * 60 * 1000 })
 
-  const resetUrl = `${process.env.SITE_URL || 'https://buymium.id'}/reset-password?token=${token}`
-  await sendResetPasswordEmail({ to: user.email, name: user.name, resetUrl })
+  await sendResetPasswordOtpEmail({ to: user.email, name: user.name, otp })
 
-  res.json({ message: 'Jika email terdaftar, link reset akan dikirim.' })
+  res.json({ message: 'Jika email terdaftar, kode OTP akan dikirim.' })
 })
 
 router.post('/reset-password', validate(ResetPasswordSchema), async (req: Request, res: Response) => {
-  const { token, password } = req.body as { token: string; password: string }
+  const { email, otp, password } = req.body as { email: string; otp: string; password: string }
 
-  const pending = pendingResets.get(token)
+  const pending = pendingResets.get(email)
   if (!pending || pending.expiresAt < Date.now()) {
-    pendingResets.delete(token)
-    res.status(400).json({ error: 'Link reset tidak valid atau sudah kadaluarsa. Minta link baru.' })
+    pendingResets.delete(email)
+    res.status(400).json({ error: 'Kode OTP tidak valid atau sudah kadaluarsa. Minta kode baru.' })
+    return
+  }
+  if (pending.otp !== otp) {
+    res.status(400).json({ error: 'Kode OTP salah. Periksa kembali email kamu.' })
     return
   }
 
   const hashedPassword = await bcrypt.hash(password, 12)
   await db.user.update({ where: { id: pending.userId }, data: { password: hashedPassword } })
-  pendingResets.delete(token)
+  pendingResets.delete(email)
 
   res.json({ message: 'Password berhasil diubah. Silakan masuk dengan password baru.' })
 })

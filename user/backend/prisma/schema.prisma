@@ -141,6 +141,7 @@ model Accsmarket {
   sourceId        Int?     @map("source_id")
   isSold          Boolean  @default(false) @map("is_sold")
   reservedOrderId Int?     @map("reserved_order_id")
+  year            String?  @db.VarChar(255)
 
   @@index([sourceId])
   @@index([isSold])
@@ -174,6 +175,7 @@ model Testimonial {
   id           Int      @id @default(autoincrement())
   productId    Int      @map("product_id")
   createdById  Int      @map("created_by_id")
+  orderId      Int?     @unique @map("order_id")
   customerName String   @db.VarChar(255) @map("customer_name")
   message      String   @db.Text
   rating       Int      @default(5)

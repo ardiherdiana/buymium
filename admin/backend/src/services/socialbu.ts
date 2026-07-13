@@ -89,6 +89,34 @@ export async function createPost(
   return ''
 }
 
+export async function getAccountsMetrics(
+  accountIds: string | string[],
+  start: string,
+  end: string,
+  metrics: string,
+): Promise<Record<string, unknown>[]> {
+  const accounts = Array.isArray(accountIds) ? accountIds : [accountIds]
+  const res = await client().get('/insights/accounts/metrics', {
+    params: { accounts, start, end, metrics },
+  })
+  const raw = res.data
+  if (Array.isArray(raw?.data)) return raw.data
+  return []
+}
+
+export async function getPostsCounts(
+  accountId: string,
+  start: string,
+  end: string,
+): Promise<{ date: string; count: number }[]> {
+  const res = await client().get('/insights/posts/counts', {
+    params: { accounts: [accountId], start, end },
+  })
+  const raw = res.data
+  if (Array.isArray(raw?.data)) return raw.data
+  return []
+}
+
 export async function deletePost(sbPostId: string): Promise<void> {
   try {
     await client().delete(`/posts/${sbPostId}`)

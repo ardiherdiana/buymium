@@ -9,6 +9,9 @@ const router = Router()
 // GET /api/admin/users - List users (roleId=2 only) dengan stats pembelian
 router.get('/', requireAdmin, UsersController.index)
 
+// GET /api/admin/users/growth - Daily new-user counts (must precede /:id)
+router.get('/growth', requireAdmin, UsersController.growth)
+
 // GET /api/admin/users/:id - Get user detail
 router.get('/:id', requireAdmin, UsersController.show)
 

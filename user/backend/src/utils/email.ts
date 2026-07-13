@@ -66,25 +66,26 @@ const wrapper = (title: string, body: string, ctaUrl?: string, ctaLabel?: string
 </html>
 `
 
-export async function sendResetPasswordEmail(opts: {
+export async function sendResetPasswordOtpEmail(opts: {
   to: string
   name: string
-  resetUrl: string
+  otp: string
 }): Promise<void> {
   const body = `
     <p>Halo <strong>${opts.name}</strong>,</p>
-    <p>Kami menerima permintaan reset password untuk akun Buymium kamu. Klik tombol di bawah untuk membuat password baru:</p>
-    <p style="margin-top:16px;text-align:center;">
-      <a href="${opts.resetUrl}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;">Reset Password</a>
-    </p>
-    <p style="margin-top:16px;color:#6b7280;font-size:13px;">Atau salin link berikut ke browser:<br/><span style="color:#2563eb;">${opts.resetUrl}</span></p>
+    <p>Kami menerima permintaan reset password untuk akun Buymium kamu. Gunakan kode OTP berikut untuk membuat password baru:</p>
+    <div style="margin:24px auto;text-align:center;">
+      <div style="display:inline-block;background:#f1f5f9;border:2px dashed #cbd5e1;border-radius:12px;padding:16px 40px;">
+        <span style="font-size:36px;font-weight:800;letter-spacing:12px;color:#0f172a;font-family:monospace;">${opts.otp}</span>
+      </div>
+    </div>
     <p style="background:#fef3c7;border:1px solid #fcd34d;padding:12px;border-radius:8px;color:#92400e;font-size:13px;margin-top:16px;">
-      Link berlaku selama <strong>30 menit</strong>. Jika kamu tidak meminta reset password, abaikan email ini — password kamu tidak akan berubah.
+      Kode berlaku selama <strong>10 menit</strong>. Jika kamu tidak meminta reset password, abaikan email ini — password kamu tidak akan berubah.
     </p>
   `
   await send({
     to: opts.to,
-    subject: 'Reset password Buymium kamu',
+    subject: `${opts.otp} — Kode reset password Buymium`,
     html: wrapper('Reset Password', body),
   })
 }

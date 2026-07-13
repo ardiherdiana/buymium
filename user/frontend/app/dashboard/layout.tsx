@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
+import { MobileBottomNav } from "@/components/mobile-bottom-nav"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
@@ -28,9 +29,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <AppSidebar />
       <SidebarInset>
         <SiteHeader />
-        <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 @container/main">
+        <main className="flex flex-1 flex-col gap-4 p-4 pb-20 lg:gap-6 lg:p-6 @container/main md:pb-6">
           {children}
         </main>
+        <MobileBottomNav />
       </SidebarInset>
     </SidebarProvider>
   )

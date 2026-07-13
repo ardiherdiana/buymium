@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Dropdown } from "@/components/ui/dropdown-select"
+import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -37,23 +38,16 @@ interface OrderDetail {
   relatedOrders: OrderDetail[]
 }
 
-const STATUS_OPTIONS = [
-  { value: "pending", label: "Pending" },
-  { value: "waiting_confirmation", label: "Menunggu Verifikasi" },
-  { value: "paid", label: "Lunas" },
-  { value: "cancelled", label: "Dibatalkan" },
-]
-
 const statusVariant: Record<string, "warning" | "blue" | "completed" | "error"> = {
   pending: "warning",
-  waiting_confirmation: "blue",
+  awaiting_confirmation: "blue",
   paid: "completed",
   cancelled: "error",
 }
 
 const statusLabel: Record<string, string> = {
   pending: "Pending",
-  waiting_confirmation: "Menunggu Verifikasi",
+  awaiting_confirmation: "Menunggu Verifikasi",
   paid: "Lunas",
   cancelled: "Dibatalkan",
 }
@@ -70,18 +64,33 @@ export default function OrderDetailPage() {
     enabled: !!id,
   })
 
-  const [newStatus, setNewStatus] = useState("")
+  const [rejectNote, setRejectNote] = useState("")
+  const [proofPreviewOpen, setProofPreviewOpen] = useState(false)
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
 
-  const updateMutation = useMutation({
-    mutationFn: (status: string) => api.patch(`/orders/${id}/status`, { status }),
+  const confirmMutation = useMutation({
+    mutationFn: () => api.post(`/orders/${id}/confirm`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["order", id] })
       queryClient.invalidateQueries({ queryKey: ["orders"] })
-      alert.success("Berhasil", "Status pesanan berhasil diperbarui")
-      setNewStatus("")
+      alert.success("Berhasil", "Pesanan dikonfirmasi dan akun telah dikirim")
     },
     onError: () => {
-      alert.error("Gagal", "Gagal memperbarui status pesanan")
+      alert.error("Gagal", "Gagal mengonfirmasi pesanan")
+    },
+  })
+
+  const rejectMutation = useMutation({
+    mutationFn: () => api.post(`/orders/${id}/reject`, { adminNote: rejectNote }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order", id] })
+      queryClient.invalidateQueries({ queryKey: ["orders"] })
+      alert.success("Berhasil", "Pesanan ditolak")
+      setRejectNote("")
+      setRejectDialogOpen(false)
+    },
+    onError: () => {
+      alert.error("Gagal", "Gagal menolak pesanan")
     },
   })
 
@@ -106,8 +115,6 @@ export default function OrderDetailPage() {
     )
   }
 
-  const activeStatus = newStatus || order.status
-
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
@@ -131,61 +138,21 @@ export default function OrderDetailPage() {
         </Badge>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Info Pelanggan</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Nama</span>
-              <span className="font-medium">{order.user.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Email</span>
-              <span>{order.user.email}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Info Pembayaran</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {order.bankAccount && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Rekening</span>
-                <span className="font-medium">
-                  {order.bankAccount.bankName} · {order.bankAccount.accountNumber}
-                </span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total</span>
-              <span className="font-semibold text-foreground">{formatIDR(order.totalPrice)}</span>
-            </div>
-            {order.notes && (
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground shrink-0">Catatan</span>
-                <span className="text-right">{order.notes}</span>
-              </div>
-            )}
-            {order.paymentProof && (
-              <div className="mt-3">
-                <p className="text-muted-foreground mb-2">Bukti Pembayaran</p>
-                <a href={getProofImageUrl(order.paymentProof)} target="_blank" rel="noopener noreferrer">
-                  <img
-                    src={getProofImageUrl(order.paymentProof)}
-                    alt="Bukti pembayaran"
-                    className="rounded-md border max-h-48 object-contain"
-                  />
-                </a>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">Info Pelanggan</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Nama</span>
+            <span className="font-medium">{order.user.name}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Email</span>
+            <span>{order.user.email}</span>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-3">
@@ -200,10 +167,50 @@ export default function OrderDetailPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">Info Pembayaran</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          {order.bankAccount && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Rekening</span>
+              <span className="font-medium">
+                {order.bankAccount.bankName} · {order.bankAccount.accountNumber}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Total</span>
+            <span className="font-semibold text-foreground">{formatIDR(order.totalPrice)}</span>
+          </div>
+          {order.notes && (
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground shrink-0">Catatan</span>
+              <span className="text-right">{order.notes}</span>
+            </div>
+          )}
+          {order.paymentProof && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Bukti Pembayaran</span>
+              <button
+                type="button"
+                onClick={() => setProofPreviewOpen(true)}
+                className="font-medium text-primary underline underline-offset-2"
+              >
+                Lihat
+              </button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {order.inventoryItems.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Akun Terkirim</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {order.status === "paid" ? "Akun Terkirim" : "Kredensial Akun (akan dikirim)"}
+            </CardTitle>
           </CardHeader>
           {/* Desktop: table */}
           <CardContent className="p-0 hidden sm:block">
@@ -248,29 +255,60 @@ export default function OrderDetailPage() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium">Update Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <Dropdown
-              options={STATUS_OPTIONS}
-              value={activeStatus}
-              onChange={setNewStatus}
-              className="w-full sm:w-44"
+      {order.status === "awaiting_confirmation" && (
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button
+            className="w-full sm:w-auto"
+            disabled={confirmMutation.isPending}
+            onClick={() => confirmMutation.mutate()}
+          >
+            {confirmMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+            Konfirmasi Pembayaran & Kirim Akun
+          </Button>
+
+          <Button
+            variant="destructive"
+            className="w-full sm:w-auto"
+            onClick={() => setRejectDialogOpen(true)}
+          >
+            Tolak Pesanan
+          </Button>
+        </div>
+      )}
+
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogTitle>Tolak Pesanan</DialogTitle>
+          <Textarea
+            placeholder="Alasan penolakan (wajib diisi)"
+            value={rejectNote}
+            onChange={(e) => setRejectNote(e.target.value)}
+            rows={3}
+          />
+          <Button
+            variant="destructive"
+            className="w-full"
+            disabled={!rejectNote.trim() || rejectMutation.isPending}
+            onClick={() => rejectMutation.mutate()}
+          >
+            {rejectMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+            Tolak Pesanan
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {order?.paymentProof && (
+        <Dialog open={proofPreviewOpen} onOpenChange={setProofPreviewOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogTitle>Bukti Pembayaran</DialogTitle>
+            <img
+              src={getProofImageUrl(order.paymentProof)}
+              alt="Bukti pembayaran"
+              className="w-full rounded-md border object-contain"
             />
-            <Button
-              className="w-full sm:w-auto"
-              disabled={!newStatus || newStatus === order.status || updateMutation.isPending}
-              onClick={() => updateMutation.mutate(activeStatus)}
-            >
-              {updateMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-              Simpan
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }

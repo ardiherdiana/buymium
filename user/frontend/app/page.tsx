@@ -7,13 +7,16 @@ import {
   Headphones,
   Star,
   ArrowRight,
+  ImageOff,
 } from "lucide-react"
-import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { FaqAccordion } from "@/components/faq-accordion"
 import { ProductCardLink } from "@/components/product-card-link"
 import { LandingNavbar } from "@/components/landing-navbar"
-import { apiFetch, type Stats, type Product, type Testimonial } from "@/lib/api"
+import { apiFetch, resolveImageUrl, type Stats, type Product, type Testimonial } from "@/lib/api"
 
 async function getStats(): Promise<Stats> {
   try {
@@ -102,10 +105,10 @@ export default async function Page() {
       {/* ── Hero ── */}
       <section className="bg-gradient-to-b from-primary/5 to-background px-4 py-20 text-center">
         <div className="mx-auto max-w-3xl">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-green-500" />
+          <Badge variant="outline" className="mb-4 h-auto rounded-full px-3 py-1 text-muted-foreground">
+            <span className="mr-2 size-1.5 rounded-full bg-green-500" />
             Tidak ada biaya tersembunyi · Garansi 24 jam
-          </div>
+          </Badge>
           <h1 className="mb-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
             Platform Terpercaya<br />
             <span className="text-primary">Beli Akun Instagram</span>
@@ -153,6 +156,7 @@ export default async function Page() {
         </div>
       </section>
 
+
       {/* ── Cara Kerja ── */}
       <section id="cara-kerja" className="px-4 py-20">
         <div className="mx-auto max-w-4xl">
@@ -180,13 +184,15 @@ export default async function Page() {
                 desc: "Setelah dikonfirmasi, data akun (username, password, email, 2FA) langsung bisa di-download dari dashboard pesanan.",
               },
             ].map((step) => (
-              <div key={step.n} className="relative rounded-xl border border-border bg-card p-6">
-                <div className="mb-4 inline-flex size-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-                  {step.n}
-                </div>
-                <h3 className="mb-2 font-semibold">{step.title}</h3>
-                <p className="text-sm text-muted-foreground">{step.desc}</p>
-              </div>
+              <Card key={step.n} className="rounded-xl border">
+                <CardContent>
+                  <div className="mb-4 inline-flex size-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                    {step.n}
+                  </div>
+                  <h3 className="mb-2 font-semibold">{step.title}</h3>
+                  <p className="text-sm text-muted-foreground">{step.desc}</p>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
@@ -202,37 +208,46 @@ export default async function Page() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {products.map((product) => (
-                <ProductCardLink
-                  key={product.id}
-                  productId={product.id}
-                  className="group rounded-xl border border-border bg-card p-4 transition-shadow hover:shadow-md"
-                >
-                  <div className="mb-2 flex items-start justify-between gap-2">
-                    <h4 className="text-sm font-medium leading-snug group-hover:text-primary">
-                      {product.title}
-                    </h4>
-                    {product.isVerified && (
-                      <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-                    )}
-                  </div>
-                  <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
-                    {product.description}
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">
-                      {product.price > 0
-                        ? `Rp ${product.price.toLocaleString("id")}`
-                        : "Hubungi kami"}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {product.inStock} stok
-                    </span>
-                  </div>
-                  {product.rating > 0 && (
-                    <div className="mt-2">
-                      <StarRating rating={product.rating} />
-                    </div>
-                  )}
+                <ProductCardLink key={product.id} productId={product.id} slug={product.slug} className="group block">
+                  <Card className="rounded-xl border transition-shadow hover:shadow-md">
+                    <CardContent>
+                      <div className="mb-3 aspect-square w-full overflow-hidden rounded-lg bg-muted flex items-center justify-center">
+                        {resolveImageUrl(product.imageUrl) ? (
+                          <img
+                            src={resolveImageUrl(product.imageUrl)!}
+                            alt={product.title}
+                            className="size-full object-cover"
+                          />
+                        ) : (
+                          <ImageOff className="size-8 text-muted-foreground/50" />
+                        )}
+                      </div>
+                      <div className="mb-2 flex items-start justify-between gap-2">
+                        <h4 className="text-sm font-medium leading-snug group-hover:text-primary">
+                          {product.title}
+                        </h4>
+                        {product.isVerified && (
+                          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+                        )}
+                      </div>
+                      <p className="mb-3 whitespace-pre-line text-xs text-muted-foreground">
+                        {product.description}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold">
+                          {product.price > 0
+                            ? `Rp ${product.price.toLocaleString("id")}`
+                            : "Hubungi kami"}
+                        </span>
+                        <Badge variant="secondary">{product.inStock} stok</Badge>
+                      </div>
+                      {product.rating > 0 && (
+                        <div className="mt-2">
+                          <StarRating rating={product.rating} />
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </ProductCardLink>
               ))}
             </div>
@@ -256,13 +271,15 @@ export default async function Page() {
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {WHY_FEATURES.map((f) => (
-              <div key={f.title} className="rounded-xl border border-border bg-card p-5">
-                <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg bg-primary/10">
-                  <f.icon className="size-5 text-primary" />
-                </div>
-                <h3 className="mb-1 font-semibold">{f.title}</h3>
-                <p className="text-sm text-muted-foreground">{f.desc}</p>
-              </div>
+              <Card key={f.title} className="rounded-xl border">
+                <CardContent>
+                  <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg bg-primary/10">
+                    <f.icon className="size-5 text-primary" />
+                  </div>
+                  <h3 className="mb-1 font-semibold">{f.title}</h3>
+                  <p className="text-sm text-muted-foreground">{f.desc}</p>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
@@ -278,21 +295,26 @@ export default async function Page() {
           {testimonials.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {testimonials.map((t) => (
-                <div key={t.id} className="rounded-xl border border-border bg-card p-4">
-                  <div className="mb-3 flex items-center gap-3">
-                    <div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                      {t.buyerName ? t.buyerName[0].toUpperCase() : "U"}
+                <Card key={t.id} className="rounded-xl border">
+                  <CardContent>
+                    <div className="mb-3 flex items-center gap-3">
+                      <Avatar>
+                        {t.avatar && <AvatarImage src={t.avatar} alt={t.customerName} />}
+                        <AvatarFallback className="bg-primary/10 font-semibold text-primary">
+                          {t.customerName ? t.customerName[0].toUpperCase() : "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-medium">{t.customerName || "Pengguna"}</p>
+                        <StarRating rating={t.rating} />
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium">{t.buyerName || "Pengguna"}</p>
-                      <StarRating rating={t.rating} />
-                    </div>
-                  </div>
-                  {t.product && (
-                    <p className="mb-2 text-xs text-muted-foreground">{t.product.title}</p>
-                  )}
-                  <p className="text-sm text-muted-foreground">{t.content}</p>
-                </div>
+                    {t.product && (
+                      <p className="mb-2 text-xs text-muted-foreground">{t.product.title}</p>
+                    )}
+                    <p className="text-sm text-muted-foreground">{t.message}</p>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           ) : (
@@ -305,18 +327,22 @@ export default async function Page() {
                 { name: "Andi P.", content: "Enkripsi kredensial bikin tenang, data tidak sembarangan dibagikan. Support juga responsif waktu saya ada pertanyaan." },
                 { name: "Sari L.", content: "Platform paling profesional yang pernah saya coba untuk beli akun. Proses verifikasi pembayarannya transparan." },
               ].map((t, i) => (
-                <div key={i} className="rounded-xl border border-border bg-card p-4">
-                  <div className="mb-3 flex items-center gap-3">
-                    <div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                      {t.name[0]}
+                <Card key={i} className="rounded-xl border">
+                  <CardContent>
+                    <div className="mb-3 flex items-center gap-3">
+                      <Avatar>
+                        <AvatarFallback className="bg-primary/10 font-semibold text-primary">
+                          {t.name[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-medium">{t.name}</p>
+                        <StarRating rating={5} />
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium">{t.name}</p>
-                      <StarRating rating={5} />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{t.content}</p>
-                </div>
+                    <p className="text-sm text-muted-foreground">{t.content}</p>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}

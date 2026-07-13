@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Save, Loader2, ImagePlus, X, ShieldCheck, Star, ImageOff, Search, Trash2, RefreshCw } from "lucide-react"
+import { Save, Loader2, ImagePlus, X, ShieldCheck, ImageOff, Search, Trash2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -269,7 +269,6 @@ export default function ProductFormPage() {
 
   const priceValue = watch("price")
   const imageUrl = watch("imageUrl")
-  const ratingValue = watch("rating")
   const watchedVariants = watch("variants") ?? []
   const activeVariantCount = watchedVariants.length
   const previewPrice = activeVariantCount > 0 ? Math.min(...watchedVariants.map((v) => v.price || 0)) : priceValue
@@ -366,7 +365,7 @@ export default function ProductFormPage() {
             </CardContent>
           </Card>
 
-          {/* Inventory source + price variations + rating card */}
+          {/* Inventory source + price variations card */}
           <Card>
             <CardContent className="p-5 space-y-5">
               <div className="space-y-2">
@@ -521,10 +520,6 @@ export default function ProductFormPage() {
                 </div>
               )}
 
-              <div className="space-y-1.5 border-t pt-4">
-                <Label htmlFor="rating">Rating (0.0 - 5.0)</Label>
-                <Input id="rating" type="number" step="0.1" min="0" max="5" {...register("rating", { valueAsNumber: true })} placeholder="0.0" />
-              </div>
             </CardContent>
           </Card>
 
@@ -594,16 +589,6 @@ export default function ProductFormPage() {
                           {activeVariantCount > 0 ? `${activeVariantCount} opsi` : "stok otomatis"}
                         </span>
                       </div>
-                      {!!ratingValue && (
-                        <div className="mt-1.5 flex items-center gap-0.5">
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <Star
-                              key={s}
-                              className={`size-3 ${s <= Math.round(ratingValue) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`}
-                            />
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>

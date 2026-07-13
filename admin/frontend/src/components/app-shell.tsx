@@ -10,7 +10,7 @@ import { useTheme } from "@/components/theme-provider"
 import { AppSidebar, type NavGroup } from "@/components/app-sidebar"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
-  SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton,
+  SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuAction, SidebarMenuButton,
   SidebarMenuItem, SidebarProvider, SidebarTrigger, useSidebar,
 } from "@/components/ui/sidebar"
 import {
@@ -141,7 +141,7 @@ function typeLabel(type: string) {
   return map[type] ?? type.charAt(0).toUpperCase() + type.slice(1)
 }
 
-function ProfilePhoto({ path, username }: { path?: string; username: string }) {
+export function ProfilePhoto({ path, username }: { path?: string; username: string }) {
   if (!path) {
     return (
       <div className="size-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium shrink-0">
@@ -203,7 +203,6 @@ function AutopostingSidebarContent() {
 
       {/* Channel list */}
       <SidebarGroup>
-        <SidebarGroupLabel>Saluran</SidebarGroupLabel>
         <SidebarGroupContent>
           {isLoading ? (
             <p className="text-xs text-muted-foreground px-2 py-1">Loading...</p>
@@ -213,13 +212,13 @@ function AutopostingSidebarContent() {
                 {state === "expanded" && (
                   <div className="px-2 py-1">
                     <span className="text-[10px] font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
-                      {typeLabel(type)}
+                      {typeLabel(type)} ({chs.length})
                     </span>
                   </div>
                 )}
                 <SidebarMenu>
                   {chs.map((ch) => (
-                    <SidebarMenuItem key={ch.id} className="group/item">
+                    <SidebarMenuItem key={ch.id}>
                       <SidebarMenuButton
                         isActive={selectedId === ch.id}
                         onClick={() => select(ch)}
@@ -228,15 +227,16 @@ function AutopostingSidebarContent() {
                       >
                         <ProfilePhoto path={ch.profilePhotoPath} username={ch.username} />
                         <span className="flex-1 truncate">{ch.username}</span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(ch.id) }}
-                          disabled={deleteMutation.isPending}
-                          className="opacity-0 group-hover/item:opacity-100 text-sidebar-foreground/40 hover:text-destructive transition-all shrink-0"
-                          title="Hapus saluran"
-                        >
-                          <Trash2 className="size-3" />
-                        </button>
                       </SidebarMenuButton>
+                      <SidebarMenuAction
+                        showOnHover
+                        onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(ch.id) }}
+                        disabled={deleteMutation.isPending}
+                        className="text-sidebar-foreground/40 hover:text-destructive"
+                        title="Hapus saluran"
+                      >
+                        <Trash2 />
+                      </SidebarMenuAction>
                     </SidebarMenuItem>
                   ))}
                 </SidebarMenu>

@@ -64,6 +64,39 @@ export class UsersController {
     }
   }
 
+  static async growth(req: Request, res: Response): Promise<void> {
+    try {
+      const end = req.query.end ? new Date(String(req.query.end)) : new Date()
+      const start = req.query.start ? new Date(String(req.query.start)) : new Date(end.getTime() - 29 * 86400000)
+      end.setHours(23, 59, 59, 999)
+      start.setHours(0, 0, 0, 0)
+
+      const users = await db.user.findMany({
+        where: { roleId: { in: [2, 3] }, createdAt: { gte: start, lte: end } },
+        select: { createdAt: true },
+      })
+
+      const counts = new Map<string, number>()
+      for (const u of users) {
+        const key = u.createdAt.toISOString().slice(0, 10)
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+      }
+
+      const days: { date: string; count: number }[] = []
+      const cursor = new Date(start)
+      while (cursor <= end) {
+        const key = cursor.toISOString().slice(0, 10)
+        days.push({ date: key, count: counts.get(key) ?? 0 })
+        cursor.setDate(cursor.getDate() + 1)
+      }
+
+      res.json({ data: days, total: users.length })
+    } catch (err) {
+      console.error('[User Growth Error]', err)
+      res.status(500).json({ success: false, error: 'Failed to fetch user growth' })
+    }
+  }
+
   static async show(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params

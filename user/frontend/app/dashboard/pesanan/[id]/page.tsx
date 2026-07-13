@@ -6,7 +6,7 @@ import Image from "next/image"
 import {
   ArrowLeft, Upload, Download, Package, CheckCircle2,
   Clock, XCircle, Copy, Check, ImageIcon, Banknote,
-  ShoppingBag, AlertCircle, Loader2, FileImage, QrCode, Trash2,
+  ShoppingBag, AlertCircle, Loader2, FileImage, QrCode, Trash2, Star,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,7 @@ interface OrderDetail {
   paymentProofUrl?: string
   groupId?: string
   product: { id: number; title: string; price: number; section?: { title: string } }
+  variantLabel?: string | null
   bankAccount?: {
     id: number
     bankName: string
@@ -32,15 +33,17 @@ interface OrderDetail {
     accountNumber: string
     logo?: string
   }
+  hasTestimonial?: boolean
+  testimonial?: { rating: number; message: string } | null
   relatedOrders: OrderDetail[]
 }
 
 const STEPS = [
   { key: "pending",              label: "Pembayaran", icon: Banknote },
-  { key: "waiting_confirmation", label: "Verifikasi",  icon: Clock },
+  { key: "awaiting_confirmation", label: "Verifikasi",  icon: Clock },
   { key: "paid",                 label: "Lunas",       icon: CheckCircle2 },
 ]
-const STEP_ORDER = ["pending", "waiting_confirmation", "paid"]
+const STEP_ORDER = ["pending", "awaiting_confirmation", "paid"]
 
 const STATUS_CONFIG: Record<string, {
   label: string
@@ -54,7 +57,7 @@ const STATUS_CONFIG: Record<string, {
     badge: "bg-amber-500/15 text-amber-500 border-amber-500/20",
     accent: "border-border",
   },
-  waiting_confirmation: {
+  awaiting_confirmation: {
     label: "Menunggu Verifikasi",
     desc: "Bukti pembayaran sedang diverifikasi oleh admin. Biasanya < 15 menit.",
     badge: "bg-blue-500/15 text-blue-400 border-blue-500/20",
@@ -77,7 +80,7 @@ const STATUS_CONFIG: Record<string, {
 function StatusIcon({ status, className = "size-5" }: { status: string; className?: string }) {
   if (status === "paid") return <CheckCircle2 className={`${className} text-green-400`} />
   if (status === "cancelled") return <XCircle className={`${className} text-red-400`} />
-  if (status === "waiting_confirmation") return <Clock className={`${className} text-blue-400`} />
+  if (status === "awaiting_confirmation") return <Clock className={`${className} text-blue-400`} />
   return <Clock className={`${className} text-amber-400`} />
 }
 
@@ -156,12 +159,36 @@ function UploadZone({ onFile, uploading, success }: {
 }) {
   const ref = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  function pickFile(f: File) {
+    setSelectedFile(f)
+    setPreviewUrl(URL.createObjectURL(f))
+  }
+
+  function clearFile() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    setSelectedFile(null)
+    setPreviewUrl(null)
+    if (ref.current) ref.current.value = ""
+  }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     setDragging(false)
     const f = e.dataTransfer.files?.[0]
-    if (f) onFile(f)
+    if (f) pickFile(f)
+  }
+
+  if (success) {
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-green-500/30 bg-green-500/5 p-6 text-center">
+        <CheckCircle2 className="size-8 text-green-400" />
+        <p className="text-sm font-medium text-green-400">Bukti berhasil dikirim!</p>
+        <p className="text-xs text-muted-foreground">Admin sedang memverifikasi pembayaranmu.</p>
+      </div>
+    )
   }
 
   return (
@@ -171,13 +198,24 @@ function UploadZone({ onFile, uploading, success }: {
         type="file"
         accept="image/*"
         className="sr-only"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f) }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) pickFile(f) }}
       />
-      {success ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-green-500/30 bg-green-500/5 p-6 text-center">
-          <CheckCircle2 className="size-8 text-green-400" />
-          <p className="text-sm font-medium text-green-400">Bukti berhasil dikirim!</p>
-          <p className="text-xs text-muted-foreground">Admin sedang memverifikasi pembayaranmu.</p>
+      {selectedFile ? (
+        <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border p-6 text-center">
+          {previewUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewUrl} alt="Preview bukti transfer" className="max-h-48 rounded-lg border object-contain" />
+          )}
+          <p className="text-sm font-medium">{selectedFile.name}</p>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={clearFile} disabled={uploading}>
+              Ganti File
+            </Button>
+            <Button size="sm" onClick={() => onFile(selectedFile)} disabled={uploading}>
+              {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+              {uploading ? "Mengirim..." : "Kirim Bukti"}
+            </Button>
+          </div>
         </div>
       ) : (
         <div
@@ -191,30 +229,105 @@ function UploadZone({ onFile, uploading, success }: {
               : "border-border hover:border-primary/50 hover:bg-muted/30"
           }`}
         >
-          {uploading ? (
-            <Loader2 className="size-8 animate-spin text-primary" />
-          ) : (
-            <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-              <FileImage className="size-6 text-muted-foreground" />
-            </div>
-          )}
+          <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+            <FileImage className="size-6 text-muted-foreground" />
+          </div>
           <div>
-            <p className="text-sm font-medium">
-              {uploading ? "Mengupload bukti..." : "Upload Bukti Transfer"}
-            </p>
+            <p className="text-sm font-medium">Upload Bukti Transfer</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {uploading ? "Mohon tunggu sebentar" : "Klik atau drag & drop gambar ke sini · JPG, PNG, WEBP"}
+              Klik atau drag & drop gambar ke sini · JPG, PNG, WEBP
             </p>
           </div>
-          {!uploading && (
-            <Button size="sm" variant="outline" className="pointer-events-none">
-              <Upload className="size-3.5" />
-              Pilih File
-            </Button>
-          )}
+          <Button size="sm" variant="outline" className="pointer-events-none">
+            <Upload className="size-3.5" />
+            Pilih File
+          </Button>
         </div>
       )}
     </>
+  )
+}
+
+function ReviewForm({ orderId, token, onSubmitted }: { orderId: number; token: string; onSubmitted: (rating: number, message: string) => void }) {
+  const [rating, setRating] = useState(0)
+  const [hovered, setHovered] = useState(0)
+  const [message, setMessage] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit() {
+    if (rating < 1 || !message.trim()) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/testimonials`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ orderId, rating, message: message.trim() }),
+      })
+      if (res.ok) {
+        onSubmitted(rating, message.trim())
+      } else {
+        const data = await res.json().catch(() => null)
+        setError(data?.error || "Gagal mengirim ulasan")
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="p-5 space-y-3">
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((s) => (
+          <button
+            key={s}
+            type="button"
+            onMouseEnter={() => setHovered(s)}
+            onMouseLeave={() => setHovered(0)}
+            onClick={() => setRating(s)}
+          >
+            <Star
+              className={`size-7 transition-colors ${
+                s <= (hovered || rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"
+              }`}
+            />
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        rows={3}
+        placeholder="Ceritakan pengalamanmu dengan produk ini..."
+        className="w-full rounded-lg border border-border bg-background p-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <Button
+        className="w-full"
+        disabled={submitting || rating < 1 || !message.trim()}
+        onClick={handleSubmit}
+      >
+        {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
+        Kirim Ulasan
+      </Button>
+    </div>
+  )
+}
+
+function ReviewDisplay({ rating, message }: { rating: number; message: string }) {
+  return (
+    <div className="p-5 space-y-3">
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((s) => (
+          <Star
+            key={s}
+            className={`size-5 ${s <= rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`}
+          />
+        ))}
+      </div>
+      <p className="text-sm text-muted-foreground whitespace-pre-line">{message}</p>
+    </div>
   )
 }
 
@@ -240,6 +353,8 @@ export default function PesananDetailPage() {
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [submittedReview, setSubmittedReview] = useState<{ rating: number; message: string } | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -282,10 +397,30 @@ export default function PesananDetailPage() {
       })
       if (res.ok) {
         setUploadSuccess(true)
-        setOrder((prev) => prev ? { ...prev, status: "waiting_confirmation" } : prev)
+        setOrder((prev) => prev ? { ...prev, status: "awaiting_confirmation" } : prev)
       }
     } finally {
       setUploading(false)
+    }
+  }
+
+  async function handleDownload() {
+    if (!token || !order) return
+    setDownloading(true)
+    try {
+      const res = await fetch(`${API_BASE}/orders/${order.id}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `buymium-order-${order.id}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -339,7 +474,7 @@ export default function PesananDetailPage() {
                 <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed max-w-xs">{cfg.desc}</p>
               </div>
             </div>
-            <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${cfg.badge}`}>
+            <span className={`hidden shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium sm:inline-block ${cfg.badge}`}>
               {cfg.label}
             </span>
           </div>
@@ -367,42 +502,6 @@ export default function PesananDetailPage() {
               })}
             </span>
           </div>
-
-          {/* Cancel button — only pending */}
-          {isPending && (
-            <div className="mt-4">
-              {!cancelConfirm ? (
-                <button
-                  onClick={() => setCancelConfirm(true)}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  <Trash2 className="size-3.5" />
-                  Batalkan pesanan ini
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5">
-                  <span className="flex-1 text-xs text-muted-foreground">Yakin ingin membatalkan pesanan?</span>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="h-7 text-xs"
-                    disabled={cancelling}
-                    onClick={handleCancel}
-                  >
-                    {cancelling ? <Loader2 className="size-3 animate-spin" /> : "Ya, batalkan"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-xs"
-                    onClick={() => setCancelConfirm(false)}
-                  >
-                    Tidak
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
@@ -419,7 +518,7 @@ export default function PesananDetailPage() {
         <div className="divide-y divide-border">
           {allOrders.map((o) => (
             <div key={o.id} className="flex items-start gap-4 px-5 py-4">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div className="hidden size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:flex">
                 <Package className="size-5" />
               </div>
               <div className="min-w-0 flex-1">
@@ -427,8 +526,13 @@ export default function PesananDetailPage() {
                 {o.product?.section && (
                   <p className="mt-0.5 text-xs text-muted-foreground">{o.product.section.title}</p>
                 )}
+                {o.variantLabel && (
+                  <span className="mt-1 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {o.variantLabel}
+                  </span>
+                )}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {o.quantity}x · Rp{(o.product?.price ?? 0).toLocaleString("id")}/akun
+                  {o.quantity}x · Rp{Math.round(o.totalPrice / o.quantity).toLocaleString("id")}/akun
                 </p>
               </div>
               <p className="shrink-0 text-sm font-semibold">Rp{o.totalPrice.toLocaleString("id")}</p>
@@ -508,13 +612,34 @@ export default function PesananDetailPage() {
             </div>
           </div>
           <div className="p-5">
-            <Button className="w-full" asChild>
-              <a href={`${API_BASE}/orders/${order.id}/download`} target="_blank" rel="noreferrer">
-                <Download className="size-4" />
-                Download Kredensial Akun
-              </a>
+            <Button className="w-full" onClick={handleDownload} disabled={downloading}>
+              {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              Download Kredensial Akun
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* ── Review / Ulasan (paid) ──────────────────────────────────────── */}
+      {isDone && token && !order.hasTestimonial && !submittedReview && (
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="flex items-center gap-2.5 border-b border-border px-5 py-3.5">
+            <Star className="size-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Beri Ulasan</h2>
+          </div>
+          <ReviewForm orderId={order.id} token={token} onSubmitted={(rating, message) => setSubmittedReview({ rating, message })} />
+        </div>
+      )}
+      {isDone && (order.hasTestimonial || submittedReview) && (
+        <div className="rounded-2xl border border-green-500/20 bg-card overflow-hidden">
+          <div className="flex items-center gap-2.5 border-b border-green-500/15 bg-green-500/5 px-5 py-3.5">
+            <CheckCircle2 className="size-4 text-green-400" />
+            <h2 className="text-sm font-semibold text-green-400">Ulasanmu</h2>
+          </div>
+          <ReviewDisplay
+            rating={submittedReview?.rating ?? order.testimonial?.rating ?? 0}
+            message={submittedReview?.message ?? order.testimonial?.message ?? ""}
+          />
         </div>
       )}
 
@@ -532,6 +657,42 @@ export default function PesananDetailPage() {
               className="w-full rounded-xl border border-border object-contain max-h-80"
             />
           </div>
+        </div>
+      )}
+
+      {/* Cancel button — only pending */}
+      {isPending && (
+        <div className="flex justify-center pt-2">
+          {!cancelConfirm ? (
+            <button
+              onClick={() => setCancelConfirm(true)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
+            >
+              <Trash2 className="size-3.5" />
+              Batalkan pesanan ini
+            </button>
+          ) : (
+            <div className="flex w-full items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5">
+              <span className="flex-1 text-xs text-muted-foreground">Yakin ingin membatalkan pesanan?</span>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-7 text-xs"
+                disabled={cancelling}
+                onClick={handleCancel}
+              >
+                {cancelling ? <Loader2 className="size-3 animate-spin" /> : "Ya, batalkan"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() => setCancelConfirm(false)}
+              >
+                Tidak
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
