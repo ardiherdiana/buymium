@@ -63,8 +63,13 @@ export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: b
   const [notFound, setNotFound] = useState(false)
   const [buying, setBuying] = useState(false)
   const [page, setPage] = useState(1)
-  const [selected, setSelected] = useState<Set<number>>(new Set())
+  // Keyed by variantId (or "none" for products without variants) so switching
+  // between follower tiers doesn't clear what was already checked elsewhere.
+  const [selectedByVariant, setSelectedByVariant] = useState<Record<string, Set<number>>>({})
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null)
+
+  const variantKey = String(selectedVariantId ?? "none")
+  const selected = selectedByVariant[variantKey] ?? new Set<number>()
 
   useEffect(() => {
     fetch(`${API_BASE}/products/${id}`)
@@ -98,42 +103,60 @@ export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: b
   }, [id])
 
   function toggleStock(stockId: number) {
-    setSelected((prev) => {
-      const next = new Set(prev)
+    setSelectedByVariant((prev) => {
+      const next = new Set(prev[variantKey] ?? [])
       if (next.has(stockId)) next.delete(stockId)
       else next.add(stockId)
-      return next
+      return { ...prev, [variantKey]: next }
     })
   }
 
   function togglePageAll() {
     const pageIds = pagedStocks.map((s) => s.id)
     const allChecked = pageIds.every((sid) => selected.has(sid))
-    setSelected((prev) => {
-      const next = new Set(prev)
+    setSelectedByVariant((prev) => {
+      const next = new Set(prev[variantKey] ?? [])
       if (allChecked) pageIds.forEach((sid) => next.delete(sid))
       else pageIds.forEach((sid) => next.add(sid))
-      return next
+      return { ...prev, [variantKey]: next }
     })
   }
 
   function selectVariant(variantId: number | null) {
     setSelectedVariantId(variantId)
-    setSelected(new Set())
     setPage(1)
   }
 
   async function submitOrder(authToken: string) {
     if (!product) return
     setBuying(true)
-    const quantity = selected.size > 0 ? selected.size : 1
-    const stockIds = selected.size > 0 ? Array.from(selected) : undefined
     try {
-      const res = await fetch(`${API_BASE}/orders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ productId: product.id, quantity, variantId: selectedVariantId ?? undefined, stockIds }),
-      })
+      const entries = Object.entries(selectedByVariant).filter(([, ids]) => ids.size > 0)
+
+      let res: Response
+      if (entries.length > 1) {
+        const items = entries.map(([key, ids]) => ({
+          productId: product.id,
+          quantity: ids.size,
+          variantId: key === "none" ? undefined : Number(key),
+          stockIds: Array.from(ids),
+        }))
+        res = await fetch(`${API_BASE}/orders/cart`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ items }),
+        })
+      } else {
+        const [key, ids] = entries[0] ?? [variantKey, selected]
+        const quantity = ids.size > 0 ? ids.size : 1
+        const stockIds = ids.size > 0 ? Array.from(ids) : undefined
+        const variantId = key === "none" ? undefined : Number(key)
+        res = await fetch(`${API_BASE}/orders`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ productId: product.id, quantity, variantId, stockIds }),
+        })
+      }
       if (res.ok) {
         const data = await res.json()
         router.push(`/dashboard/pesanan/${data.orderId ?? data.firstOrderId ?? ""}`)
@@ -190,8 +213,14 @@ export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: b
 
   const selectedCount = selected.size
   const unitPrice = selectedVariant ? selectedVariant.price : product.price
-  const totalPrice = unitPrice * (selectedCount || 1)
   const availableForDisplay = selectedVariant ? selectedVariant.availableStock : product.inStock
+
+  // Grand total across every variant tab that has checked accounts, not just the
+  // one currently in view - selections persist when switching tiers.
+  const priceForKey = (key: string) => key === "none" ? product.price : (variants.find((v) => v.id === Number(key))?.price ?? product.price)
+  const totalSelectedCount = Object.values(selectedByVariant).reduce((s, ids) => s + ids.size, 0)
+  const totalSelectedPrice = Object.entries(selectedByVariant).reduce((s, [key, ids]) => s + priceForKey(key) * ids.size, 0)
+  const totalPrice = totalSelectedCount > 0 ? totalSelectedPrice : unitPrice
 
   const priceRange = variants.length > 0
     ? { min: Math.min(...variants.map((v) => v.price)), max: Math.max(...variants.map((v) => v.price)) }
@@ -413,10 +442,10 @@ export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: b
         <div className="flex items-center justify-between gap-3 sm:gap-4">
           <div className="min-w-0">
             <p className="truncate text-xs text-muted-foreground">
-              {selectedCount > 0 ? `${selectedCount} akun dipilih` : "Harga per akun"}
+              {totalSelectedCount > 0 ? `${totalSelectedCount} akun dipilih` : "Harga per akun"}
             </p>
             <p className="truncate text-lg font-bold sm:text-xl">
-              {needsVariantSelection && priceRange ? (
+              {needsVariantSelection && priceRange && totalSelectedCount === 0 ? (
                 priceRange.min === priceRange.max
                   ? `Rp ${priceRange.min.toLocaleString("id")}`
                   : `Rp ${priceRange.min.toLocaleString("id")} - Rp ${priceRange.max.toLocaleString("id")}`
@@ -428,14 +457,14 @@ export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: b
             </p>
           </div>
 
-          {needsVariantSelection ? (
+          {needsVariantSelection && totalSelectedCount === 0 ? (
             <Button size="lg" disabled variant="outline" className="shrink-0">
               Pilih tingkatan dulu
             </Button>
-          ) : availableForDisplay > 0 ? (
+          ) : availableForDisplay > 0 || totalSelectedCount > 0 ? (
             <Button size="lg" onClick={handleBuy} disabled={buying} className="shrink-0">
               <ShoppingCart className="size-4" />
-              {buying ? "Memproses..." : selectedCount > 0 ? `Beli ${selectedCount} Akun` : "Beli Sekarang"}
+              {buying ? "Memproses..." : totalSelectedCount > 0 ? `Beli ${totalSelectedCount} Akun` : "Beli Sekarang"}
             </Button>
           ) : (
             <Button size="lg" disabled variant="outline" className="shrink-0">

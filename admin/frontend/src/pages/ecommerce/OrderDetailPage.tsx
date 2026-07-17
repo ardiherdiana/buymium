@@ -20,6 +20,16 @@ interface InventoryItem {
   username: string | null
   email: string | null
   password: string | null
+  passwordEmail?: string | null
+  twoFactorAuth?: string | null
+  currentFollowers?: number | null
+  targetFollowers?: number | null
+  accountStatus?: string | null
+  loginApp?: string | null
+  phoneModel?: string | null
+  year?: string | null
+  capital?: number | null
+  isAccsmarket: boolean
 }
 
 interface OrderDetail {
@@ -28,7 +38,9 @@ interface OrderDetail {
   user: { id: number; name: string; email: string }
   product: { id: number; title: string; section?: { title: string } }
   totalPrice: number
+  subtotal?: number
   quantity: number
+  variantLabel?: string | null
   status: string
   paymentProof?: string
   notes?: string
@@ -50,6 +62,179 @@ const statusLabel: Record<string, string> = {
   awaiting_confirmation: "Menunggu Verifikasi",
   paid: "Lunas",
   cancelled: "Dibatalkan",
+}
+
+function AccountStatusBadge({ status }: { status?: string | null }) {
+  const s = status?.toLowerCase()
+  return (
+    <Badge variant={s === "completed" ? "completed" : s === "error" ? "destructive" : "progress"}>
+      {s === "completed" ? "Selesai" : s === "error" ? "Error" : "Proses"}
+    </Badge>
+  )
+}
+
+function AccountCredentials({ items }: { items: InventoryItem[] }) {
+  return (
+    <>
+      {/* Desktop: table */}
+      <CardContent className="p-0 hidden sm:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Email</TableHead>
+              <TableHead>Username</TableHead>
+              <TableHead>Password</TableHead>
+              <TableHead>Saat Ini</TableHead>
+              <TableHead>Target</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Aplikasi Login</TableHead>
+              <TableHead>Modal</TableHead>
+              <TableHead>HP</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((acc) => (
+              <TableRow key={acc.id}>
+                <TableCell className="text-xs text-muted-foreground">{acc.email ?? "-"}</TableCell>
+                <TableCell className="font-medium text-sm">{acc.username ?? "-"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{acc.password ?? "-"}</TableCell>
+                <TableCell>{acc.currentFollowers?.toLocaleString("id-ID") ?? "-"}</TableCell>
+                <TableCell>{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</TableCell>
+                <TableCell><AccountStatusBadge status={acc.accountStatus} /></TableCell>
+                <TableCell className="text-xs text-muted-foreground">{acc.loginApp ?? "-"}</TableCell>
+                <TableCell>{acc.capital ? formatIDR(acc.capital) : "-"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{acc.phoneModel ?? "-"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+      {/* Mobile: cards */}
+      <CardContent className="sm:hidden p-4 space-y-3">
+        {items.map((acc) => (
+          <div key={acc.id} className="rounded-md border p-3 space-y-1.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">{acc.username ?? "-"}</p>
+                <p className="text-xs text-muted-foreground truncate">{acc.email ?? "-"}</p>
+              </div>
+              <AccountStatusBadge status={acc.accountStatus} />
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Password</span>
+              <span className="font-mono">{acc.password ?? "-"}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Followers</span>
+                <span className="font-medium">{acc.currentFollowers?.toLocaleString("id-ID") ?? "-"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Target</span>
+                <span className="font-medium">{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Modal</span>
+                <span className="font-medium">{acc.capital ? formatIDR(acc.capital) : "-"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">HP</span>
+                <span className="font-medium truncate">{acc.phoneModel ?? "-"}</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t text-xs text-muted-foreground">
+              {acc.loginApp ?? "-"}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </>
+  )
+}
+
+function AccsmarketCredentials({ items }: { items: InventoryItem[] }) {
+  return (
+    <>
+      {/* Desktop: table */}
+      <CardContent className="p-0 hidden sm:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Email</TableHead>
+              <TableHead>Password Email</TableHead>
+              <TableHead>Username</TableHead>
+              <TableHead>Password</TableHead>
+              <TableHead>Saat Ini</TableHead>
+              <TableHead>Target</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>2FA</TableHead>
+              <TableHead>Tahun</TableHead>
+              <TableHead>Modal</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((acc) => (
+              <TableRow key={acc.id}>
+                <TableCell className="text-xs text-muted-foreground">{acc.email ?? "-"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{acc.passwordEmail ?? "-"}</TableCell>
+                <TableCell className="font-medium text-sm">{acc.username ?? "-"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{acc.password ?? "-"}</TableCell>
+                <TableCell>{acc.currentFollowers?.toLocaleString("id-ID") ?? "-"}</TableCell>
+                <TableCell>{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</TableCell>
+                <TableCell><AccountStatusBadge status={acc.accountStatus} /></TableCell>
+                <TableCell className="text-xs text-muted-foreground">{acc.twoFactorAuth ?? "-"}</TableCell>
+                <TableCell className="text-xs">{acc.year ?? "-"}</TableCell>
+                <TableCell>{acc.capital ? formatIDR(acc.capital) : "-"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+      {/* Mobile: cards */}
+      <CardContent className="sm:hidden p-4 space-y-3">
+        {items.map((acc) => (
+          <div key={acc.id} className="rounded-md border p-3 space-y-1.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">{acc.username ?? "-"}</p>
+                <p className="text-xs text-muted-foreground truncate">{acc.email ?? "-"}</p>
+              </div>
+              <AccountStatusBadge status={acc.accountStatus} />
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Password Email</span>
+              <span className="font-mono">{acc.passwordEmail ?? "-"}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Password</span>
+              <span className="font-mono">{acc.password ?? "-"}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Followers</span>
+                <span className="font-medium">{acc.currentFollowers?.toLocaleString("id-ID") ?? "-"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Target</span>
+                <span className="font-medium">{acc.targetFollowers?.toLocaleString("id-ID") ?? "-"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Modal</span>
+                <span className="font-medium">{acc.capital ? formatIDR(acc.capital) : "-"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Tahun</span>
+                <span className="font-medium">{acc.year ?? "-"}</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t text-xs text-muted-foreground font-mono">
+              {acc.twoFactorAuth ?? "-"}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </>
+  )
 }
 
 export default function OrderDetailPage() {
@@ -115,6 +300,19 @@ export default function OrderDetailPage() {
     )
   }
 
+  const allOrders = order.relatedOrders?.length > 0 ? order.relatedOrders : [order]
+  const grandSubtotal = allOrders.reduce((s, o) => s + (o.subtotal ?? o.totalPrice), 0)
+  const grandTotal = grandSubtotal
+
+  // Same product bought across multiple follower tiers (e.g. 1K + 2K) should read as
+  // one product card with each variant as a sub-row, not a repeated product block.
+  const productGroups: { product: OrderDetail["product"]; items: OrderDetail[] }[] = []
+  for (const o of allOrders) {
+    let group = productGroups.find((g) => g.product.id === o.product.id)
+    if (!group) { group = { product: o.product, items: [] }; productGroups.push(group) }
+    group.items.push(o)
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
@@ -158,12 +356,37 @@ export default function OrderDetailPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium">Produk</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm space-y-1">
-          <p className="font-medium">{order.product.title}</p>
-          {order.product.section && (
-            <p className="text-muted-foreground">{order.product.section.title}</p>
-          )}
-          <p className="text-muted-foreground">Qty: {order.quantity}</p>
+        <CardContent className="p-0">
+          <div className="divide-y divide-border">
+            {productGroups.map(({ product, items }) => (
+              <div key={product.id}>
+                <div className="px-5 pt-4 pb-2">
+                  <p className="font-medium text-sm truncate">{product.title}</p>
+                  {product.section && (
+                    <p className="text-xs text-muted-foreground">{product.section.title}</p>
+                  )}
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Variasi</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Subtotal</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((o) => (
+                      <TableRow key={o.id}>
+                        <TableCell className="text-sm">{o.variantLabel ?? "-"}</TableCell>
+                        <TableCell className="text-right text-sm">{o.quantity}</TableCell>
+                        <TableCell className="text-right text-sm font-semibold">{formatIDR(o.subtotal ?? o.totalPrice)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
@@ -181,8 +404,12 @@ export default function OrderDetailPage() {
             </div>
           )}
           <div className="flex justify-between">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span>{formatIDR(grandSubtotal)}</span>
+          </div>
+          <div className="flex justify-between">
             <span className="text-muted-foreground">Total</span>
-            <span className="font-semibold text-foreground">{formatIDR(order.totalPrice)}</span>
+            <span className="font-semibold text-foreground">{formatIDR(grandTotal)}</span>
           </div>
           {order.notes && (
             <div className="flex justify-between gap-4">
@@ -205,55 +432,37 @@ export default function OrderDetailPage() {
         </CardContent>
       </Card>
 
-      {order.inventoryItems.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">
-              {order.status === "paid" ? "Akun Terkirim" : "Kredensial Akun (akan dikirim)"}
-            </CardTitle>
-          </CardHeader>
-          {/* Desktop: table */}
-          <CardContent className="p-0 hidden sm:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Password</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {order.inventoryItems.map((stock) => (
-                  <TableRow key={stock.id}>
-                    <TableCell className="font-mono text-xs">{stock.username}</TableCell>
-                    <TableCell className="font-mono text-xs">{stock.email || "-"}</TableCell>
-                    <TableCell className="font-mono text-xs">{stock.password}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-          {/* Mobile: cards */}
-          <CardContent className="sm:hidden p-4 space-y-3">
-            {order.inventoryItems.map((stock) => (
-              <div key={stock.id} className="rounded-md border p-3 space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Username</span>
-                  <span className="font-mono font-medium">{stock.username}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Email</span>
-                  <span className="font-mono">{stock.email || "-"}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Password</span>
-                  <span className="font-mono">{stock.password}</span>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      {order.inventoryItems.length > 0 && (() => {
+        // A multi-variant cart order can mix Account (non-accsmarket) and Accsmarket
+        // rows across its lines - render each kind in its own matching table instead
+        // of picking one type from the first item and dropping the rest.
+        const accountItems = order.inventoryItems.filter((i) => !i.isAccsmarket)
+        const accsmarketItems = order.inventoryItems.filter((i) => i.isAccsmarket)
+        return (
+          <>
+            {accountItems.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium">
+                    {order.status === "paid" ? "Akun Terkirim" : "Kredensial Akun (akan dikirim)"}
+                  </CardTitle>
+                </CardHeader>
+                <AccountCredentials items={accountItems} />
+              </Card>
+            )}
+            {accsmarketItems.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium">
+                    {order.status === "paid" ? "Akun Terkirim (AccsMarket)" : "Kredensial Akun AccsMarket (akan dikirim)"}
+                  </CardTitle>
+                </CardHeader>
+                <AccsmarketCredentials items={accsmarketItems} />
+              </Card>
+            )}
+          </>
+        )
+      })()}
 
       {order.status === "awaiting_confirmation" && (
         <div className="flex flex-col sm:flex-row gap-3">

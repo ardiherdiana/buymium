@@ -6,6 +6,12 @@ import { AccsmarketsService } from './management/accsmarketsService'
 
 export function startScheduler() {
   cron.schedule('*/60 * * * * *', async () => {
+    await expireStaleOrders()
+  })
+
+  console.log('[Scheduler] Order expiry job started - runs every 60 seconds')
+
+  cron.schedule('*/60 * * * * *', async () => {
     try {
       const now = new Date()
 
@@ -43,6 +49,30 @@ export function startScheduler() {
   })
 
   console.log('[Scheduler] Midnight sync & scan job scheduled - runs daily at 00:00')
+}
+
+// Orders left unpaid for more than 24h are auto-cancelled and their reserved
+// Account/Accsmarket rows released back to available stock - mirrors the manual
+// reject flow in ecommerce/orders.ts so this stays authoritative regardless of
+// whether the admin or user frontend happens to be the one loading the order.
+async function expireStaleOrders() {
+  try {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const staleOrders = await db.order.findMany({
+      where: { status: 'pending', createdAt: { lt: cutoff } },
+      select: { id: true },
+    })
+    if (staleOrders.length === 0) return
+
+    const ids = staleOrders.map(o => o.id)
+    await db.account.updateMany({ where: { reservedOrderId: { in: ids } }, data: { reservedOrderId: null } })
+    await db.accsmarket.updateMany({ where: { reservedOrderId: { in: ids } }, data: { reservedOrderId: null } })
+    await db.order.updateMany({ where: { id: { in: ids } }, data: { status: 'cancelled' } })
+
+    console.log(`[Scheduler] Auto-cancelled ${ids.length} stale pending order(s) past 24h`)
+  } catch (err) {
+    logger.error('[Scheduler] Order expiry job failed:', err)
+  }
 }
 
 async function syncAccounts() {

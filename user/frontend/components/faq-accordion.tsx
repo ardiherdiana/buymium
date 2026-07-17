@@ -24,7 +24,7 @@ const FAQS = [
   },
   {
     q: "Bagaimana cara login ke akun yang saya beli?",
-    a: "Bisa langsung login pakai username dan password nya, ga perlu login gmail. Kalau ada OTP, silakan kunjungi website dengan cari di google dengan kata kunci buymium.store. Masukkan alamat email yang diberikan admin pada kolom yang tersedia — jika sesuai, kode akan otomatis muncul di layar untuk langsung Anda salin.",
+    a: "Setelah pembayaran dikonfirmasi, Anda bisa download file berisi data akun (username, password, email, 2FA jika ada) lengkap dengan panduan cara login-nya dari halaman riwayat pesanan Anda. Kalau masih ada yang kurang jelas, silakan tanya admin melalui halaman Kontak.",
   },
   {
     q: "Bagaimana cara menghindari suspend?",
@@ -32,7 +32,7 @@ const FAQS = [
   },
   {
     q: "Apakah ada garansi jika akun bermasalah?",
-    a: "Ada. Jika akun mengalami suspend/banned/disable, penjual akan memberikan: 1) ganti gratis 1 akun atau gratis isi followers sejumlah yang dipesan, atau 2) dikirim ke akun lain milik pembeli, atau 3) refund 70% cash ke rekening pembeli. Silakan hubungi admin untuk klaim garansi.",
+    a: "Ada. Jika akun mengalami suspend/banned/disable, penjual akan memberikan: 1) ganti gratis 1 akun, atau 2) refund 60% cash ke rekening pembeli. Silakan hubungi admin untuk klaim garansi.",
   },
   {
     q: "Apakah ada minimum pembelian?",

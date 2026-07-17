@@ -1,14 +1,20 @@
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { Search } from "lucide-react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useNavigate } from "react-router-dom"
+import { Search, Trash2 } from "lucide-react"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { EmptyRow, LoadingRow, Pagination } from "@/components/ui/table-extras"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
 
@@ -70,11 +76,57 @@ interface UsersResponse {
   meta: { total: number; page: number; limit: number; totalPages: number }
 }
 
+function DeleteUserButton({ user }: { user: User }) {
+  const queryClient = useQueryClient()
+  const { mutate, isPending } = useMutation({
+    mutationFn: () => api.delete(`/users/${user.id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] })
+    },
+  })
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-destructive hover:text-destructive"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Hapus pengguna?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Pengguna <strong>{user.name}</strong> ({user.email}) akan dihapus secara permanen. Tindakan ini tidak dapat dibatalkan.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Batal</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            onClick={(e) => { e.stopPropagation(); mutate() }}
+            disabled={isPending}
+          >
+            {isPending ? "Menghapus..." : "Hapus"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
 const PAGE_SIZE = 20
 
 export default function UsersPage() {
+  const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState("")
+
+  const goToOrders = (user: User) => navigate(`/ecommerce/orders?userId=${user.id}`)
 
   const { data, isLoading } = useQuery<UsersResponse>({
     queryKey: ["users", page, search],
@@ -111,16 +163,21 @@ export default function UsersPage() {
                 <TableHead className="text-right">Pesanan</TableHead>
                 <TableHead className="text-right">Total Belanja</TableHead>
                 <TableHead>Bergabung</TableHead>
+                <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <LoadingRow colSpan={4} />
+                <LoadingRow colSpan={5} />
               ) : !data?.data?.length ? (
-                <EmptyRow colSpan={4} message="Tidak ada pengguna ditemukan" />
+                <EmptyRow colSpan={5} message="Tidak ada pengguna ditemukan" />
               ) : (
                 data.data.map((user) => (
-                  <TableRow key={user.id}>
+                  <TableRow
+                    key={user.id}
+                    className="cursor-pointer"
+                    onClick={() => goToOrders(user)}
+                  >
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="size-8">
@@ -144,6 +201,11 @@ export default function UsersPage() {
                         year: "numeric",
                       })}
                     </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        <DeleteUserButton user={user} />
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -166,7 +228,7 @@ export default function UsersPage() {
           <p className="text-sm text-muted-foreground text-center py-8">Tidak ada pengguna ditemukan</p>
         ) : (
           data.data.map((user) => (
-            <Card key={user.id}>
+            <Card key={user.id} className="cursor-pointer" onClick={() => goToOrders(user)}>
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <Avatar className="size-10 shrink-0">
@@ -194,6 +256,9 @@ export default function UsersPage() {
                     <p className="font-semibold">{formatIDR(user.totalSpent)}</p>
                     <p className="text-xs text-muted-foreground">Total Belanja</p>
                   </div>
+                </div>
+                <div className="flex items-center justify-end mt-3 pt-3 border-t">
+                  <DeleteUserButton user={user} />
                 </div>
               </CardContent>
             </Card>

@@ -89,7 +89,10 @@ async function resolveInventoryRefs(inventoryRefsJson: string | null): Promise<u
     accountIds.length ? db.account.findMany({ where: { id: { in: accountIds } } }) : [],
     accsmarketIds.length ? db.accsmarket.findMany({ where: { id: { in: accsmarketIds } } }) : [],
   ])
-  return [...accounts, ...accsmarkets]
+  return [
+    ...accounts.map((a) => ({ ...a, isAccsmarket: false })),
+    ...accsmarkets.map((a) => ({ ...a, isAccsmarket: true })),
+  ]
 }
 
 async function resolveReservedInventory(orderId: number): Promise<unknown[]> {
@@ -97,7 +100,10 @@ async function resolveReservedInventory(orderId: number): Promise<unknown[]> {
     db.account.findMany({ where: { reservedOrderId: orderId } }),
     db.accsmarket.findMany({ where: { reservedOrderId: orderId } }),
   ])
-  return [...accounts, ...accsmarkets]
+  return [
+    ...accounts.map((a) => ({ ...a, isAccsmarket: false })),
+    ...accsmarkets.map((a) => ({ ...a, isAccsmarket: true })),
+  ]
 }
 
 export class OrdersController {
@@ -107,9 +113,11 @@ export class OrdersController {
       const limit = Math.min(100, parseInt(String(req.query.limit || '20')) || 20)
       const status = req.query.status as string | undefined
       const search = req.query.search as string | undefined
+      const userId = req.query.userId ? parseInt(String(req.query.userId)) : undefined
 
       const where: Prisma.OrderWhereInput = {}
       if (status) where.status = status
+      if (userId) where.userId = userId
       if (search) {
         where.OR = [
           { groupId: { contains: search } },
@@ -118,23 +126,48 @@ export class OrdersController {
         ]
       }
 
-      const [total, orders] = await Promise.all([
-        db.order.count({ where }),
-        db.order.findMany({
-          where,
-          include: {
-            user: { select: { id: true, name: true, email: true } },
-            product: { select: { id: true, title: true, section: { select: { title: true } } } },
-            bankAccount: { select: { id: true, bankName: true, accountNumber: true, accountHolder: true } },
-          },
-          orderBy: { createdAt: 'desc' },
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-      ])
+      const orders = await db.order.findMany({
+        where,
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          product: { select: { id: true, title: true, section: { select: { title: true } } } },
+          bankAccount: { select: { id: true, bankName: true, accountNumber: true, accountHolder: true } },
+        },
+        orderBy: [{ groupId: 'asc' }, { id: 'asc' }],
+      })
+
+      // A single cart checkout creates one Order row per variant/product but shares one
+      // groupId (see user/backend POST /orders/cart) - collapse those back into a single
+      // list row so a buyer's multi-variant purchase reads as one order, not several.
+      const groups = new Map<string, typeof orders>()
+      for (const o of orders) {
+        const key = o.groupId ?? `single-${o.id}`
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key)!.push(o)
+      }
+
+      const merged = [...groups.values()]
+        .map((items) => {
+          const primary = items[0]
+          return {
+            id: primary.id,
+            groupId: primary.groupId,
+            user: primary.user,
+            products: items.map((o) => o.product),
+            itemCount: items.length,
+            totalPrice: items.reduce((s, o) => s + o.totalPrice, 0),
+            status: primary.status,
+            bankAccount: primary.bankAccount,
+            createdAt: items.reduce((latest, o) => new Date(o.createdAt) > new Date(latest) ? o.createdAt : latest, primary.createdAt),
+          }
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+      const total = merged.length
+      const paged = merged.slice((page - 1) * limit, page * limit)
 
       res.json({
-        data: orders,
+        data: paged,
         meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
       })
     } catch (err) {
@@ -197,7 +230,8 @@ export class OrdersController {
         return
       }
 
-      let relatedOrders: unknown[] = []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let relatedOrders: any[] = []
       if (order.groupId?.startsWith('BUYMIUM-CART-')) {
         relatedOrders = await db.order.findMany({
           where: { groupId: order.groupId },
@@ -206,11 +240,46 @@ export class OrdersController {
         })
       }
 
-      const inventoryItems = order.inventoryRefs
-        ? await resolveInventoryRefs(order.inventoryRefs)
-        : await resolveReservedInventory(order.id)
+      // A cart checkout with multiple variants creates one Order row per variant,
+      // each holding only its own slice of inventoryRefs - resolve credentials across
+      // every order in the group, not just the one the admin happened to open.
+      const ordersForInventory = relatedOrders.length > 0 ? relatedOrders : [order]
+      const perOrderInventory = await Promise.all(
+        ordersForInventory.map((o) =>
+          o.inventoryRefs ? resolveInventoryRefs(o.inventoryRefs) : resolveReservedInventory(o.id)
+        )
+      )
+      const inventoryItems = perOrderInventory.flat()
 
-      res.json({ ...order, relatedOrders, inventoryItems })
+      // Derive each order's follower-tier label from its own resolved inventory rows
+      // (e.g. "1.000+ Followers") so a multi-variant cart order shows which line is which.
+      const variantLabels = await Promise.all(
+        ordersForInventory.map(async (o, i) => {
+          const items = perOrderInventory[i] as { targetFollowers?: number | null }[]
+          const targetFollowers = items[0]?.targetFollowers ?? null
+          if (targetFollowers === null) return null
+          const variant = await db.productVariant.findFirst({ where: { productId: o.productId, targetFollowers } })
+          return variant?.name ?? `${targetFollowers.toLocaleString('id-ID')}+ Followers`
+        })
+      )
+
+      const relatedOrdersWithBreakdown = relatedOrders.map((o, i) => ({
+        ...o,
+        variantLabel: variantLabels[i],
+        subtotal: o.totalPrice,
+      }))
+      const currentIndex = ordersForInventory.findIndex((o) => o.id === order.id)
+      const orderVariantLabel = variantLabels[currentIndex] ?? null
+      const orderBreakdown = relatedOrdersWithBreakdown.find((o) => o.id === order.id)
+        ?? { subtotal: order.totalPrice }
+
+      res.json({
+        ...order,
+        variantLabel: orderVariantLabel,
+        subtotal: orderBreakdown.subtotal,
+        relatedOrders: relatedOrdersWithBreakdown,
+        inventoryItems,
+      })
     } catch (err) {
       console.error('[Order Detail Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch order detail' })

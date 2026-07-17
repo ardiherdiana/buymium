@@ -6,7 +6,7 @@ import Image from "next/image"
 import {
   ArrowLeft, Upload, Download, Package, CheckCircle2,
   Clock, XCircle, Copy, Check, ImageIcon, Banknote,
-  ShoppingBag, AlertCircle, Loader2, FileImage, QrCode, Trash2, Star,
+  ShoppingBag, AlertCircle, Loader2, FileImage, QrCode, Trash2, Star, FileText,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,7 @@ interface OrderDetail {
   createdAt: string
   status: string
   totalPrice: number
+  subtotal?: number
   quantity: number
   paymentProofUrl?: string
   groupId?: string
@@ -354,6 +355,7 @@ export default function PesananDetailPage() {
   const [cancelling, setCancelling] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false)
   const [submittedReview, setSubmittedReview] = useState<{ rating: number; message: string } | null>(null)
 
   useEffect(() => {
@@ -424,6 +426,26 @@ export default function PesananDetailPage() {
     }
   }
 
+  async function handleDownloadInvoice() {
+    if (!token || !order) return
+    setDownloadingInvoice(true)
+    try {
+      const res = await fetch(`${API_BASE}/orders/${order.id}/invoice`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `invoice-${order.groupId ?? order.id}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloadingInvoice(false)
+    }
+  }
+
   if (loading) return <LoadingSkeleton />
 
   if (notFound || !order) {
@@ -443,7 +465,8 @@ export default function PesananDetailPage() {
   }
 
   const allOrders = order.relatedOrders?.length > 0 ? order.relatedOrders : [order]
-  const grandTotal = allOrders.reduce((s, o) => s + o.totalPrice, 0)
+  const grandSubtotal = allOrders.reduce((s, o) => s + (o.subtotal ?? o.totalPrice), 0)
+  const grandTotal = grandSubtotal
   const cfg = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.pending
   const isPending = order.status === "pending"
   const isDone = order.status === "paid"
@@ -532,17 +555,23 @@ export default function PesananDetailPage() {
                   </span>
                 )}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {o.quantity}x · Rp{Math.round(o.totalPrice / o.quantity).toLocaleString("id")}/akun
+                  {o.quantity}x · Rp{Math.round((o.subtotal ?? o.totalPrice) / o.quantity).toLocaleString("id")}/akun
                 </p>
               </div>
-              <p className="shrink-0 text-sm font-semibold">Rp{o.totalPrice.toLocaleString("id")}</p>
+              <p className="shrink-0 text-sm font-semibold">Rp{(o.subtotal ?? o.totalPrice).toLocaleString("id")}</p>
             </div>
           ))}
         </div>
 
-        <div className="flex items-center justify-between border-t border-border bg-muted/20 px-5 py-4">
-          <span className="text-sm text-muted-foreground">Total Pembayaran</span>
-          <span className="text-base font-bold">Rp{grandTotal.toLocaleString("id")}</span>
+        <div className="border-t border-border bg-muted/20 px-5 py-4 space-y-1.5">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span>Rp{grandSubtotal.toLocaleString("id")}</span>
+          </div>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-sm text-muted-foreground">Total Pembayaran</span>
+            <span className="text-base font-bold">Rp{grandTotal.toLocaleString("id")}</span>
+          </div>
         </div>
       </div>
 
@@ -611,10 +640,14 @@ export default function PesananDetailPage() {
               <p className="text-[11px] text-green-400/70">Simpan file dengan aman di perangkatmu</p>
             </div>
           </div>
-          <div className="p-5">
+          <div className="p-5 space-y-2">
             <Button className="w-full" onClick={handleDownload} disabled={downloading}>
               {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               Download Kredensial Akun
+            </Button>
+            <Button className="w-full" variant="outline" onClick={handleDownloadInvoice} disabled={downloadingInvoice}>
+              {downloadingInvoice ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
+              Download Invoice
             </Button>
           </div>
         </div>

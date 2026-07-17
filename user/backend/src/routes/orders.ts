@@ -13,8 +13,6 @@ import { reserveInventory, releaseInventory, countAvailableInventory, getVariant
 
 const router = Router()
 
-const SERVICE_FEE = 2000
-
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'payment-proofs')
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 
@@ -62,7 +60,7 @@ router.post('/', requireAuth, userRateLimit, validate(CreateOrderSchema), async 
   if (available < quantity) { res.status(400).json({ error: 'Stok tidak mencukupi' }); return }
 
   const subtotal = Math.round(unitPrice * quantity)
-  const totalPrice = subtotal + SERVICE_FEE
+  const totalPrice = subtotal
   const groupId = generateGroupId('SO', userId)
 
   const order = await db.order.create({
@@ -106,7 +104,7 @@ router.post('/cart', requireAuth, userRateLimit, validate(CartOrderSchema), asyn
   const orders = await Promise.all(
     items.map((it, i) => {
       const subtotal = Math.round(unitPrices[i] * it.quantity)
-      const totalPrice = subtotal + (i === 0 ? SERVICE_FEE : 0)
+      const totalPrice = subtotal
       return db.order.create({
         data: { userId, productId: it.productId, quantity: it.quantity, totalPrice, status: 'pending', groupId },
       })
@@ -242,7 +240,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   const orderId = parseInt(req.params.id as string, 10)
   if (isNaN(orderId)) { res.status(400).json({ error: 'ID pesanan tidak valid' }); return }
 
-  const order = await db.order.findFirst({
+  let order = await db.order.findFirst({
     where: { id: orderId, userId },
     include: {
       product: true,
@@ -251,6 +249,13 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   })
 
   if (!order) { res.status(404).json({ error: 'Pesanan tidak ditemukan' }); return }
+
+  const expiryCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  if (order.status === 'pending' && order.createdAt < expiryCutoff) {
+    await db.order.update({ where: { id: order.id }, data: { status: 'cancelled' } })
+    await releaseInventory([order.id])
+    order = { ...order, status: 'cancelled' }
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let relatedOrders: any[] = []
@@ -274,7 +279,14 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     select: { rating: true, message: true },
   })
 
-  res.json({ ...order, variantLabel, relatedOrders, hasTestimonial: !!existingTestimonial, testimonial: existingTestimonial })
+  res.json({
+    ...order,
+    subtotal: order.totalPrice,
+    variantLabel,
+    relatedOrders: relatedOrders,
+    hasTestimonial: !!existingTestimonial,
+    testimonial: existingTestimonial,
+  })
 })
 
 router.get('/:id/download', requireAuth, async (req: Request, res: Response) => {
@@ -359,8 +371,7 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
   textContent += `KETENTUAN GARANSI\n`
   textContent += `Jika akun mengalami suspend/banned/disable, penjual akan memberikan:\n`
   textContent += `1. Ganti gratis 1 akun atau\n`
-  textContent += `2. Gratis isi followers sejumlah yang dipesan dikirim ke akun lain milik pembeli, atau\n`
-  textContent += `3. Refund 70% cash ke rekening pembeli.\n\n`
+  textContent += `2. Refund 60% cash ke rekening pembeli.\n\n`
   textContent += `Silakan hubungi admin untuk klaim garansi.\n`
 
   const fileName = `${order.groupId ?? order.id}.txt`
@@ -390,8 +401,13 @@ router.get('/:id/invoice', requireAuth, async (req: Request, res: Response) => {
     if (related.length > 0) allOrders = related as typeof order[]
   }
 
-  const grandSubtotal = allOrders.reduce((sum, o) => sum + Math.round(o.product.price * o.quantity), 0)
-  const grandTotal = grandSubtotal + SERVICE_FEE
+  const itemSubtotals = allOrders.map((o) => o.totalPrice)
+  const grandSubtotal = itemSubtotals.reduce((sum, s) => sum + s, 0)
+  const grandTotal = grandSubtotal
+
+  const variantLabels = await Promise.all(
+    allOrders.map((o) => getOrderVariantLabel(o.id, o.productId, o.product.sourceId, o.inventoryRefs))
+  )
 
   try {
     const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true, bufferPages: false })
@@ -452,22 +468,24 @@ router.get('/:id/invoice', requireAuth, async (req: Request, res: Response) => {
     doc.rect(50, y, W - 100, 20).fill(lightGray)
     const thY = y + 6
     label('Produk', 58, thY, { bold: true, size: 7.5, color: blue })
-    label('Kategori', 270, thY, { bold: true, size: 7.5, color: blue })
+    label('Variasi', 270, thY, { bold: true, size: 7.5, color: blue })
     label('Qty', 370, thY, { bold: true, size: 7.5, color: blue })
     label('Harga', 410, thY, { bold: true, size: 7.5, color: blue })
     label('Total', W - 100, thY, { bold: true, size: 7.5, color: blue, width: 50, align: 'right' })
     y += 26
 
     const titleMaxChars = 38
-    for (const item of allOrders) {
+    for (let i = 0; i < allOrders.length; i++) {
+      const item = allOrders[i]
       const titleDisplay = item.product.title.length > titleMaxChars
         ? item.product.title.slice(0, titleMaxChars) + '…'
         : item.product.title
-      const itemSubtotal = Math.round(item.product.price * item.quantity)
+      const itemSubtotal = itemSubtotals[i]
+      const unitPrice = Math.round(itemSubtotal / item.quantity)
       label(titleDisplay, 58, y, { size: 8 })
-      label('Instagram', 270, y, { size: 8 })
+      label(variantLabels[i] ?? '-', 270, y, { size: 8, width: 95 })
       label(String(item.quantity), 370, y, { size: 8 })
-      label(`Rp ${item.product.price.toLocaleString('id-ID')}`, 410, y, { size: 8 })
+      label(`Rp ${unitPrice.toLocaleString('id-ID')}`, 410, y, { size: 8 })
       label(`Rp ${itemSubtotal.toLocaleString('id-ID')}`, W - 100, y, { size: 8, width: 50, align: 'right' })
       y += 16
       doc.moveTo(50, y).lineTo(W - 50, y).strokeColor('#E2E8F0').lineWidth(0.5).stroke()
@@ -481,7 +499,6 @@ router.get('/:id/invoice', requireAuth, async (req: Request, res: Response) => {
       y += bold ? 4 : 16
     }
     totalRow('Subtotal', `Rp ${grandSubtotal.toLocaleString('id-ID')}`)
-    totalRow('Biaya Layanan', `Rp ${SERVICE_FEE.toLocaleString('id-ID')}`)
     doc.moveTo(tX, y + 2).lineTo(W - 50, y + 2).strokeColor('#CBD5E1').lineWidth(0.8).stroke()
     y += 10
     totalRow('Total', `Rp ${grandTotal.toLocaleString('id-ID')}`, true)

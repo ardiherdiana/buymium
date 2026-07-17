@@ -81,7 +81,7 @@ The admin backend also has k6 load test scripts (`.js`) under `src/tests/load/` 
 
 **Admin backend** (`/api/`):
 - `auth` — login, refresh, logout
-- `management` — dashboard, customers, sources, finance (sales, analytics), stock (accounts, accsmarket), problems, users
+- `management` — dashboard, customers, sources, finance (sales, analytics), stock (accounts, accsmarket), users
 - `ecommerce` — orders, products, users, testimonials, sections, stats
 - `autoposting` — social media scheduling
 - `roles` — role management (note: there's both a top-level `routes/roles.ts` and `routes/management/roles.ts` — check which is mounted before adding to either)

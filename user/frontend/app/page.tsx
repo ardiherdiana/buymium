@@ -363,8 +363,12 @@ export default async function Page() {
       {/* ── Community ── */}
       {/* ── Footer ── */}
       <footer className="border-t border-border px-4 py-6">
-        <div className="mx-auto max-w-5xl text-center text-xs text-muted-foreground">
-          © 2026 Buymium. All rights reserved.
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 text-xs text-muted-foreground sm:flex-row">
+          <span>© 2026 Buymium. All rights reserved.</span>
+          <div className="flex gap-4">
+            <a href="/syarat" className="hover:text-foreground">Syarat & Ketentuan</a>
+            <a href="/kontak" className="hover:text-foreground">Kontak</a>
+          </div>
         </div>
       </footer>
     </div>

@@ -76,8 +76,12 @@ describe('GET /api/orders', () => {
   })
 
   it('returns correct pagination metadata', async () => {
-    mockDb.order.count.mockResolvedValueOnce(45)
-    mockDb.order.findMany.mockResolvedValueOnce([mockOrder])
+    // Orders are grouped by groupId (a cart checkout shares one groupId across
+    // several rows) before pagination is applied, so findMany returns every
+    // matching row up front and paging happens in-memory over the groups.
+    mockDb.order.findMany.mockResolvedValueOnce(
+      Array.from({ length: 45 }, (_, i) => ({ ...mockOrder, id: i + 1 }))
+    )
 
     const res = await request(app)
       .get('/api/orders?page=2&limit=10')
@@ -87,9 +91,7 @@ describe('GET /api/orders', () => {
     expect(res.body.meta.page).toBe(2)
     expect(res.body.meta.limit).toBe(10)
     expect(res.body.meta.totalPages).toBe(5)
-    expect(mockDb.order.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ skip: 10, take: 10 })
-    )
+    expect(res.body.data).toHaveLength(10)
   })
 })
 
@@ -113,6 +115,37 @@ describe('GET /api/orders/:id', () => {
     expect(res.status).toBe(200)
     expect(res.body.id).toBe(1)
     expect(res.body).toHaveProperty('inventoryItems')
+  })
+
+  it('splits a multi-variant cart group into per-order subtotal/fee/variantLabel', async () => {
+    const productA = { id: 1, title: 'Akun IG', sourceId: 5 }
+    const orderRow = (id: number, totalPrice: number) => ({
+      id, userId: 10, productId: 1, quantity: 1, totalPrice, status: 'awaiting_confirmation',
+      groupId: 'BUYMIUM-CART-10-123', inventoryRefs: null, createdAt: new Date(),
+      product: productA,
+    })
+    const order1 = orderRow(19, 90000)
+    const order2 = orderRow(20, 140000)
+
+    mockDb.order.findUnique.mockResolvedValueOnce({ ...order1, user: mockOrder.user, bankAccount: null })
+    mockDb.order.findMany.mockResolvedValueOnce([order1, order2])
+    mockDb.account.findMany
+      .mockResolvedValueOnce([{ id: 100, targetFollowers: 1000 }])
+      .mockResolvedValueOnce([{ id: 101, targetFollowers: 2000 }])
+    mockDb.accsmarket.findMany.mockResolvedValue([])
+    ;(mockDb.productVariant as unknown as { findFirst: ReturnType<typeof vi.fn> }).findFirst = vi.fn()
+      .mockResolvedValueOnce({ name: '1.000+ Followers' })
+      .mockResolvedValueOnce({ name: '2.000+ Followers' })
+
+    const res = await request(app).get('/api/orders/19').set('Authorization', authHeader)
+
+    expect(res.status).toBe(200)
+    expect(res.body.subtotal).toBe(90000)
+    expect(res.body.variantLabel).toBe('1.000+ Followers')
+    expect(res.body.relatedOrders).toEqual([
+      expect.objectContaining({ id: 19, subtotal: 90000, variantLabel: '1.000+ Followers' }),
+      expect.objectContaining({ id: 20, subtotal: 140000, variantLabel: '2.000+ Followers' }),
+    ])
   })
 
   it('returns 404 when order does not exist', async () => {

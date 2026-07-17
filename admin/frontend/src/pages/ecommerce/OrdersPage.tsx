@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { useNavigate } from "react-router-dom"
-import { Search } from "lucide-react"
+import { useNavigate, useSearchParams } from "react-router-dom"
+import { Search, X } from "lucide-react"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -62,11 +62,18 @@ interface Order {
   id: number
   groupId?: string
   user: { id: number; name: string; email: string }
-  product: { id: number; title: string }
+  products: { id: number; title: string }[]
+  itemCount: number
   totalPrice: number
   status: string
   bankAccount?: { bankName: string; accountNumber: string }
   createdAt: string
+}
+
+function productSummary(order: Order): string {
+  const titles = order.products.map((p) => p.title)
+  if (titles.length <= 1) return titles[0] ?? "-"
+  return `${titles[0]} +${titles.length - 1} lainnya`
 }
 
 interface OrdersResponse {
@@ -100,17 +107,28 @@ const PAGE_SIZE = 20
 
 export default function OrdersPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const userId = searchParams.get("userId") ?? undefined
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState("")
 
   const { data, isLoading } = useQuery<OrdersResponse>({
-    queryKey: ["orders", page, search, status],
+    queryKey: ["orders", page, search, status, userId],
     queryFn: () =>
       api
-        .get("/orders", { params: { page, limit: PAGE_SIZE, search: search || undefined, status: status || undefined } })
+        .get("/orders", { params: { page, limit: PAGE_SIZE, search: search || undefined, status: status || undefined, userId } })
         .then((r) => r.data),
   })
+
+  const filteredUserName = userId ? data?.data?.[0]?.user?.name : undefined
+
+  const clearUserFilter = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete("userId")
+    setSearchParams(next)
+    setPage(1)
+  }
 
   return (
     <div className="space-y-5">
@@ -120,6 +138,22 @@ export default function OrdersPage() {
       </div>
 
       <OrdersTrendChart />
+
+      {userId && (
+        <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm">
+          <span className="text-muted-foreground">
+            Menampilkan pesanan{filteredUserName ? ` milik ${filteredUserName}` : ""}
+          </span>
+          <button
+            type="button"
+            onClick={clearUserFilter}
+            className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5" />
+            Hapus filter
+          </button>
+        </div>
+      )}
 
       {/* Filters — column on mobile (search first), row on sm+ */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
@@ -174,7 +208,12 @@ export default function OrdersPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[160px] truncate">
-                      {order.product.title}
+                      {productSummary(order)}
+                      {order.itemCount > 1 && (
+                        <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {order.itemCount} varian
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="font-medium">{formatIDR(order.totalPrice)}</TableCell>
                     <TableCell>
@@ -226,7 +265,14 @@ export default function OrdersPage() {
                     {statusLabel[order.status] ?? order.status}
                   </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground truncate">{order.product.title}</p>
+                <p className="text-sm text-muted-foreground truncate">
+                  {productSummary(order)}
+                  {order.itemCount > 1 && (
+                    <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {order.itemCount} varian
+                    </span>
+                  )}
+                </p>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span className="font-mono">#{order.id}</span>
                   <span className="font-semibold text-foreground text-sm">{formatIDR(order.totalPrice)}</span>
