@@ -3,6 +3,7 @@ import { db } from '../config/database'
 import { logger } from '../utils/logger'
 import { AccountsService } from './management/accountsService'
 import { AccsmarketsService } from './management/accsmarketsService'
+import { UpfollService } from './management/upfollService'
 
 export function startScheduler() {
   cron.schedule('*/60 * * * * *', async () => {
@@ -127,6 +128,18 @@ async function scanAccsmarkets() {
   console.log(`[Scheduler] Accsmarket scan done - ${accsmarkets.length} account(s) processed`)
 }
 
+async function scanUpfoll() {
+  const { items } = await UpfollService.getItemsForScan()
+  for (const item of items) {
+    try {
+      await UpfollService.refreshFollowers(item.id)
+    } catch (err) {
+      logger.error(`[Scheduler] Error scanning upfoll item #${item.id}:`, err)
+    }
+  }
+  console.log(`[Scheduler] Upfoll scan done - ${items.length} item(s) processed`)
+}
+
 async function runMidnightSyncAndScan() {
   console.log('[Scheduler] Midnight sync & scan started')
   try {
@@ -134,6 +147,7 @@ async function runMidnightSyncAndScan() {
     await scanAccounts()
     await syncAccsmarkets()
     await scanAccsmarkets()
+    await scanUpfoll()
     console.log('[Scheduler] Midnight sync & scan finished')
   } catch (err) {
     logger.error('[Scheduler] Midnight sync & scan failed:', err)

@@ -93,7 +93,8 @@ app.use('/api', apiRouter)
 app.use((err: { status?: number; statusCode?: number; message?: string }, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('[Error]', err)
   const status = err.status || err.statusCode || 500
-  const message = err.message || 'Internal server error'
+  const isProduction = process.env.NODE_ENV === 'production'
+  const message = isProduction && status === 500 ? 'Internal server error' : err.message || 'Internal server error'
   res.status(status).json({ success: false, error: message })
 })
 

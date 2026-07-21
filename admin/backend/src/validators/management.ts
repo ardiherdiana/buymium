@@ -102,3 +102,41 @@ export const UpdateSourceSchema = z.object({
   is_accsmarket: z.union([z.boolean(), z.string()]).optional(),
 })
 
+// ─── Upfoll Vendors ───────────────────────────────────────────────────────────
+// Fields from UpfollVendorsController.store / .update
+
+export const CreateUpfollVendorSchema = z.object({
+  name: z.string().min(1, 'name is required'),
+  is_active: z.boolean().optional(),
+})
+
+export const UpdateUpfollVendorSchema = CreateUpfollVendorSchema.partial()
+
+// ─── Upfoll Vendor Tiers ──────────────────────────────────────────────────────
+// Fields from UpfollVendorsController.storeTier / .updateTier — each vendor
+// defines its own tiers (target-follower package + price it charges).
+
+export const CreateUpfollVendorTierSchema = z.object({
+  name: z.string().min(1, 'name is required'),
+  target_followers: z.number().int().positive('target_followers must be a positive integer'),
+  price: z.union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/)]),
+})
+
+export const UpdateUpfollVendorTierSchema = CreateUpfollVendorTierSchema.partial()
+
+// ─── Upfoll Orders ────────────────────────────────────────────────────────────
+// Fields from UpfollOrdersController.store (nested items array)
+
+const UpfollOrderItemSchema = z.object({
+  username: z.string().min(1, 'username is required'),
+  vendor_tier_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]),
+})
+
+export const CreateUpfollOrderSchema = z.object({
+  customer_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/, 'customer_id must be a positive integer')]),
+  total_sale_price: z.union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/)]),
+  is_shopee: z.boolean().optional(),
+  shopee_order_number: z.string().optional().nullable(),
+  items: z.array(UpfollOrderItemSchema).min(1, 'items must have at least one entry'),
+})
+

@@ -37,6 +37,11 @@ const AnalyticsPage = lazy(() => import("@/pages/management/finance/analytics/in
 const CustomersPage = lazy(() => import("@/pages/management/master/customers/index"))
 const SourcesPage = lazy(() => import("@/pages/management/master/sources/index"))
 
+// Upfoll
+const UpfollVendorsPage = lazy(() => import("@/pages/management/upfoll/vendors/index"))
+const UpfollOrdersPage = lazy(() => import("@/pages/management/upfoll/orders/index"))
+const UpfollOrderFormPage = lazy(() => import("@/pages/management/upfoll/orders/form"))
+
 // Autoposting
 const AutopostingPage = lazy(() => import("@/pages/autoposting/index"))
 
@@ -90,6 +95,9 @@ export default function App() {
             <Route path="/finance/analytics" element={<S><AnalyticsPage /></S>} />
             <Route path="/master/customers" element={<S><CustomersPage /></S>} />
             <Route path="/master/sources" element={<S><SourcesPage /></S>} />
+            <Route path="/upfoll/vendors" element={<S><UpfollVendorsPage /></S>} />
+            <Route path="/upfoll/orders" element={<S><UpfollOrdersPage /></S>} />
+            <Route path="/upfoll/orders/new" element={<S><UpfollOrderFormPage /></S>} />
           </Route>
 
           {/* Autoposting module */}

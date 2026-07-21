@@ -581,8 +581,8 @@ export default function PesananDetailPage() {
           <div className="flex items-center gap-2.5 border-b border-border px-5 py-3.5">
             <QrCode className="size-4 text-muted-foreground" />
             <div>
-              <p className="text-sm font-semibold">Pembayaran via QRIS</p>
-              <p className="text-[11px] text-muted-foreground">Scan QR dengan aplikasi e-wallet atau m-banking apapun</p>
+              <p className="text-sm font-semibold">Pembayaran</p>
+              <p className="text-[11px] text-muted-foreground">Pilih cara pembayaran yang kamu inginkan</p>
             </div>
           </div>
 

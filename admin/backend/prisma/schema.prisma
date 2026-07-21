@@ -43,6 +43,7 @@ model User {
   schedules    AutopostingSchedule[]
   customers    Customer[]
   testimonials Testimonial[] @relation("TestimonialCreatedBy")
+  upfollOrders UpfollOrder[]
 
   @@index([email])
   @@index([googleId])
@@ -281,9 +282,99 @@ model Customer {
 
   creator   User?   @relation(fields: [createdBy], references: [id], onDelete: SetNull)
   sales     Sale[]
+  upfollOrders UpfollOrder[]
 
   @@index([createdAt])
   @@map("customers")
+}
+
+// Upfoll Module Models
+// Organic IG follow-for-tag giveaway sponsorship — not panel/inject followers.
+// Vendors are the suppliers who run the actual giveaway; each vendor defines
+// its own tiers (target-follower package + price it charges, e.g. "1K
+// Followers" = Rp15.000) since different vendors' giveaways draw from
+// different follower pools — there's no shared tier catalog. UpfollItem
+// records one sponsored username against a specific vendor's tier, and a
+// unique constraint on (username, vendorTierId) blocks re-tagging the same
+// vendor's giveaway audience twice; the same username is free to be reused
+// under a different vendor.
+model UpfollVendor {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(150)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  tiers UpfollVendorTier[]
+
+  @@index([isActive])
+  @@map("upfoll_vendors")
+}
+
+model UpfollVendorTier {
+  id              Int      @id @default(autoincrement())
+  vendorId        Int      @map("vendor_id")
+  name            String   @db.VarChar(100)
+  targetFollowers Int      @map("target_followers")
+  price           Float
+  createdAt       DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt       DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  vendor UpfollVendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  items  UpfollItem[]
+
+  @@index([vendorId])
+  @@map("upfoll_vendor_tiers")
+}
+
+// saleId mirrors this order into the shared Sale/SaleLine tables at creation
+// time so it's automatically picked up by the existing Finance > Sales and
+// Analytics pages without those pages needing to know about Upfoll at all.
+model UpfollOrder {
+  id                Int      @id @default(autoincrement())
+  orderNumber       String   @db.VarChar(255) @map("order_number")
+  customerId        Int?     @map("customer_id")
+  totalSalePrice    Float    @map("total_sale_price")
+  totalProfit       Float    @default(0) @map("total_profit")
+  isShopee          Boolean  @default(false) @map("is_shopee")
+  shopeeOrderNumber String?  @db.VarChar(255) @map("shopee_order_number")
+  saleId            Int?     @unique @map("sale_id")
+  createdBy         Int?     @map("created_by")
+  createdAt         DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt         DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  customer Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  creator  User?        @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  sale     Sale?        @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  items    UpfollItem[]
+
+  @@index([customerId])
+  @@index([isShopee])
+  @@index([createdAt])
+  @@map("upfoll_orders")
+}
+
+model UpfollItem {
+  id               Int      @id @default(autoincrement())
+  orderId          Int      @map("order_id")
+  vendorTierId     Int      @map("vendor_tier_id")
+  username         String   @db.VarChar(255)
+  currentFollowers Int?     @map("current_followers")
+  capital          Float    @default(0)
+  unitSalePrice    Float    @map("unit_sale_price")
+  profit           Float    @default(0)
+  status           String   @default("progress") @db.VarChar(20)
+  createdAt        DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt        DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  order      UpfollOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vendorTier UpfollVendorTier @relation(fields: [vendorTierId], references: [id], onDelete: Restrict)
+
+  @@unique([username, vendorTierId])
+  @@index([orderId])
+  @@index([vendorTierId])
+  @@index([status])
+  @@map("upfoll_items")
 }
 
 model Accsmarket {
@@ -335,6 +426,7 @@ model Sale {
   source   Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   order    Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
   saleLines SaleLine[]
+  upfollOrder UpfollOrder?
 
   @@index([customerId])
   @@index([sourceId])

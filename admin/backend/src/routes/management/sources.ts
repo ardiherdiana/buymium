@@ -2,6 +2,7 @@
 import multer from 'multer'
 import fs from 'fs'
 import path from 'path'
+import crypto from 'crypto'
 import { SourcesController } from '../../controllers/management/sources'
 import { validate } from '../../middleware/validate'
 import { CreateSourceSchema, UpdateSourceSchema } from '../../validators/management'
@@ -18,8 +19,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 const storage = multer.diskStorage({
   destination: UPLOADS_DIR,
   filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}-${file.originalname}`
-    cb(null, uniqueName)
+    cb(null, `${crypto.randomUUID()}${path.extname(file.originalname)}`)
   }
 })
 

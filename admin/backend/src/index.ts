@@ -6,6 +6,13 @@ import { startCleanup } from './services/cleanup'
 
 const PORT = process.env.PORT || 5001
 
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET is missing or too short (minimum 32 characters)')
+}
+if (!process.env.ENCRYPTION_KEY || process.env.ENCRYPTION_KEY.length !== 64) {
+  throw new Error('ENCRYPTION_KEY is missing or invalid (must be a 64-character hex string)')
+}
+
 // Start background services
 startScheduler()
 startCleanup()

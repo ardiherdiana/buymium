@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   ShoppingCart, Package, Users, Star,
   BarChart3, ShoppingBag, TrendingUp, PieChart, UserSquare, Database,
-  LayoutDashboard, Plus, Trash2, Sun, Moon,
+  LayoutDashboard, Plus, Trash2, Sun, Moon, Gift, Store,
 } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 import { AppSidebar, type NavGroup } from "@/components/app-sidebar"
@@ -75,6 +75,13 @@ const MANAGEMENT_NAV: NavGroup[] = [
     items: [
       { label: "Pelanggan", href: "/master/customers", icon: UserSquare },
       { label: "Source", href: "/master/sources", icon: Database },
+    ],
+  },
+  {
+    group: "Upfoll",
+    items: [
+      { label: "Pesanan", href: "/upfoll/orders", icon: Gift },
+      { label: "Vendor", href: "/upfoll/vendors", icon: Store },
     ],
   },
 ]

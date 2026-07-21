@@ -91,6 +91,7 @@ The admin backend also has k6 load test scripts (`.js`) under `src/tests/load/` 
 - `auth` — login, Google OAuth, registration, password reset
 - `products`, `orders`, `stocks`, `bank-accounts`, `testimonials`, `sitemap`, `admin`
 - Static file serving at `/api/uploads`
+- Payment is manual bank transfer / QRIS only (buyer uploads proof, admin confirms) — no payment gateway integration.
 
 ### Frontend Routing
 
@@ -104,7 +105,7 @@ The admin backend also has k6 load test scripts (`.js`) under `src/tests/load/` 
 - `/masuk` — login; `/auth/callback` — Google OAuth
 - `/dashboard/pesanan`, `/dashboard/produk`, `/dashboard/profil` — user dashboard
 - `/lupa-password`, `/reset-password` — password reset
-- `/links`, `/kontak`, `/syarat` — link-in-bio page, contact, terms & conditions
+- `/links`, `/kontak`, `/syarat`, `/faq`, `/refund` — link-in-bio page, contact, terms & conditions, FAQ, refund policy (legal pages share `components/legal-nav.tsx` and `components/legal-section.tsx`)
 
 
 ### User Backend Structure
@@ -141,4 +142,4 @@ Both backends require a `.env` file. Critical variables:
 - `ENCRYPTION_KEY` — 64-char hex (AES-256-GCM), must match across both backends
 - `RESEND_API_KEY` — shared email service key
 - Admin backend also needs `OPENAI_API_KEY`, `GOOGLE_SHEETS_CREDENTIALS` path, and Google Sheets service account JSON in `admin/backend/credentials/`
-- User backend needs `GOOGLE_CLIENT_ID` for OAuth and `MIDTRANS_*` keys for payments
+- User backend needs `GOOGLE_CLIENT_ID` for OAuth (see `admin/backend/.env.example` for the admin-side variable list)

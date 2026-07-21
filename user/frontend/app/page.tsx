@@ -367,6 +367,8 @@ export default async function Page() {
           <span>© 2026 Buymium. All rights reserved.</span>
           <div className="flex gap-4">
             <a href="/syarat" className="hover:text-foreground">Syarat & Ketentuan</a>
+            <a href="/refund" className="hover:text-foreground">Refund</a>
+            <a href="/faq" className="hover:text-foreground">FAQ</a>
             <a href="/kontak" className="hover:text-foreground">Kontak</a>
           </div>
         </div>

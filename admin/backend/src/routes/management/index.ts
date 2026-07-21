@@ -10,6 +10,8 @@ import rolesRouter from './roles'
 import usersRouter from './users'
 import sourcesRouter from './sources'
 import salesRouter from './sales'
+import upfollVendorsRouter from './upfollVendors'
+import upfollOrdersRouter from './upfollOrders'
 
 const router = express.Router()
 
@@ -25,5 +27,7 @@ router.use('/roles', rolesRouter)
 router.use('/users', usersRouter)
 router.use('/sources', sourcesRouter)
 router.use('/sales', salesRouter)
+router.use('/upfoll-vendors', upfollVendorsRouter)
+router.use('/upfoll-orders', upfollOrdersRouter)
 
 export default router

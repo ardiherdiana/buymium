@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { ArrowLeft, Mail, MessageCircle, Phone, MapPin, Clock } from "lucide-react"
 import { LandingNavbar } from "@/components/landing-navbar"
+import { LegalNav } from "@/components/legal-nav"
 
 export const metadata: Metadata = {
   title: "Kontak",
@@ -30,6 +31,8 @@ export default function KontakPage() {
               Butuh bantuan? Tim kami siap membantu kamu.
             </p>
           </div>
+
+          <LegalNav active="kontak" />
 
           {/* Contact cards */}
           <div className="grid gap-4 sm:grid-cols-2 mb-6">
@@ -124,14 +127,14 @@ export default function KontakPage() {
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-6">
             <h2 className="mb-2 font-semibold">Cek FAQ Dulu</h2>
             <p className="mb-4 text-sm text-muted-foreground">
-              Banyak pertanyaan umum sudah terjawab di halaman Syarat & Ketentuan kami — mulai dari
-              cara membayar, proses verifikasi, hingga kebijakan garansi dan refund.
+              Banyak pertanyaan umum sudah terjawab di halaman FAQ kami — mulai dari cara membayar,
+              proses verifikasi, hingga kebijakan garansi dan refund.
             </p>
             <a
-              href="/syarat"
+              href="/faq"
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
-              Lihat Syarat & Ketentuan
+              Lihat FAQ
             </a>
           </div>
         </div>

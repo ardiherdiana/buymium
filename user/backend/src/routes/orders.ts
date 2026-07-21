@@ -364,7 +364,6 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
   }
   textContent += `\n`
 
-  textContent += `CARA MENGHINDARI SUSPEND\n`
   textContent += `- Dilarang mengganti email, username, password, dll selama 7 hari setelah login agar menghindari suspend.\n`
   textContent += `- Bisa gunakan akun untuk aktivitas biasa seperti scroll dll agar akun lengket ke perangkat yang baru login.\n\n`
 

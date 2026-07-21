@@ -1,0 +1,4 @@
+-- Duitku payment gateway integration removed. Actual column drop happens via
+-- the matching migration in user/backend (same DATABASE_URL / orders table);
+-- this migration exists purely so admin/backend's own migration history
+-- matches its schema.prisma, which no longer declares these fields.

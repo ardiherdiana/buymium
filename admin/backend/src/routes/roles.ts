@@ -7,7 +7,7 @@ import { UpdateUserRoleByNameSchema } from '../validators/auth'
 const router = express.Router()
 
 // GET all roles (for reference)
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', requireAdmin, async (req: Request, res: Response) => {
   try {
     const roles = await prisma.role.findMany({
       select: { id: true, name: true, description: true, permissions: true },
