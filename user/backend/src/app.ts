@@ -1,4 +1,6 @@
+import 'express-async-errors'
 import express from 'express'
+import multer from 'multer'
 import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
@@ -7,7 +9,6 @@ import path from 'path'
 import authRoutes from './routes/auth'
 import productRoutes from './routes/products'
 import orderRoutes from './routes/orders'
-import adminRoutes from './routes/admin'
 import bankAccountRoutes from './routes/bankAccounts'
 import sitemapRoutes from './routes/sitemap'
 import testimonialRoutes from './routes/testimonials'
@@ -62,9 +63,22 @@ const authLimiter = rateLimit({
   },
 })
 
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    securityLogger.rateLimitHit(req.ip ?? 'unknown', req.path)
+    res.status(429).json({ error: 'Terlalu banyak permintaan refresh token, coba lagi nanti.' })
+  },
+})
+
 app.use('/api', generalLimiter)
 app.use('/api/auth/login', authLimiter)
 app.use('/api/auth/google', authLimiter)
+app.use('/api/auth/resend-otp', authLimiter)
+app.use('/api/auth/refresh', refreshLimiter)
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
@@ -78,9 +92,33 @@ app.use('/api/uploads', (_req, res, next) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/orders', orderRoutes)
-app.use('/api/admin', adminRoutes)
 app.use('/api/bank-accounts', bankAccountRoutes)
 app.use('/sitemap.xml', sitemapRoutes)
 app.use('/api/testimonials', testimonialRoutes)
+
+app.use((req, res) => {
+  res.status(404).json({ error: 'Endpoint tidak ditemukan' })
+})
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (res.headersSent) return
+
+  if (err instanceof multer.MulterError) {
+    res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Ukuran file maksimal 5MB' : err.message })
+    return
+  }
+  if (err.message === 'File harus berupa gambar JPG/PNG/WEBP') {
+    res.status(400).json({ error: err.message })
+    return
+  }
+  if (err.message === 'Not allowed by CORS') {
+    res.status(403).json({ error: 'Origin tidak diizinkan' })
+    return
+  }
+
+  console.error('[UnhandledError]', err)
+  res.status(500).json({ error: 'Terjadi kesalahan pada server. Silakan coba lagi nanti.' })
+})
 
 export default app

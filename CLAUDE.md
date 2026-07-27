@@ -11,7 +11,29 @@ Buymium consists of four independent applications (no npm workspaces/turborepo �
 - `user/backend` — Express.js API on port 5000 (storefront, payments, Google OAuth)
 - `user/frontend` — Next.js 16 app on port 3000 (customer-facing store, Indonesian language)
 
-Both backends use the same `DATABASE_URL` (same MySQL server) but each has its **own separate `prisma/schema.prisma`** — they are not shared. The admin schema is a superset covering more domain models (`Customer`, `Source`, `Account`, `Accsmarket`, `Sale`/`SaleLine`, `AutopostingPost`/`AutopostingSchedule`, `ProductSection`) alongside the common models. The user schema only has the core storefront models (`Role`, `User`, `Product`, `Order`, `BankAccount`, `Stock`, `Channel`, `Testimonial`). When changing a shared model (e.g. `Product`, `Order`, `Stock`), update and migrate both schemas.
+Both backends use the same `DATABASE_URL` (same MySQL server) but each has its **own separate `prisma/schema.prisma`** for client generation/type narrowing — they are not shared for that purpose. The admin schema is a superset covering more domain models (`Customer`, `Source`, `Account`, `Accsmarket`, `Sale`/`SaleLine`, `AutopostingPost`/`AutopostingSchedule`, `ProductSection`) alongside the common models. The user schema only has the core storefront models (`Role`, `User`, `Product`, `Order`, `BankAccount`, `Stock`, `Channel`, `Testimonial`, `OtpToken`, `AccountAccessLog`).
+
+### Migrations are centralized in `db/`
+
+`db/schema.prisma` is the **single canonical schema** (union of every model from both apps) and `db/migrations/` is the **single shared migration history** for the whole database. This exists because both backends used to run `prisma migrate dev/deploy` independently against the same MySQL database — since Prisma tracks applied migrations in one `_prisma_migrations` table per database (not per schema file), the two independent histories collided and produced stuck/failed migrations (duplicate-column errors) that blocked further deploys.
+
+**Never run `prisma migrate dev/deploy` from `admin/backend` or `user/backend`** — `db/` is its own small npm project (`db/package.json`, own `node_modules`, own `.env` with `DATABASE_URL`) and is the only place migrations run:
+```bash
+cd db
+npm run migrate          # prisma migrate dev
+npm run migrate:deploy   # prisma migrate deploy (non-interactive/CI)
+npm run migrate:status   # prisma migrate status
+npm run generate         # prisma generate (for db/'s own client, rarely needed directly)
+npm run studio           # prisma studio
+```
+
+Workflow for changing a shared model (e.g. `Product`, `Order`, `Stock`):
+1. Edit `db/schema.prisma` (the canonical model definition).
+2. `cd db && npm run migrate` to create+apply the migration into `db/migrations`.
+3. Manually mirror the relevant fields into `admin/backend/prisma/schema.prisma` and/or `user/backend/prisma/schema.prisma` (each app only keeps the subset/shape it actually needs — e.g. `Account`/`Accsmarket` are read-only narrow projections on the user side).
+4. Run `npm run prisma:generate` (admin) / regenerate the client in user backend so each app's typed client matches its own local schema.
+
+`admin/backend`'s `prisma:push` script and `user/backend`'s `db:reset` script were removed — both bypassed the shared migration history (`db push`) or could drop/recreate every table in the database including the other app's models (`migrate reset --force`), which is too destructive now that the DB is shared across one migration lineage.
 
 Note: the expense-tracking feature (`ExpenseCategory`/`Expense` models, `management/finance/expenses` controllers/routes/page) was removed — finance now only covers sales/analytics. Don't resurrect references to it.
 
@@ -28,8 +50,7 @@ npm run test:run     # vitest run — single pass (no DB needed — Prisma is mo
 npm run test         # vitest watch mode
 npm run test:coverage
 npx vitest run src/tests/routes/auth.test.ts  # run a single test file
-npx prisma migrate dev
-npx prisma studio
+npm run prisma:generate  # prisma generate (regenerate client after schema changes)
 npm run seed         # tsx prisma/seed.ts
 ```
 
@@ -49,10 +70,8 @@ npm run dev          # tsx watch src/index.ts
 npm run build        # tsc
 npm run test:run     # vitest run — single pass
 npm run test         # vitest watch mode
-npx prisma migrate dev  # db:migrate
-npm run db:seed
-npm run db:studio
-npm run db:reset     # prisma migrate reset --force && seed
+npm run db:seed      # tsx prisma/seed.ts
+npm run db:studio    # prisma studio
 ```
 Note: `user/backend` has no `lint` or `typecheck` script — type errors surface via `npm run build`.
 
@@ -62,13 +81,15 @@ npm run dev          # next dev --turbopack
 npm run build        # next build
 npm run lint
 npm run typecheck    # tsc --noEmit
+npm run test         # vitest run
 ```
-Note: `user/frontend` has no test script/suite.
 
 ## Architecture
 
 ### Auth Flow
-Both backends use JWT Bearer tokens (7-day access, 14-day refresh). Tokens carry `{ userId, email, roleName, roleId }`. The admin frontend stores tokens in localStorage and uses an Axios interceptor to auto-refresh on 401. The user frontend stores tokens in cookies (SSR-friendly).
+Both backends use JWT Bearer tokens with a refresh token, but access-token lifetime differs per app: `admin/backend` issues a 7-day access token (`admin/backend/src/middleware/auth.ts`); `user/backend` issues a 1-hour access token (`user/backend/src/middleware/auth.ts` — shorter by design, not a bug). Both issue a 14-day refresh token. Tokens carry `{ userId, email, roleName, roleId }`.
+
+The admin frontend stores tokens in localStorage and uses an Axios interceptor to auto-refresh on 401. The user frontend also stores tokens in localStorage (not cookies, despite the app being SSR-capable) via `contexts/auth-context.tsx`, which persists both the access and refresh token and exposes an `authFetch()` helper that transparently refreshes on a 401 and retries once before forcing logout — always use `authFetch` from `useAuth()` for authenticated calls in `user/frontend` rather than raw `fetch` with a manually attached `Authorization` header, or the 1-hour expiry will force users to re-login constantly.
 
 Admin middleware: `requireAuth` checks any valid JWT; `requireAdmin` enforces `roleName === 'admin'`; `requireSuperAdmin` is currently an alias for `requireAdmin` (in `admin/backend/src/middleware/auth.ts`).
 

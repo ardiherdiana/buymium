@@ -10,7 +10,6 @@ interface DecodedToken {
   exp: number
 }
 
-// These are loaded AFTER helpers.ts sets process.env.JWT_SECRET
 const JWT_SECRET = process.env.JWT_SECRET!
 
 describe('generateToken / signToken', () => {
@@ -38,7 +37,6 @@ describe('generateToken / signToken', () => {
     const now = Math.floor(Date.now() / 1000)
     const oneDayFromNow = now + 86400
 
-    // Allow 5 minute slack
     expect(decoded.exp).toBeGreaterThan(now)
     expect(decoded.exp).toBeLessThanOrEqual(oneDayFromNow + 300)
   })
@@ -132,7 +130,7 @@ describe('requireAuth middleware', () => {
 describe('requireAdmin middleware', () => {
   it('rejects non-admin users with 403', async () => {
     const { requireAdmin } = await import('../../middleware/auth')
-    const token = makeUserToken(1) // roleId: 2
+    const token = makeUserToken(1)
 
     const req = {
       headers: { authorization: `Bearer ${token}` },
@@ -155,7 +153,7 @@ describe('requireAdmin middleware', () => {
 
   it('calls next for admin users (roleId=1)', async () => {
     const { requireAdmin } = await import('../../middleware/auth')
-    const token = makeAdminToken(99) // roleId: 1
+    const token = makeAdminToken(99)
 
     const req = {
       headers: { authorization: `Bearer ${token}` },

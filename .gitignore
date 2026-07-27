@@ -92,5 +92,6 @@ desktop.ini
 .claude/
 **/.claude/
 
-# DB dumps — comment out jika ingin commit schema
-db/
+# DB dumps and raw SQL scripts — schema.prisma and migrations/ ARE tracked (source of truth)
+db/*.sql
+db/node_modules/

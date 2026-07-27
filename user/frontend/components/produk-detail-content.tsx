@@ -53,7 +53,7 @@ function StarRating({ rating }: { rating: number }) {
 
 export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: boolean }) {
   const { id } = useParams<{ id: string }>()
-  const { token } = useAuth()
+  const { token, authFetch } = useAuth()
   const router = useRouter()
 
   const [product, setProduct] = useState<Product | null>(null)
@@ -63,8 +63,6 @@ export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: b
   const [notFound, setNotFound] = useState(false)
   const [buying, setBuying] = useState(false)
   const [page, setPage] = useState(1)
-  // Keyed by variantId (or "none" for products without variants) so switching
-  // between follower tiers doesn't clear what was already checked elsewhere.
   const [selectedByVariant, setSelectedByVariant] = useState<Record<string, Set<number>>>({})
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null)
 
@@ -127,7 +125,7 @@ export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: b
     setPage(1)
   }
 
-  async function submitOrder(authToken: string) {
+  async function submitOrder() {
     if (!product) return
     setBuying(true)
     try {
@@ -141,9 +139,9 @@ export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: b
           variantId: key === "none" ? undefined : Number(key),
           stockIds: Array.from(ids),
         }))
-        res = await fetch(`${API_BASE}/orders/cart`, {
+        res = await authFetch("/orders/cart", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ items }),
         })
       } else {
@@ -151,9 +149,9 @@ export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: b
         const quantity = ids.size > 0 ? ids.size : 1
         const stockIds = ids.size > 0 ? Array.from(ids) : undefined
         const variantId = key === "none" ? undefined : Number(key)
-        res = await fetch(`${API_BASE}/orders`, {
+        res = await authFetch("/orders", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ productId: product.id, quantity, variantId, stockIds }),
         })
       }
@@ -172,7 +170,7 @@ export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: b
       router.push(`/masuk?redirect=/produk/${id}`)
       return
     }
-    submitOrder(token)
+    submitOrder()
   }
 
   if (loading) {
@@ -215,8 +213,6 @@ export function ProdukDetailContent({ hasBottomNav = false }: { hasBottomNav?: b
   const unitPrice = selectedVariant ? selectedVariant.price : product.price
   const availableForDisplay = selectedVariant ? selectedVariant.availableStock : product.inStock
 
-  // Grand total across every variant tab that has checked accounts, not just the
-  // one currently in view - selections persist when switching tiers.
   const priceForKey = (key: string) => key === "none" ? product.price : (variants.find((v) => v.id === Number(key))?.price ?? product.price)
   const totalSelectedCount = Object.values(selectedByVariant).reduce((s, ids) => s + ids.size, 0)
   const totalSelectedPrice = Object.entries(selectedByVariant).reduce((s, [key, ids]) => s + priceForKey(key) * ids.size, 0)

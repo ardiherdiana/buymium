@@ -8,13 +8,11 @@ import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api"
-
 const INPUT_CLASS =
   "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2"
 
 export default function ProfilPage() {
-  const { user, token, login, logout } = useAuth()
+  const { user, token, login, logout, authFetch } = useAuth()
   const router = useRouter()
 
   function handleLogout() {
@@ -26,19 +24,18 @@ export default function ProfilPage() {
 
   useEffect(() => {
     if (!token) return
-    fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+    authFetch("/auth/me")
       .then((r) => r.json())
       .then((data) => { if (data.avatar) setAvatar(data.avatar) })
       .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
-  // Profile section
   const [name, setName] = useState(user?.name ?? "")
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileSuccess, setProfileSuccess] = useState(false)
   const [profileError, setProfileError] = useState("")
 
-  // Change password section
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -48,8 +45,6 @@ export default function ProfilPage() {
   const [passSuccess, setPassSuccess] = useState(false)
   const [passError, setPassError] = useState("")
 
-  // hasPassword: Google-only users have password === '' so we expose this via /me
-  // We store it in user context — fall back to checking if user was set without it
   const hasPassword = (user as any)?.hasPassword ?? true
 
   async function handleSaveProfile(e: FormEvent) {
@@ -59,12 +54,9 @@ export default function ProfilPage() {
     setProfileSuccess(false)
     setProfileLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/auth/profile`, {
+      const res = await authFetch("/auth/profile", {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       })
       const data = await res.json()
@@ -90,12 +82,9 @@ export default function ProfilPage() {
     try {
       const body: Record<string, string> = { newPassword }
       if (hasPassword) body.currentPassword = currentPassword
-      const res = await fetch(`${API_BASE}/auth/change-password`, {
+      const res = await authFetch("/auth/change-password", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
       const data = await res.json()

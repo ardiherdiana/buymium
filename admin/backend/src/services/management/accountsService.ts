@@ -6,6 +6,7 @@ import { enqueueRapidApiCall } from '../../utils/rapidApiQueue'
 import type { Source, Account } from '@prisma/client'
 import type { sheets_v4 } from 'googleapis'
 import { Prisma } from '@prisma/client'
+import { encrypt } from '../../utils/encrypt'
 
 const prisma = db
 
@@ -203,7 +204,7 @@ export const AccountsService = {
                   orderIndex,
                   email: email || null,
                   username: username || null,
-                  password: password || null,
+                  password: password ? encrypt(password) : null,
                   targetFollowers: targetFollowers || 0,
                   currentFollowers: null,
                   accountStatus: null,

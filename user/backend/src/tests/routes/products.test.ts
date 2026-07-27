@@ -80,34 +80,36 @@ describe('GET /api/products/:id', () => {
     expect(res.body.error).toBe('Produk tidak ditemukan')
   })
 
-  it('returns 400 when id is not a number', async () => {
+  it('returns 404 when id is not a number and no matching slug exists', async () => {
+    mockDb.product.findUnique.mockResolvedValue(null)
+    mockDb.product.findMany.mockResolvedValue([])
+
     const res = await request(app).get('/api/products/abc')
 
-    expect(res.status).toBe(400)
-    expect(res.body.error).toBe('ID tidak valid')
+    expect(res.status).toBe(404)
+    expect(res.body.error).toBe('Produk tidak ditemukan')
   })
 })
 
 describe('GET /api/products/stats', () => {
   it('returns 200 with product stats', async () => {
-    mockDb.product.count.mockResolvedValue(5)
-    mockDb.product.aggregate
-      .mockResolvedValueOnce({ _sum: { inStock: 50 } })
-      .mockResolvedValueOnce({ _avg: { rating: 4.2 } })
+    mockDb.product.findMany.mockResolvedValue([
+      { id: 1, sourceId: null, inStock: 20 },
+      { id: 2, sourceId: null, inStock: 30 },
+    ])
+    mockDb.testimonial.aggregate.mockResolvedValue({ _avg: { rating: 4.2 } })
 
     const res = await request(app).get('/api/products/stats')
 
     expect(res.status).toBe(200)
-    expect(res.body.totalListings).toBe(5)
+    expect(res.body.totalListings).toBe(2)
     expect(res.body.totalStock).toBe(50)
     expect(res.body.avgRating).toBe(4.2)
   })
 
   it('returns 0 totals when no products', async () => {
-    mockDb.product.count.mockResolvedValue(0)
-    mockDb.product.aggregate
-      .mockResolvedValueOnce({ _sum: { inStock: null } })
-      .mockResolvedValueOnce({ _avg: { rating: null } })
+    mockDb.product.findMany.mockResolvedValue([])
+    mockDb.testimonial.aggregate.mockResolvedValue({ _avg: { rating: null } })
 
     const res = await request(app).get('/api/products/stats')
 
@@ -142,7 +144,7 @@ describe('POST /api/products (admin)', () => {
       .send({ description: 'No title' })
 
     expect(res.status).toBe(400)
-    expect(res.body.error).toBe('title dan description wajib diisi')
+    expect(res.body.error).toBe('Validasi gagal')
   })
 
   it('returns 201 with created product for admin', async () => {

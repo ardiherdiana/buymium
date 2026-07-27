@@ -11,37 +11,39 @@ import { sendOtpEmail, sendResetPasswordOtpEmail } from '../utils/email'
 const router = Router()
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 
-// In-memory OTP store: email -> { otp, hashedPassword, name, expiresAt }
-interface PendingRegistration {
-  otp: string
+interface RegistrationPayload {
   name: string
   hashedPassword: string
-  expiresAt: number
 }
-const pendingRegistrations = new Map<string, PendingRegistration>()
 
-// Clean up expired entries periodically
-setInterval(() => {
-  const now = Date.now()
-  for (const [email, entry] of pendingRegistrations.entries()) {
-    if (entry.expiresAt < now) pendingRegistrations.delete(email)
-  }
-}, 60_000)
-
-// In-memory reset OTP store: email -> { userId, otp, expiresAt }
-interface PendingReset {
-  userId: number
-  otp: string
-  expiresAt: number
+async function createOtpToken(email: string, purpose: 'register' | 'reset', payload?: unknown): Promise<string> {
+  await db.otpToken.deleteMany({ where: { email, purpose } })
+  const otp = Math.floor(100000 + Math.random() * 900000).toString()
+  const codeHash = await bcrypt.hash(otp, 10)
+  await db.otpToken.create({
+    data: {
+      email,
+      purpose,
+      codeHash,
+      payload: payload !== undefined ? JSON.stringify(payload) : null,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    },
+  })
+  return otp
 }
-const pendingResets = new Map<string, PendingReset>()
 
-setInterval(() => {
-  const now = Date.now()
-  for (const [email, entry] of pendingResets.entries()) {
-    if (entry.expiresAt < now) pendingResets.delete(email)
+async function consumeOtpToken<T>(email: string, purpose: 'register' | 'reset', otp: string): Promise<{ ok: true; payload: T | null } | { ok: false; error: string }> {
+  const pending = await db.otpToken.findFirst({ where: { email, purpose }, orderBy: { createdAt: 'desc' } })
+  if (!pending) return { ok: false, error: 'notfound' }
+  if (pending.expiresAt < new Date()) {
+    await db.otpToken.delete({ where: { id: pending.id } })
+    return { ok: false, error: 'expired' }
   }
-}, 60_000)
+  const valid = await bcrypt.compare(otp, pending.codeHash)
+  if (!valid) return { ok: false, error: 'mismatch' }
+  await db.otpToken.delete({ where: { id: pending.id } })
+  return { ok: true, payload: pending.payload ? (JSON.parse(pending.payload) as T) : null }
+}
 
 router.post('/register', validate(RegisterSchema), async (req: Request, res: Response) => {
   const { name, email, password } = req.body as { name: string; email: string; password: string }
@@ -52,15 +54,8 @@ router.post('/register', validate(RegisterSchema), async (req: Request, res: Res
     return
   }
 
-  const otp = Math.floor(100000 + Math.random() * 900000).toString()
   const hashedPassword = await bcrypt.hash(password, 12)
-
-  pendingRegistrations.set(email, {
-    otp,
-    name,
-    hashedPassword,
-    expiresAt: Date.now() + 10 * 60 * 1000,
-  })
+  const otp = await createOtpToken(email, 'register', { name, hashedPassword } satisfies RegistrationPayload)
 
   await sendOtpEmail({ to: email, name, otp })
 
@@ -70,22 +65,17 @@ router.post('/register', validate(RegisterSchema), async (req: Request, res: Res
 router.post('/verify-otp', validate(OtpVerifySchema), async (req: Request, res: Response) => {
   const { email, otp } = req.body as { email: string; otp: string }
 
-  const pending = pendingRegistrations.get(email)
-  if (!pending) {
-    res.status(400).json({ error: 'Tidak ada permintaan pendaftaran untuk email ini. Daftar ulang.' })
+  const result = await consumeOtpToken<RegistrationPayload>(email, 'register', otp)
+  if (!result.ok || !result.payload) {
+    const error = !result.ok && result.error === 'expired'
+      ? 'Kode OTP sudah kadaluarsa. Daftar ulang untuk mendapat kode baru.'
+      : !result.ok && result.error === 'mismatch'
+      ? 'Kode OTP salah. Periksa kembali email kamu.'
+      : 'Tidak ada permintaan pendaftaran untuk email ini. Daftar ulang.'
+    res.status(400).json({ error })
     return
   }
-  if (pending.expiresAt < Date.now()) {
-    pendingRegistrations.delete(email)
-    res.status(400).json({ error: 'Kode OTP sudah kadaluarsa. Daftar ulang untuk mendapat kode baru.' })
-    return
-  }
-  if (pending.otp !== otp) {
-    res.status(400).json({ error: 'Kode OTP salah. Periksa kembali email kamu.' })
-    return
-  }
-
-  pendingRegistrations.delete(email)
+  const pending = result.payload
 
   const existing = await db.user.findUnique({ where: { email } })
   if (existing) {
@@ -116,31 +106,26 @@ router.post('/resend-otp', async (req: Request, res: Response) => {
   const { email } = req.body as { email: string }
   if (!email) { res.status(400).json({ error: 'Email diperlukan' }); return }
 
-  const pending = pendingRegistrations.get(email)
-  if (!pending) {
-    res.status(400).json({ error: 'Tidak ada sesi pendaftaran aktif untuk email ini.' })
-    return
+  const existingToken = await db.otpToken.findFirst({ where: { email, purpose: 'register' }, orderBy: { createdAt: 'desc' } })
+  if (existingToken?.payload) {
+    const pending = JSON.parse(existingToken.payload) as RegistrationPayload
+    const newOtp = await createOtpToken(email, 'register', pending)
+    await sendOtpEmail({ to: email, name: pending.name, otp: newOtp })
   }
 
-  const newOtp = Math.floor(100000 + Math.random() * 900000).toString()
-  pendingRegistrations.set(email, { ...pending, otp: newOtp, expiresAt: Date.now() + 10 * 60 * 1000 })
-
-  await sendOtpEmail({ to: email, name: pending.name, otp: newOtp })
-  res.json({ message: 'Kode OTP baru telah dikirim.' })
+  res.json({ message: 'Jika ada sesi pendaftaran aktif untuk email ini, kode OTP baru telah dikirim.' })
 })
 
 router.post('/forgot-password', validate(ForgotPasswordSchema), async (req: Request, res: Response) => {
   const { email } = req.body as { email: string }
 
   const user = await db.user.findUnique({ where: { email } })
-  // Always respond OK to prevent email enumeration
   if (!user || !user.password) {
     res.json({ message: 'Jika email terdaftar, kode OTP akan dikirim.' })
     return
   }
 
-  const otp = Math.floor(100000 + Math.random() * 900000).toString()
-  pendingResets.set(email, { userId: user.id, otp, expiresAt: Date.now() + 10 * 60 * 1000 })
+  const otp = await createOtpToken(email, 'reset', { userId: user.id })
 
   await sendResetPasswordOtpEmail({ to: user.email, name: user.name, otp })
 
@@ -150,20 +135,14 @@ router.post('/forgot-password', validate(ForgotPasswordSchema), async (req: Requ
 router.post('/reset-password', validate(ResetPasswordSchema), async (req: Request, res: Response) => {
   const { email, otp, password } = req.body as { email: string; otp: string; password: string }
 
-  const pending = pendingResets.get(email)
-  if (!pending || pending.expiresAt < Date.now()) {
-    pendingResets.delete(email)
+  const result = await consumeOtpToken<{ userId: number }>(email, 'reset', otp)
+  if (!result.ok || !result.payload) {
     res.status(400).json({ error: 'Kode OTP tidak valid atau sudah kadaluarsa. Minta kode baru.' })
-    return
-  }
-  if (pending.otp !== otp) {
-    res.status(400).json({ error: 'Kode OTP salah. Periksa kembali email kamu.' })
     return
   }
 
   const hashedPassword = await bcrypt.hash(password, 12)
-  await db.user.update({ where: { id: pending.userId }, data: { password: hashedPassword } })
-  pendingResets.delete(email)
+  await db.user.update({ where: { id: result.payload.userId }, data: { password: hashedPassword } })
 
   res.json({ message: 'Password berhasil diubah. Silakan masuk dengan password baru.' })
 })

@@ -1,4 +1,3 @@
-// This schema is shared with user backend - same database
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,13 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Role model
 model Role {
-  id          Int     @id @default(autoincrement())
-  name        String  @unique @db.VarChar(50)
-  displayName String  @db.VarChar(255) @map("display_name")
-  description String? @db.Text
-  permissions String  @db.LongText
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  displayName String   @db.VarChar(255) @map("display_name")
+  description String?  @db.Text
+  permissions String   @db.LongText
   createdAt   DateTime @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt   DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
@@ -24,19 +22,18 @@ model Role {
   @@map("roles")
 }
 
-// User model - shared with actual database
 model User {
-  id        Int     @id @default(autoincrement())
-  name      String  @db.VarChar(255)
-  email     String  @unique @db.VarChar(255)
-  password  String  @db.VarChar(255)
-  roleId    Int     @default(3) @map("role_id")
-  googleId  String? @unique @db.VarChar(255) @map("google_id")
-  avatar    String? @db.VarChar(500)
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(255)
+  email     String   @unique @db.VarChar(255)
+  password  String   @db.VarChar(255)
+  roleId    Int      @default(3) @map("role_id")
+  googleId  String?  @unique @db.VarChar(255) @map("google_id")
+  avatar    String?  @db.VarChar(500)
   createdAt DateTime @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  role      Role                  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  role         Role                  @relation(fields: [roleId], references: [id], onDelete: Restrict)
   orders       Order[]
   channels     Channel[]
   posts        AutopostingPost[]
@@ -51,25 +48,24 @@ model User {
   @@map("users")
 }
 
-// Product model - shared
 model Product {
-  id          Int     @id @default(autoincrement())
-  title       String  @db.Text
-  slug        String? @unique @db.VarChar(255)
-  description String  @db.Text
-  inStock     Int     @default(0) @map("in_stock")
-  price       Float   @default(0)
-  rating      Float   @default(0)
-  isVerified  Boolean @default(false) @map("is_verified")
-  sectionId   Int?    @map("section_id")
-  imageUrl     String? @db.VarChar(500) @map("image_url")
-  variantLabel String? @db.VarChar(100) @map("variant_label")
-  sourceId    Int?    @unique @map("source_id")
-  createdAt   DateTime @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt   DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+  id           Int      @id @default(autoincrement())
+  title        String   @db.Text
+  slug         String?  @unique @db.VarChar(255)
+  description  String   @db.Text
+  inStock      Int      @default(0) @map("in_stock")
+  price        Float    @default(0)
+  rating       Float    @default(0)
+  isVerified   Boolean  @default(false) @map("is_verified")
+  sectionId    Int?     @map("section_id")
+  imageUrl     String?  @db.VarChar(500) @map("image_url")
+  variantLabel String?  @db.VarChar(100) @map("variant_label")
+  sourceId     Int?     @unique @map("source_id")
+  createdAt    DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt    DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  section      ProductSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
-  source       Source?         @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  section      ProductSection?  @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  source       Source?          @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   orders       Order[]
   testimonials Testimonial[]
   variants     ProductVariant[]
@@ -79,8 +75,6 @@ model Product {
   @@map("products")
 }
 
-// Price tiers for a source-linked product, auto-detected from distinct Account/Accsmarket
-// targetFollowers values (e.g. 1000, 2000) within the linked Source; admin only fills in price.
 model ProductVariant {
   id              Int      @id @default(autoincrement())
   productId       Int      @map("product_id")
@@ -111,7 +105,6 @@ model ProductSection {
   @@map("product_sections")
 }
 
-// Order model - shared
 model Order {
   id              Int       @id @default(autoincrement())
   userId          Int       @map("user_id")
@@ -129,9 +122,9 @@ model Order {
   createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product             Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  bankAccount         BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
   reservedAccounts    Account[]
   reservedAccsmarkets Accsmarket[]
   sale                Sale?
@@ -144,7 +137,6 @@ model Order {
   @@map("orders")
 }
 
-// Bank Account model - for manual bank transfer
 model BankAccount {
   id            Int      @id @default(autoincrement())
   bankName      String   @db.VarChar(100) @map("bank_name")
@@ -161,18 +153,17 @@ model BankAccount {
   @@map("bank_accounts")
 }
 
-// Autoposting Module Models
 model Channel {
-  id               Int       @id @default(autoincrement())
-  userId           Int       @map("user_id")
-  username         String    @db.VarChar(255)
-  type             String?   @db.VarChar(50)
-  profilePhotoPath String?   @db.VarChar(500) @map("profile_photo_path")
-  socialBuId       String?   @unique @db.VarChar(255) @map("social_bu_id")
-  createdAt        DateTime  @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt        DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+  id               Int      @id @default(autoincrement())
+  userId           Int      @map("user_id")
+  username         String   @db.VarChar(255)
+  type             String?  @db.VarChar(50)
+  profilePhotoPath String?  @db.VarChar(500) @map("profile_photo_path")
+  socialBuId       String?  @unique @db.VarChar(255) @map("social_bu_id")
+  createdAt        DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt        DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   posts     AutopostingPost[]
   schedules AutopostingSchedule[]
 
@@ -182,18 +173,18 @@ model Channel {
 }
 
 model AutopostingPost {
-  id            Int        @id @default(autoincrement())
-  userId        Int        @map("user_id")
-  channelId     Int        @map("channel_id")
-  caption       String     @db.Text
-  source        String?    @db.VarChar(255)
-  imageUrl      String?    @db.VarChar(500) @map("image_url")
-  scheduledTime DateTime?  @map("scheduled_time") @db.DateTime(3)
-  status        String     @default("drafted") @db.VarChar(50)
-  socialBuId    String?    @unique @db.VarChar(255) @map("social_bu_id")
-  postedAt      DateTime?  @map("posted_at") @db.DateTime(3)
-  createdAt     DateTime   @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt     DateTime   @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+  id            Int       @id @default(autoincrement())
+  userId        Int       @map("user_id")
+  channelId     Int       @map("channel_id")
+  caption       String    @db.Text
+  source        String?   @db.VarChar(255)
+  imageUrl      String?   @db.VarChar(500) @map("image_url")
+  scheduledTime DateTime? @map("scheduled_time") @db.DateTime(3)
+  status        String    @default("drafted") @db.VarChar(50)
+  socialBuId    String?   @unique @db.VarChar(255) @map("social_bu_id")
+  postedAt      DateTime? @map("posted_at") @db.DateTime(3)
+  createdAt     DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt     DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
@@ -207,12 +198,12 @@ model AutopostingPost {
 }
 
 model AutopostingSchedule {
-  id        Int     @id @default(autoincrement())
-  userId    Int     @map("user_id")
-  channelId Int     @map("channel_id")
-  day       String  @db.VarChar(20)
-  isActive  Boolean @default(true) @map("is_active")
-  slots     String  @db.LongText
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  channelId Int      @map("channel_id")
+  day       String   @db.VarChar(20)
+  isActive  Boolean  @default(true) @map("is_active")
+  slots     String   @db.LongText
   createdAt DateTime @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
@@ -224,43 +215,42 @@ model AutopostingSchedule {
   @@map("schedules")
 }
 
-// Management Module Models
 model Source {
-  id                      Int       @id @default(autoincrement())
-  name                    String    @db.VarChar(255)
-  spreadsheetId           String?   @db.VarChar(500) @map("spreadsheet_id")
-  isAccsmarket            Boolean   @default(false) @map("is_accsmarket")
-  createdAt               DateTime  @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt               DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+  id            Int      @id @default(autoincrement())
+  name          String   @db.VarChar(255)
+  spreadsheetId String?  @db.VarChar(500) @map("spreadsheet_id")
+  isAccsmarket  Boolean  @default(false) @map("is_accsmarket")
+  createdAt     DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt     DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  accounts Account[]
+  accounts    Account[]
   accsmarkets Accsmarket[]
-  sales Sale[]
-  product  Product?
+  sales       Sale[]
+  product     Product?
 
   @@map("sources")
 }
 
 model Account {
-  id              Int       @id @default(autoincrement())
-  orderIndex      Int?      @map("order_index")
-  email           String?   @db.VarChar(255)
-  username        String?   @db.VarChar(255)
-  password        String?   @db.VarChar(255)
-  targetFollowers Int?      @map("target_followers")
+  id               Int      @id @default(autoincrement())
+  orderIndex       Int?     @map("order_index")
+  email            String?  @db.VarChar(255)
+  username         String?  @db.VarChar(255)
+  password         String?  @db.VarChar(255)
+  targetFollowers  Int?     @map("target_followers")
   currentFollowers Int?     @map("current_followers")
-  accountStatus   String?   @db.VarChar(50) @map("account_status")
-  loginApp        String?   @db.VarChar(255) @map("login_app")
-  capital         Float?
-  phoneModel      String?   @db.VarChar(255) @map("phone_model")
-  sourceId        Int?      @map("source_id")
-  isSold          Boolean   @default(false) @map("is_sold")
-  reservedOrderId Int?      @map("reserved_order_id")
-  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+  accountStatus    String?  @db.VarChar(50) @map("account_status")
+  loginApp         String?  @db.VarChar(255) @map("login_app")
+  capital          Float?
+  phoneModel       String?  @db.VarChar(255) @map("phone_model")
+  sourceId         Int?     @map("source_id")
+  isSold           Boolean  @default(false) @map("is_sold")
+  reservedOrderId  Int?     @map("reserved_order_id")
+  createdAt        DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt        DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  source        Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  reservedOrder Order?      @relation(fields: [reservedOrderId], references: [id], onDelete: SetNull)
+  source        Source?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  reservedOrder Order?     @relation(fields: [reservedOrderId], references: [id], onDelete: SetNull)
   saleLines     SaleLine[]
 
   @@index([email])
@@ -274,31 +264,21 @@ model Account {
 }
 
 model Customer {
-  id              Int       @id @default(autoincrement())
-  usernameSh      String?   @unique @db.VarChar(255) @map("username_shopee")
-  nomorHp         String?   @db.VarChar(20) @map("nomor_hp")
-  createdBy       Int?      @map("created_by")
-  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+  id         Int      @id @default(autoincrement())
+  usernameSh String?  @unique @db.VarChar(255) @map("username_shopee")
+  nomorHp    String?  @db.VarChar(20) @map("nomor_hp")
+  createdBy  Int?     @map("created_by")
+  createdAt  DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt  DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  creator   User?   @relation(fields: [createdBy], references: [id], onDelete: SetNull)
-  sales     Sale[]
+  creator      User?         @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  sales        Sale[]
   upfollOrders UpfollOrder[]
 
   @@index([createdAt])
   @@map("customers")
 }
 
-// Upfoll Module Models
-// Organic IG follow-for-tag giveaway sponsorship — not panel/inject followers.
-// Vendors are the suppliers who run the actual giveaway; each vendor defines
-// its own tiers (target-follower package + price it charges, e.g. "1K
-// Followers" = Rp15.000) since different vendors' giveaways draw from
-// different follower pools — there's no shared tier catalog. UpfollItem
-// records one sponsored username against a specific vendor's tier, and a
-// unique constraint on (username, vendorTierId) blocks re-tagging the same
-// vendor's giveaway audience twice; the same username is free to be reused
-// under a different vendor.
 model UpfollVendor {
   id        Int      @id @default(autoincrement())
   name      String   @db.VarChar(150)
@@ -328,9 +308,6 @@ model UpfollVendorTier {
   @@map("upfoll_vendor_tiers")
 }
 
-// saleId mirrors this order into the shared Sale/SaleLine tables at creation
-// time so it's automatically picked up by the existing Finance > Sales and
-// Analytics pages without those pages needing to know about Upfoll at all.
 model UpfollOrder {
   id                Int      @id @default(autoincrement())
   orderNumber       String   @db.VarChar(255) @map("order_number")
@@ -379,26 +356,26 @@ model UpfollItem {
 }
 
 model Accsmarket {
-  id              Int       @id @default(autoincrement())
-  orderIndex      Int?      @map("order_index")
-  email           String?   @db.VarChar(255)
-  passwordEmail   String?   @db.VarChar(255) @map("password_email")
-  username        String?   @db.VarChar(255)
-  password        String?   @db.VarChar(255)
-  twoFactorAuth   String?   @db.VarChar(255) @map("two_factor_auth")
-  targetFollowers Int?      @map("target_followers")
+  id               Int      @id @default(autoincrement())
+  orderIndex       Int?     @map("order_index")
+  email            String?  @db.VarChar(255)
+  passwordEmail    String?  @db.VarChar(255) @map("password_email")
+  username         String?  @db.VarChar(255)
+  password         String?  @db.VarChar(255)
+  twoFactorAuth    String?  @db.VarChar(255) @map("two_factor_auth")
+  targetFollowers  Int?     @map("target_followers")
   currentFollowers Int?     @map("current_followers")
-  accountStatus   String?   @db.VarChar(50) @map("account_status")
-  capital         Float?
-  year            String?   @db.VarChar(255)
-  sourceId        Int?      @map("source_id")
-  isSold          Boolean   @default(false) @map("is_sold")
-  reservedOrderId Int?      @map("reserved_order_id")
-  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+  accountStatus    String?  @db.VarChar(50) @map("account_status")
+  capital          Float?
+  year             String?  @db.VarChar(255)
+  sourceId         Int?     @map("source_id")
+  isSold           Boolean  @default(false) @map("is_sold")
+  reservedOrderId  Int?     @map("reserved_order_id")
+  createdAt        DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt        DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  source        Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  reservedOrder Order?      @relation(fields: [reservedOrderId], references: [id], onDelete: SetNull)
+  source        Source?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  reservedOrder Order?     @relation(fields: [reservedOrderId], references: [id], onDelete: SetNull)
   saleLines     SaleLine[]
 
   @@index([email])
@@ -412,21 +389,21 @@ model Accsmarket {
 }
 
 model Sale {
-  id              Int       @id @default(autoincrement())
-  salesNumber     String    @db.VarChar(255) @map("sales_number")
-  customerId      Int?      @map("customer_id")
-  totalSalePrice  Float     @map("total_sale_price")
-  totalProfit     Float     @map("total_profit")
-  isShopee        Boolean   @default(false) @map("is_shopee")
-  sourceId        Int?      @map("source_id")
-  orderId         Int?      @unique @map("order_id")
-  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt       DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+  id             Int      @id @default(autoincrement())
+  salesNumber    String   @db.VarChar(255) @map("sales_number")
+  customerId     Int?     @map("customer_id")
+  totalSalePrice Float    @map("total_sale_price")
+  totalProfit    Float    @map("total_profit")
+  isShopee       Boolean  @default(false) @map("is_shopee")
+  sourceId       Int?     @map("source_id")
+  orderId        Int?     @unique @map("order_id")
+  createdAt      DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt      DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  source   Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  order    Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  saleLines SaleLine[]
+  customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  source      Source?      @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  order       Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  saleLines   SaleLine[]
   upfollOrder UpfollOrder?
 
   @@index([customerId])
@@ -437,17 +414,17 @@ model Sale {
 }
 
 model SaleLine {
-  id              Int       @id @default(autoincrement())
-  saleId          Int       @map("sale_id")
-  accountId       Int?      @map("account_id")
-  accsmarketId    Int?      @map("accsmarket_id")
-  unitSalePrice   Float?    @map("unit_sale_price")
-  price           Float     @default(0)
-  profit          Float     @default(0)
-  createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+  id            Int      @id @default(autoincrement())
+  saleId        Int      @map("sale_id")
+  accountId     Int?     @map("account_id")
+  accsmarketId  Int?     @map("accsmarket_id")
+  unitSalePrice Float?   @map("unit_sale_price")
+  price         Float    @default(0)
+  profit        Float    @default(0)
+  createdAt     DateTime @db.DateTime(3) @default(now()) @map("created_at")
 
-  sale       Sale       @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  account    Account?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  sale       Sale        @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  account    Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
   accsmarket Accsmarket? @relation(fields: [accsmarketId], references: [id], onDelete: SetNull)
 
   @@index([saleId])
@@ -475,4 +452,29 @@ model Testimonial {
   @@index([productId])
   @@index([isPublished])
   @@map("testimonials")
+}
+
+model AccountAccessLog {
+  id        Int      @id @default(autoincrement())
+  orderId   Int      @map("order_id")
+  userId    Int      @map("user_id")
+  ip        String?  @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@index([userId])
+  @@map("account_access_logs")
+}
+
+model OtpToken {
+  id        Int      @id @default(autoincrement())
+  email     String   @db.VarChar(255)
+  purpose   String   @db.VarChar(30) @map("purpose")
+  codeHash  String   @db.VarChar(255) @map("code_hash")
+  payload   String?  @db.Text
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email, purpose])
+  @@map("otp_tokens")
 }

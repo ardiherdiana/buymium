@@ -1,8 +1,6 @@
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
 
-// Product photos are uploaded and stored on the admin backend (separate domain from
-// this storefront), so relative paths like "/uploads/xxx.jpg" need that origin prefixed.
 const UPLOADS_BASE_URL = process.env.NEXT_PUBLIC_UPLOADS_URL ?? "https://admin.buymium.store"
 
 export function resolveImageUrl(url?: string | null): string | null {

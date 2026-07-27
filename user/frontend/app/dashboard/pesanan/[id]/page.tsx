@@ -249,7 +249,7 @@ function UploadZone({ onFile, uploading, success }: {
   )
 }
 
-function ReviewForm({ orderId, token, onSubmitted }: { orderId: number; token: string; onSubmitted: (rating: number, message: string) => void }) {
+function ReviewForm({ orderId, authFetch, onSubmitted }: { orderId: number; authFetch: (path: string, init?: RequestInit) => Promise<Response>; onSubmitted: (rating: number, message: string) => void }) {
   const [rating, setRating] = useState(0)
   const [hovered, setHovered] = useState(0)
   const [message, setMessage] = useState("")
@@ -261,9 +261,9 @@ function ReviewForm({ orderId, token, onSubmitted }: { orderId: number; token: s
     setSubmitting(true)
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/testimonials`, {
+      const res = await authFetch("/testimonials", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId, rating, message: message.trim() }),
       })
       if (res.ok) {
@@ -345,7 +345,7 @@ function LoadingSkeleton() {
 
 export default function PesananDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { token } = useAuth()
+  const { token, authFetch } = useAuth()
   const router = useRouter()
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -360,23 +360,19 @@ export default function PesananDetailPage() {
 
   useEffect(() => {
     if (!token) return
-    fetch(`${API_BASE}/orders/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    authFetch(`/orders/${id}`)
       .then((r) => { if (r.status === 404) { setNotFound(true); return null } return r.json() })
       .then((d) => { if (d) setOrder(d) })
       .catch(() => {})
       .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, token])
 
   async function handleCancel() {
     if (!token || !order) return
     setCancelling(true)
     try {
-      const res = await fetch(`${API_BASE}/orders/${order.id}/cancel`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`/orders/${order.id}/cancel`, { method: "POST" })
       if (res.ok) {
         setOrder((prev) => prev ? { ...prev, status: "cancelled" } : prev)
         setCancelConfirm(false)
@@ -392,9 +388,8 @@ export default function PesananDetailPage() {
     const form = new FormData()
     form.append("proof", file)
     try {
-      const res = await fetch(`${API_BASE}/orders/${order.id}/proof`, {
+      const res = await authFetch(`/orders/${order.id}/proof`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: form,
       })
       if (res.ok) {
@@ -410,9 +405,7 @@ export default function PesananDetailPage() {
     if (!token || !order) return
     setDownloading(true)
     try {
-      const res = await fetch(`${API_BASE}/orders/${order.id}/download`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`/orders/${order.id}/download`)
       if (!res.ok) return
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -430,9 +423,7 @@ export default function PesananDetailPage() {
     if (!token || !order) return
     setDownloadingInvoice(true)
     try {
-      const res = await fetch(`${API_BASE}/orders/${order.id}/invoice`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`/orders/${order.id}/invoice`)
       if (!res.ok) return
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -660,7 +651,7 @@ export default function PesananDetailPage() {
             <Star className="size-4 text-muted-foreground" />
             <h2 className="text-sm font-semibold">Beri Ulasan</h2>
           </div>
-          <ReviewForm orderId={order.id} token={token} onSubmitted={(rating, message) => setSubmittedReview({ rating, message })} />
+          <ReviewForm orderId={order.id} authFetch={authFetch} onSubmitted={(rating, message) => setSubmittedReview({ rating, message })} />
         </div>
       )}
       {isDone && (order.hasTestimonial || submittedReview) && (

@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express'
 import { Prisma, Product } from '@prisma/client'
 import db from '../config/database'
 import { requireAdmin } from '../middleware/auth'
+import { validate } from '../middleware/validate'
+import { CreateProductSchema, UpdateProductSchema } from '../validators'
 import { countAvailableInventory, listInventoryPreview, getProductVariants } from '../utils/inventory'
 
 const router = Router()
@@ -14,13 +16,13 @@ function slugify(title: string): string {
     .replace(/(^-|-$)/g, '')
 }
 
-// Products have no dedicated slug column - the public URL slug is derived from the title
-// on the fly, so lookup by slug means scanning all products and matching the derived value.
 async function findProductByIdOrSlug(idOrSlug: string): Promise<Product | null> {
   if (/^\d+$/.test(idOrSlug)) {
     return db.product.findUnique({ where: { id: parseInt(idOrSlug) } })
   }
-  const products = await db.product.findMany()
+  const bySlug = await db.product.findUnique({ where: { slug: idOrSlug } })
+  if (bySlug) return bySlug
+  const products = await db.product.findMany({ where: { slug: null } })
   return products.find((p) => slugify(p.title) === idOrSlug) ?? null
 }
 
@@ -38,7 +40,37 @@ async function parseProduct(p: Product) {
   ])
   const rating = ratingAgg._avg.rating ? parseFloat(ratingAgg._avg.rating.toFixed(1)) : 0
   const soldCount = soldAgg._sum.quantity ?? 0
-  return { ...p, slug: slugify(p.title), inStock, rating, soldCount }
+  return { ...p, slug: p.slug ?? slugify(p.title), inStock, rating, soldCount }
+}
+
+async function parseProducts(products: Product[]) {
+  if (products.length === 0) return []
+  const ids = products.map((p) => p.id)
+  const [ratings, sold, stocks] = await Promise.all([
+    db.testimonial.groupBy({
+      by: ['productId'],
+      where: { productId: { in: ids }, isPublished: true, rating: { gte: 4 } },
+      _avg: { rating: true },
+    }),
+    db.order.groupBy({
+      by: ['productId'],
+      where: { productId: { in: ids }, status: 'paid' },
+      _sum: { quantity: true },
+    }),
+    Promise.all(products.map((p) => (p.sourceId ? countAvailableInventory(p.id, p.sourceId) : p.inStock))),
+  ])
+  const ratingMap = new Map(ratings.map((r) => [r.productId, r._avg.rating]))
+  const soldMap = new Map(sold.map((s) => [s.productId, s._sum.quantity]))
+  return products.map((p, i) => {
+    const avg = ratingMap.get(p.id)
+    return {
+      ...p,
+      slug: p.slug ?? slugify(p.title),
+      inStock: stocks[i],
+      rating: avg ? parseFloat(avg.toFixed(1)) : 0,
+      soldCount: soldMap.get(p.id) ?? 0,
+    }
+  })
 }
 
 router.get('/', async (req: Request, res: Response) => {
@@ -61,7 +93,7 @@ router.get('/', async (req: Request, res: Response) => {
   ])
 
   res.json({
-    data: await Promise.all(products.map(parseProduct)),
+    data: await parseProducts(products),
     meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
   })
 })
@@ -113,17 +145,13 @@ router.get('/:id', async (req: Request, res: Response) => {
   res.json({ ...parsed, variants })
 })
 
-router.post('/', requireAdmin, async (req: Request, res: Response) => {
+router.post('/', requireAdmin, validate(CreateProductSchema), async (req: Request, res: Response) => {
   const { title, description, inStock, price, rating, isVerified } = req.body
-
-  if (!title || !description) {
-    res.status(400).json({ error: 'title dan description wajib diisi' })
-    return
-  }
 
   const product = await db.product.create({
     data: {
       title, description,
+      slug: slugify(title),
       inStock: inStock ?? 0,
       price: price ?? 0,
       rating: rating ?? 0,
@@ -134,7 +162,7 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
   res.status(201).json(await parseProduct(product))
 })
 
-router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
+router.put('/:id', requireAdmin, validate(UpdateProductSchema), async (req: Request, res: Response) => {
   const id = parseInt(String(req.params.id))
   if (isNaN(id)) {
     res.status(400).json({ error: 'ID tidak valid' })
@@ -145,7 +173,7 @@ router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
 
   const product = await db.product.update({
     where: { id },
-    data: { title, description, inStock, price, rating, isVerified },
+    data: { title, description, slug: title ? slugify(title) : undefined, inStock, price, rating, isVerified },
   })
 
   res.json(await parseProduct(product))

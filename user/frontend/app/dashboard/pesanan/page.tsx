@@ -6,8 +6,6 @@ import { ShoppingBag, ChevronRight, Download } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
-
 interface Order {
   id: number
   createdAt: string
@@ -43,7 +41,7 @@ function tabToStatus(tab: Tab): string[] {
 }
 
 export default function PesananPage() {
-  const { token } = useAuth()
+  const { token, authFetch } = useAuth()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<Tab>("Semua")
@@ -53,9 +51,7 @@ export default function PesananPage() {
     if (!token) return
     setDownloadingId(orderId)
     try {
-      const res = await fetch(`${API_BASE}/orders/${orderId}/download`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`/orders/${orderId}/download`)
       if (!res.ok) return
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -71,11 +67,12 @@ export default function PesananPage() {
   useEffect(() => {
     if (!token) return
     setLoading(true)
-    fetch(`${API_BASE}/orders`, { headers: { Authorization: `Bearer ${token}` } })
+    authFetch("/orders")
       .then((r) => r.json())
       .then((d) => setOrders(Array.isArray(d) ? d : d.orders ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
   const filtered =

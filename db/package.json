@@ -1,0 +1,20 @@
+{
+  "name": "buymium-db",
+  "version": "1.0.0",
+  "description": "Centralized Prisma schema and migration history shared by admin/backend and user/backend",
+  "private": true,
+  "scripts": {
+    "migrate": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:status": "prisma migrate status",
+    "migrate:resolve": "prisma migrate resolve",
+    "generate": "prisma generate",
+    "studio": "prisma studio"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  }
+}

@@ -91,7 +91,6 @@ describe('POST /api/auth/google', () => {
   })
 
   it('returns 200 with token for valid google credential (new user)', async () => {
-    // google-auth-library is mocked globally in setup.ts
     mockDb.user.findUnique.mockResolvedValue(null)
     mockDb.user.create.mockResolvedValue({
       id: 2,

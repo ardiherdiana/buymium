@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import db from '../../config/database'
+import { generateUniqueSlug } from '../../utils/slug'
 
 // The "done" account status is stored inconsistently across Account ("Completed") and
 // Accsmarket ("completed") rows - match both casings rather than relying on one.
@@ -127,10 +128,12 @@ export class ProductsController {
   static async create(req: Request, res: Response): Promise<void> {
     try {
       const { title, description, price, sectionId, imageUrl, sourceId } = req.body
+      const slug = await generateUniqueSlug(title)
 
       const product = await db.product.create({
         data: {
           title,
+          slug,
           description,
           price: parseFloat(price),
           sectionId: sectionId || null,
@@ -154,7 +157,10 @@ export class ProductsController {
       const { title, description, price, sectionId, inStock, isVerified, imageUrl, sourceId } = req.body
 
       const data: Prisma.ProductUpdateInput = {}
-      if (title !== undefined) data.title = title
+      if (title !== undefined) {
+        data.title = title
+        data.slug = await generateUniqueSlug(title, parseInt(id))
+      }
       if (description !== undefined) data.description = description
       if (price !== undefined) data.price = parseFloat(price)
       if (sectionId !== undefined) data.section = sectionId ? { connect: { id: sectionId } } : { disconnect: true }

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { logger } from '../../utils/logger'
 import { AccountsService } from '../../services/management/accountsService'
 import db from '../../config/database'
+import { encrypt, safeDecrypt } from '../../utils/encrypt'
 
 const prisma = db
 
@@ -178,7 +179,7 @@ export class AccountsController {
       }
 
       res.json({
-        accounts,
+        accounts: accounts.map((a) => ({ ...a, password: safeDecrypt(a.password) })),
         sources,
         phoneModels,
         targetFollowers,
@@ -276,7 +277,7 @@ export class AccountsController {
           orderIndex: order_index || null,
           email: email || null,
           username: username || null,
-          password: password || null,
+          password: password ? encrypt(password) : null,
           targetFollowers: target_followers || 0,
           currentFollowers: current_followers || null,
           accountStatus: account_status || null,
@@ -291,7 +292,7 @@ export class AccountsController {
       res.status(201).json({
         success: true,
         message: 'Account created successfully',
-        account,
+        account: { ...account, password: safeDecrypt(account.password) },
       })
     } catch (error) {
       logger.error('Error in AccountsController.store:', error)
@@ -310,7 +311,7 @@ export class AccountsController {
           orderIndex: order_index !== undefined ? order_index : undefined,
           email: email !== undefined ? email : undefined,
           username: username !== undefined ? username : undefined,
-          password: password !== undefined ? password : undefined,
+          password: password !== undefined ? (password ? encrypt(password) : null) : undefined,
           targetFollowers: target_followers !== undefined ? target_followers : undefined,
           currentFollowers: current_followers !== undefined ? current_followers : undefined,
           accountStatus: account_status !== undefined ? account_status : undefined,
@@ -325,7 +326,7 @@ export class AccountsController {
       res.json({
         success: true,
         message: 'Account updated successfully',
-        account,
+        account: { ...account, password: safeDecrypt(account.password) },
       })
     } catch (error) {
       logger.error('Error in AccountsController.update:', error)

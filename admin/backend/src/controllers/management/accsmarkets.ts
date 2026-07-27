@@ -3,8 +3,13 @@ import { Prisma } from '@prisma/client'
 import db from '../../config/database'
 import { logger } from '../../utils/logger'
 import { AccsmarketsService } from '../../services/management/accsmarketsService'
+import { encrypt, safeDecrypt } from '../../utils/encrypt'
 
 const prisma = db
+
+function decryptAccsmarket<T extends { password: string | null; passwordEmail: string | null; twoFactorAuth: string | null }>(a: T) {
+  return { ...a, password: safeDecrypt(a.password), passwordEmail: safeDecrypt(a.passwordEmail), twoFactorAuth: safeDecrypt(a.twoFactorAuth) }
+}
 
 export const AccsmarketsController = {
   async index(req: Request, res: Response) {
@@ -104,7 +109,7 @@ export const AccsmarketsController = {
       })
 
       res.json({
-        accsmarkets,
+        accsmarkets: accsmarkets.map(decryptAccsmarket),
         sources: accsmarketSources,
         targetFollowers,
         years,
@@ -207,7 +212,7 @@ export const AccsmarketsController = {
       })
 
       res.json({
-        accsmarkets,
+        accsmarkets: accsmarkets.map(decryptAccsmarket),
         sources,
         targetFollowers,
         years,
@@ -291,7 +296,7 @@ export const AccsmarketsController = {
       })
 
       res.json({
-        accsmarkets,
+        accsmarkets: accsmarkets.map(decryptAccsmarket),
         customers,
         selectedAccountIds,
       })
@@ -322,10 +327,10 @@ export const AccsmarketsController = {
         data: {
           orderIndex: order_index,
           email: email || null,
-          passwordEmail: password_email || null,
+          passwordEmail: password_email ? encrypt(password_email) : null,
           username: username || null,
-          password: password || null,
-          twoFactorAuth: two_factor_auth || null,
+          password: password ? encrypt(password) : null,
+          twoFactorAuth: two_factor_auth ? encrypt(two_factor_auth) : null,
           targetFollowers: target_followers,
           accountStatus: account_status,
           capital: capital,
@@ -335,7 +340,7 @@ export const AccsmarketsController = {
         },
       })
 
-      res.status(201).json({ success: true, accsmarket })
+      res.status(201).json({ success: true, accsmarket: decryptAccsmarket(accsmarket) })
     } catch (error) {
       logger.error('Error creating accsmarket:', error)
       if ((error as { code?: string }).code === 'P2002') {
@@ -369,10 +374,10 @@ export const AccsmarketsController = {
         data: {
           orderIndex: order_index,
           email: email || null,
-          passwordEmail: password_email || null,
+          passwordEmail: password_email ? encrypt(password_email) : null,
           username: username || null,
-          password: password || null,
-          twoFactorAuth: two_factor_auth || null,
+          password: password ? encrypt(password) : null,
+          twoFactorAuth: two_factor_auth ? encrypt(two_factor_auth) : null,
           targetFollowers: target_followers,
           accountStatus: account_status,
           capital: capital,
@@ -382,7 +387,7 @@ export const AccsmarketsController = {
         },
       })
 
-      res.json({ success: true, accsmarket })
+      res.json({ success: true, accsmarket: decryptAccsmarket(accsmarket) })
     } catch (error) {
       logger.error('Error updating accsmarket:', error)
       if ((error as { code?: string }).code === 'P2002') {

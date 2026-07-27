@@ -78,6 +78,8 @@ describe('POST /api/orders', () => {
     mockDb.account.count.mockResolvedValue(5)
     mockDb.account.findMany.mockResolvedValue([{ id: 1 }])
     mockDb.account.updateMany.mockResolvedValue({ count: 1 })
+    mockDb.$queryRaw.mockResolvedValue([{ id: 1 }])
+    mockDb.$executeRaw.mockResolvedValue(1)
 
     const res = await request(app)
       .post('/api/orders')
@@ -124,8 +126,6 @@ describe('GET /api/orders', () => {
   })
 
   it('returns 200 with user orders when authenticated', async () => {
-    // First findMany: expired check (returns empty so no updateMany needed)
-    // Second findMany: actual order list
     mockDb.order.findMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([mockOrder])
@@ -141,8 +141,8 @@ describe('GET /api/orders', () => {
 
   it('returns 200 with empty array when user has no orders', async () => {
     mockDb.order.findMany
-      .mockResolvedValueOnce([])  // expired check
-      .mockResolvedValueOnce([])  // actual list
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
 
     const res = await request(app)
       .get('/api/orders')
@@ -254,6 +254,8 @@ describe('POST /api/orders/cart', () => {
     mockDb.account.count.mockResolvedValue(5)
     mockDb.account.findMany.mockResolvedValue([{ id: 1 }])
     mockDb.account.updateMany.mockResolvedValue({ count: 1 })
+    mockDb.$queryRaw.mockResolvedValue([{ id: 1 }])
+    mockDb.$executeRaw.mockResolvedValue(1)
 
     const res = await request(app)
       .post('/api/orders/cart')
@@ -310,15 +312,15 @@ describe('GET /api/orders/:id/download', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns 404 when order not found or not paid', async () => {
+  it('returns 403 when order not found or not paid', async () => {
     mockDb.order.findFirst.mockResolvedValue(null)
 
     const res = await request(app)
       .get('/api/orders/1/download')
       .set('Authorization', `Bearer ${userToken}`)
 
-    expect(res.status).toBe(404)
-    expect(res.body.error).toBe('Data tidak ditemukan atau pesanan belum dibayar')
+    expect(res.status).toBe(403)
+    expect(res.body.error).toBe('Tidak diizinkan')
   })
 
   it('returns 404 when order is paid but has no inventory refs', async () => {

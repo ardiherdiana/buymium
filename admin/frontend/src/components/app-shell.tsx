@@ -64,6 +64,13 @@ const MANAGEMENT_NAV: NavGroup[] = [
     ],
   },
   {
+    group: "Upfoll",
+    items: [
+      { label: "Pesanan", href: "/upfoll/orders", icon: Gift },
+      { label: "Vendor", href: "/upfoll/vendors", icon: Store },
+    ],
+  },
+  {
     group: "Finance",
     items: [
       { label: "Penjualan", href: "/finance/sales", icon: TrendingUp },
@@ -75,13 +82,6 @@ const MANAGEMENT_NAV: NavGroup[] = [
     items: [
       { label: "Pelanggan", href: "/master/customers", icon: UserSquare },
       { label: "Source", href: "/master/sources", icon: Database },
-    ],
-  },
-  {
-    group: "Upfoll",
-    items: [
-      { label: "Pesanan", href: "/upfoll/orders", icon: Gift },
-      { label: "Vendor", href: "/upfoll/vendors", icon: Store },
     ],
   },
 ]

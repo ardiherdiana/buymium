@@ -42,6 +42,7 @@ model Product {
   orders       Order[]
   testimonials Testimonial[]
   title        String          @db.Text
+  slug         String?         @unique @db.VarChar(255)
   description  String          @db.Text
   inStock      Int             @default(0) @map("in_stock")
   price        Float           @default(0)
@@ -169,6 +170,31 @@ model Channel {
   @@index([userId])
   @@index([socialBuId])
   @@map("channels")
+}
+
+model AccountAccessLog {
+  id        Int      @id @default(autoincrement())
+  orderId   Int      @map("order_id")
+  userId    Int      @map("user_id")
+  ip        String?  @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@index([userId])
+  @@map("account_access_logs")
+}
+
+model OtpToken {
+  id        Int      @id @default(autoincrement())
+  email     String   @db.VarChar(255)
+  purpose   String   @db.VarChar(30) @map("purpose")
+  codeHash  String   @db.VarChar(255) @map("code_hash")
+  payload   String?  @db.Text
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email, purpose])
+  @@map("otp_tokens")
 }
 
 model Testimonial {

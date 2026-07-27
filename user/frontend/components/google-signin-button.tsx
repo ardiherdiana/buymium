@@ -28,7 +28,6 @@ export function GoogleSignInButton({ onCredential, disabled }: GoogleSignInButto
   const initializedRef = useRef(false)
   const [ready, setReady] = useState(false)
 
-  // Keep ref current without triggering re-init
   useEffect(() => { onCredentialRef.current = onCredential }, [onCredential])
 
   useEffect(() => {
@@ -74,7 +73,7 @@ export function GoogleSignInButton({ onCredential, disabled }: GoogleSignInButto
     return () => {
       window.google?.accounts.id.disableAutoSelect()
     }
-  }, []) // empty deps — init once on mount
+  }, [])
 
   return (
     <div className={`relative ${disabled ? "pointer-events-none opacity-50" : ""}`}>

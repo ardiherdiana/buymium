@@ -10,6 +10,7 @@ import { CreateOrderSchema, CartOrderSchema } from '../validators'
 import { userRateLimit } from '../middleware/userRateLimit'
 import { sendOrderCreated, sendProofUploaded } from '../utils/email'
 import { reserveInventory, releaseInventory, countAvailableInventory, getVariantPrice, getOrderVariantLabel } from '../utils/inventory'
+import { safeDecrypt } from '../utils/encrypt'
 
 const router = Router()
 
@@ -36,10 +37,11 @@ function generateGroupId(prefix: string, userId: number): string {
   return `BUYMIUM-${prefix}-${userId}-${Date.now()}`
 }
 
-async function reserveForProduct(orderId: number, productId: number, quantity: number, variantId?: number, stockIds?: number[]): Promise<void> {
+async function reserveForProduct(orderId: number, productId: number, quantity: number, variantId?: number, stockIds?: number[]): Promise<boolean> {
   const product = await db.product.findUnique({ where: { id: productId }, select: { sourceId: true } })
-  if (!product?.sourceId) return
-  await reserveInventory(orderId, productId, product.sourceId, quantity, variantId, stockIds)
+  if (!product?.sourceId) return true
+  const reserved = await reserveInventory(orderId, productId, product.sourceId, quantity, variantId, stockIds)
+  return reserved >= quantity
 }
 
 router.post('/', requireAuth, userRateLimit, validate(CreateOrderSchema), async (req: Request, res: Response) => {
@@ -67,7 +69,13 @@ router.post('/', requireAuth, userRateLimit, validate(CreateOrderSchema), async 
     data: { userId, productId, quantity, totalPrice, status: 'pending', groupId },
   })
 
-  await reserveForProduct(order.id, productId, quantity, variantId, stockIds)
+  const reserved = await reserveForProduct(order.id, productId, quantity, variantId, stockIds)
+  if (!reserved) {
+    await releaseInventory([order.id])
+    await db.order.update({ where: { id: order.id }, data: { status: 'cancelled' } })
+    res.status(409).json({ error: 'Stok baru saja habis dibeli orang lain, silakan pilih produk/variasi lain' })
+    return
+  }
 
   const user = await db.user.findUnique({ where: { id: userId } })
   if (user?.email) {
@@ -111,7 +119,14 @@ router.post('/cart', requireAuth, userRateLimit, validate(CartOrderSchema), asyn
     })
   )
 
-  await Promise.all(items.map((it, i) => reserveForProduct(orders[i].id, it.productId, it.quantity, it.variantId, it.stockIds)))
+  const reservations = await Promise.all(items.map((it, i) => reserveForProduct(orders[i].id, it.productId, it.quantity, it.variantId, it.stockIds)))
+  if (!reservations.every(Boolean)) {
+    const orderIds = orders.map((o) => o.id)
+    await releaseInventory(orderIds)
+    await db.order.updateMany({ where: { id: { in: orderIds } }, data: { status: 'cancelled' } })
+    res.status(409).json({ error: 'Sebagian stok di keranjang baru saja habis dibeli orang lain, silakan cek ulang keranjang kamu' })
+    return
+  }
 
   const totalAll = orders.reduce((s, o) => s + o.totalPrice, 0)
   const totalQty = items.reduce((s, it) => s + it.quantity, 0)
@@ -164,10 +179,18 @@ router.post('/:id/proof', requireAuth, userRateLimit, upload.single('proof'), as
   }
   if (bankId) updateData.bankAccountId = bankId
 
-  if (order.groupId) {
-    await db.order.updateMany({ where: { groupId: order.groupId, userId }, data: updateData })
-  } else {
-    await db.order.update({ where: { id: order.id }, data: updateData })
+  try {
+    if (order.groupId) {
+      await db.order.updateMany({
+        where: { groupId: order.groupId, userId, status: { in: ['pending', 'awaiting_confirmation'] } },
+        data: updateData,
+      })
+    } else {
+      await db.order.update({ where: { id: order.id }, data: updateData })
+    }
+  } catch (err) {
+    fs.unlink(req.file.path, () => {})
+    throw err
   }
 
   const user = await db.user.findUnique({ where: { id: userId } })
@@ -301,6 +324,18 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
 
   if (!order) { res.status(403).json({ error: 'Tidak diizinkan' }); return }
 
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const recentAccessCount = await db.accountAccessLog.count({
+    where: { orderId: order.id, createdAt: { gt: since } },
+  })
+  if (recentAccessCount >= 5) {
+    res.status(429).json({ error: 'Batas download kredensial tercapai, coba lagi besok atau hubungi admin' })
+    return
+  }
+  await db.accountAccessLog.create({
+    data: { orderId: order.id, userId, ip: req.ip ?? null },
+  })
+
   type InventoryRef = { type: 'account' | 'accsmarket'; id: number }
   const inventoryRefs: InventoryRef[] = (() => {
     try { return order.inventoryRefs ? JSON.parse(order.inventoryRefs) : [] } catch { return [] }
@@ -332,7 +367,7 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
     textContent += `AKUN #${index}\n`
     if (acc.email) textContent += `Email: ${acc.email}\n`
     if (acc.username) textContent += `Username: ${acc.username}\n`
-    if (acc.password) textContent += `Password: ${acc.password}\n`
+    if (acc.password) textContent += `Password: ${safeDecrypt(acc.password)}\n`
     textContent += `------------------------------------------\n`
     const email = (acc.email || '').toLowerCase()
     if (email.endsWith('@buymium.store')) hasBuymiumStoreEmail = true
@@ -342,10 +377,10 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
     index += 1
     textContent += `AKUN #${index}\n`
     if (acc.email) textContent += `Email: ${acc.email}\n`
-    if (acc.passwordEmail) textContent += `Password Email: ${acc.passwordEmail}\n`
+    if (acc.passwordEmail) textContent += `Password Email: ${safeDecrypt(acc.passwordEmail)}\n`
     if (acc.username) textContent += `Username: ${acc.username}\n`
-    if (acc.password) textContent += `Password: ${acc.password}\n`
-    if (acc.twoFactorAuth) textContent += `2FA: ${acc.twoFactorAuth}\n`
+    if (acc.password) textContent += `Password: ${safeDecrypt(acc.password)}\n`
+    if (acc.twoFactorAuth) textContent += `2FA: ${safeDecrypt(acc.twoFactorAuth)}\n`
     textContent += `------------------------------------------\n`
     const email = (acc.email || '').toLowerCase()
     if (email.endsWith('@buymium.store')) hasBuymiumStoreEmail = true

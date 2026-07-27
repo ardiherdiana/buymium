@@ -116,7 +116,7 @@ function MasukForm() {
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.message ?? data.error ?? "Terjadi kesalahan")
-        login(data.user, data.token)
+        login(data.user, data.token, data.refreshToken)
         router.push(redirectTo)
       } else {
         const res = await fetch(`${API_BASE}/auth/register`, {
@@ -150,7 +150,7 @@ function MasukForm() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message ?? data.error ?? "Verifikasi gagal")
-      login(data.user, data.token)
+      login(data.user, data.token, data.refreshToken)
       router.push(redirectTo)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verifikasi gagal")
@@ -188,7 +188,7 @@ function MasukForm() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message ?? data.error ?? "Login Google gagal")
-      login(data.user, data.token)
+      login(data.user, data.token, data.refreshToken)
       router.push(redirectTo)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login Google gagal")
@@ -199,7 +199,6 @@ function MasukForm() {
 
   const busy = loading || googleLoading
 
-  // ── OTP Step ──
   if (step === "otp") {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-primary/5 to-background px-4">
@@ -264,7 +263,6 @@ function MasukForm() {
     )
   }
 
-  // ── Login / Register form ──
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-primary/5 to-background px-4">
       <a

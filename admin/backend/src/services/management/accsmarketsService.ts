@@ -5,6 +5,7 @@ import type { sheets_v4 } from 'googleapis'
 import { enqueueRapidApiCall } from '../../utils/rapidApiQueue'
 import type { Accsmarket } from '@prisma/client'
 import { Prisma } from '@prisma/client'
+import { encrypt } from '../../utils/encrypt'
 
 const prisma = db
 
@@ -190,10 +191,10 @@ export const AccsmarketsService = {
                 sourceId: source.id,
                 orderIndex,
                 email: email || null,
-                passwordEmail: passwordEmail || null,
+                passwordEmail: passwordEmail ? encrypt(passwordEmail) : null,
                 username: username || null,
-                password: password || null,
-                twoFactorAuth: twoFa || null,
+                password: password ? encrypt(password) : null,
+                twoFactorAuth: twoFa ? encrypt(twoFa) : null,
                 targetFollowers: targetFollowers,
                 currentFollowers: null,
                 accountStatus: null,

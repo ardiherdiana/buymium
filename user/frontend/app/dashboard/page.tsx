@@ -5,8 +5,6 @@ import Link from "next/link"
 import { ShoppingBag, Package, Clock, ArrowRight } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
-
 interface DashboardStats {
   totalOrders: number
   pendingOrders: number
@@ -36,23 +34,23 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 export default function DashboardPage() {
-  const { user, token } = useAuth()
+  const { user, token, authFetch } = useAuth()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
 
   useEffect(() => {
     if (!token) return
-    const headers = { Authorization: `Bearer ${token}` }
 
-    fetch(`${API_BASE}/orders/stats`, { headers })
+    authFetch("/orders/stats")
       .then((r) => r.json())
       .then((d) => setStats(d))
       .catch(() => {})
 
-    fetch(`${API_BASE}/orders?limit=5`, { headers })
+    authFetch("/orders?limit=5")
       .then((r) => r.json())
       .then((d) => setRecentOrders(Array.isArray(d) ? d : d.orders ?? []))
       .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
   return (
