@@ -34,7 +34,7 @@ function UserGrowthChart() {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Pertumbuhan Pengguna Baru — 30 hari terakhir</CardTitle>
+        <CardTitle className="text-sm font-medium">Pertumbuhan Pengguna Baru — Bulan Ini</CardTitle>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -45,11 +45,19 @@ function UserGrowthChart() {
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={points} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v: string) => v.slice(-2)}
+                interval={0}
+              />
               <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip
                 contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--popover-foreground)" }}
                 formatter={(v) => [v as number, "Pengguna Baru"]}
+                labelFormatter={(v: string) => `Tanggal ${v.slice(-2)}`}
               />
               <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} dot={false} name="Pengguna Baru" />
             </LineChart>

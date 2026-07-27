@@ -66,8 +66,12 @@ export class UsersController {
 
   static async growth(req: Request, res: Response): Promise<void> {
     try {
-      const end = req.query.end ? new Date(String(req.query.end)) : new Date()
-      const start = req.query.start ? new Date(String(req.query.start)) : new Date(end.getTime() - 29 * 86400000)
+      const localKey = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+      const now = new Date()
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
       end.setHours(23, 59, 59, 999)
       start.setHours(0, 0, 0, 0)
 
@@ -78,14 +82,14 @@ export class UsersController {
 
       const counts = new Map<string, number>()
       for (const u of users) {
-        const key = u.createdAt.toISOString().slice(0, 10)
+        const key = localKey(u.createdAt)
         counts.set(key, (counts.get(key) ?? 0) + 1)
       }
 
       const days: { date: string; count: number }[] = []
       const cursor = new Date(start)
       while (cursor <= end) {
-        const key = cursor.toISOString().slice(0, 10)
+        const key = localKey(cursor)
         days.push({ date: key, count: counts.get(key) ?? 0 })
         cursor.setDate(cursor.getDate() + 1)
       }

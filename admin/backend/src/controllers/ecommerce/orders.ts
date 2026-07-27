@@ -178,8 +178,12 @@ export class OrdersController {
 
   static async trend(req: Request, res: Response): Promise<void> {
     try {
-      const end = req.query.end ? new Date(String(req.query.end)) : new Date()
-      const start = req.query.start ? new Date(String(req.query.start)) : new Date(end.getTime() - 29 * 86400000)
+      const localKey = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+      const now = new Date()
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
       end.setHours(23, 59, 59, 999)
       start.setHours(0, 0, 0, 0)
 
@@ -190,7 +194,7 @@ export class OrdersController {
 
       const counts = new Map<string, { total: number; paid: number }>()
       for (const o of orders) {
-        const key = o.createdAt.toISOString().slice(0, 10)
+        const key = localKey(o.createdAt)
         const entry = counts.get(key) ?? { total: 0, paid: 0 }
         entry.total += 1
         if (o.status === 'paid') entry.paid += 1
@@ -200,7 +204,7 @@ export class OrdersController {
       const days: { date: string; total: number; paid: number }[] = []
       const cursor = new Date(start)
       while (cursor <= end) {
-        const key = cursor.toISOString().slice(0, 10)
+        const key = localKey(cursor)
         const entry = counts.get(key) ?? { total: 0, paid: 0 }
         days.push({ date: key, total: entry.total, paid: entry.paid })
         cursor.setDate(cursor.getDate() + 1)
