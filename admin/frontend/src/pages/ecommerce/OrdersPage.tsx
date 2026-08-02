@@ -53,7 +53,7 @@ function OrdersTrendChart() {
               <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip
                 contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--popover-foreground)" }}
-                labelFormatter={(v: string) => `Tanggal ${v.slice(-2)}`}
+                labelFormatter={(v) => `Tanggal ${String(v).slice(-2)}`}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => (v === "paid" ? "Lunas" : "Total Pesanan")} />
               <Line type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} dot={false} name="total" />

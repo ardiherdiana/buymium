@@ -1,4 +1,5 @@
 import app from './app'
+import { logger } from './utils/logger'
 
 // Services
 import { startScheduler } from './services/scheduler'
@@ -19,8 +20,8 @@ startCleanup()
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`[Admin Backend] Running on http://localhost:${PORT}`)
-  console.log(`[Admin Backend] Environment: ${process.env.NODE_ENV || 'development'}`)
+  logger.info(`[Admin Backend] Running on http://localhost:${PORT}`)
+  logger.info(`[Admin Backend] Environment: ${process.env.NODE_ENV || 'development'}`)
 })
 
 export default app

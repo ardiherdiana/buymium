@@ -1,4 +1,5 @@
 import dotenv from 'dotenv'
+import { logger } from '../utils/logger'
 dotenv.config()
 
 interface EnvRule {
@@ -37,25 +38,25 @@ for (const [key, rule] of Object.entries(rules)) {
   const val = process.env[key]
   if (!val) {
     if (rule.required) {
-      console.error(`[env] ❌ ${key} is required but not set`)
+      logger.error(`[env] ❌ ${key} is required but not set`)
       failed = true
     }
     continue
   }
   const err = rule.validate?.(val)
   if (err) {
-    console.error(`[env] ❌ ${key}: ${err}`)
+    logger.error(`[env] ❌ ${key}: ${err}`)
     failed = true
   }
 }
 
 for (const key of optional) {
   if (!process.env[key]) {
-    console.warn(`[env] ⚠️  ${key} is not set — related features will be disabled`)
+    logger.warn(`[env] ⚠️  ${key} is not set — related features will be disabled`)
   }
 }
 
 if (failed) {
-  console.error('[env] Fix the above environment variables and restart.')
+  logger.error('[env] Fix the above environment variables and restart.')
   process.exit(1)
 }

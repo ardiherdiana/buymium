@@ -107,6 +107,7 @@ describe('GET /api/orders/:id', () => {
       product: { ...mockOrder.product, section: { title: 'Streaming' } },
     }
     mockDb.order.findUnique.mockResolvedValueOnce(detailedOrder)
+    mockDb.account.findMany.mockResolvedValueOnce([])
 
     const res = await request(app)
       .get('/api/orders/1')
@@ -118,7 +119,7 @@ describe('GET /api/orders/:id', () => {
   })
 
   it('splits a multi-variant cart group into per-order subtotal/fee/variantLabel', async () => {
-    const productA = { id: 1, title: 'Akun IG', sourceId: 5 }
+    const productA = { id: 1, title: 'Akun IG', sourceSheetName: 'Buymium' }
     const orderRow = (id: number, totalPrice: number) => ({
       id, userId: 10, productId: 1, quantity: 1, totalPrice, status: 'awaiting_confirmation',
       groupId: 'BUYMIUM-CART-10-123', inventoryRefs: null, createdAt: new Date(),
@@ -132,7 +133,6 @@ describe('GET /api/orders/:id', () => {
     mockDb.account.findMany
       .mockResolvedValueOnce([{ id: 100, targetFollowers: 1000 }])
       .mockResolvedValueOnce([{ id: 101, targetFollowers: 2000 }])
-    mockDb.accsmarket.findMany.mockResolvedValue([])
     ;(mockDb.productVariant as unknown as { findFirst: ReturnType<typeof vi.fn> }).findFirst = vi.fn()
       .mockResolvedValueOnce({ name: '1.000+ Followers' })
       .mockResolvedValueOnce({ name: '2.000+ Followers' })
@@ -231,9 +231,6 @@ describe('DELETE /api/orders/:id', () => {
     expect(res.status).toBe(200)
     expect(res.body.message).toMatch(/deleted successfully/i)
     expect(mockDb.account.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { reservedOrderId: 1 } })
-    )
-    expect(mockDb.accsmarket.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { reservedOrderId: 1 } })
     )
     expect(mockDb.order.delete).toHaveBeenCalledWith(

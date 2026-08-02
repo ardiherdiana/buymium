@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import db from '../../config/database'
+import { logger } from '../../utils/logger'
 
 export class SectionsController {
   static async index(_req: Request, res: Response): Promise<void> {
@@ -12,7 +13,7 @@ export class SectionsController {
       })
       res.json(sections)
     } catch (err) {
-      console.error('[Sections List Error]', err)
+      logger.error('[Sections List Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch sections' })
     }
   }
@@ -29,7 +30,7 @@ export class SectionsController {
       }
       res.json(section)
     } catch (err) {
-      console.error('[Section Detail Error]', err)
+      logger.error('[Section Detail Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch section' })
     }
   }
@@ -42,7 +43,7 @@ export class SectionsController {
       })
       res.status(201).json(section)
     } catch (err) {
-      console.error('[Create Section Error]', err)
+      logger.error('[Create Section Error]', err)
       res.status(500).json({ success: false, error: 'Failed to create section' })
     }
   }
@@ -56,7 +57,7 @@ export class SectionsController {
       })
       res.json(section)
     } catch (err) {
-      console.error('[Update Section Error]', err)
+      logger.error('[Update Section Error]', err)
       res.status(500).json({ success: false, error: 'Failed to update section' })
     }
   }
@@ -66,7 +67,7 @@ export class SectionsController {
       await db.productSection.delete({ where: { id: parseInt(req.params.id) } })
       res.json({ message: 'Section dihapus' })
     } catch (err) {
-      console.error('[Delete Section Error]', err)
+      logger.error('[Delete Section Error]', err)
       res.status(500).json({ success: false, error: 'Failed to delete section' })
     }
   }

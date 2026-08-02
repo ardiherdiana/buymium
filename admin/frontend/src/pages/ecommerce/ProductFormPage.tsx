@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Save, Loader2, ImagePlus, X, ShieldCheck, ImageOff, Search, Trash2, RefreshCw } from "lucide-react"
+import { Save, Loader2, ImagePlus, X, ShieldCheck, ImageOff, Trash2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Dropdown } from "@/components/ui/dropdown-select"
 import { useAlert } from "@/stores/alertStore"
 import api from "@/lib/api"
 
@@ -28,30 +29,13 @@ const schema = z.object({
   imageUrl: z.string().optional(),
   price: z.number().min(0),
   rating: z.number().min(0).max(5).optional(),
-  isVerified: z.boolean().default(false),
-  isActive: z.boolean().default(true),
+  isVerified: z.boolean(),
+  isActive: z.boolean(),
   variants: z.array(variantSchema).optional(),
   sourceId: z.number({ error: "Source wajib dipilih" }),
 })
 
-type FormData = {
-  title: string
-  description?: string
-  imageUrl?: string
-  price: number
-  rating?: number
-  isVerified: boolean
-  isActive: boolean
-  variants?: { name: string; price: number; targetFollowers: number | null; count?: number }[]
-  sourceId: number
-}
-
-interface SourceOption {
-  id: number
-  name: string
-  is_accsmarket: boolean
-  product?: { id: number; title: string } | null
-}
+type FormData = z.infer<typeof schema>
 
 interface ProductVariant {
   id: number
@@ -79,7 +63,11 @@ interface Product {
   isActive?: boolean
   variants?: ProductVariant[]
   sourceId?: number | null
-  source?: { id: number; name: string } | null
+}
+
+interface Source {
+  id: number
+  name: string
 }
 
 export default function ProductFormPage() {
@@ -90,13 +78,7 @@ export default function ProductFormPage() {
   const alert = useAlert()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingImage, setUploadingImage] = useState(false)
-  const [selectedSource, setSelectedSource] = useState<SourceOption | null>(null)
-  const [sourceSearch, setSourceSearch] = useState("")
-  const [sourceResults, setSourceResults] = useState<SourceOption[]>([])
-  const [showSourceDropdown, setShowSourceDropdown] = useState(false)
   const [detectingVariants, setDetectingVariants] = useState(false)
-  const sourceDropdownRef = useRef<HTMLDivElement>(null)
-  const sourceInputWrapRef = useRef<HTMLDivElement>(null)
 
   const { data: product, isLoading } = useQuery<Product>({
     queryKey: ["product", id],
@@ -113,7 +95,7 @@ export default function ProductFormPage() {
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema),
     defaultValues: {
       title: "",
       description: "",
@@ -169,7 +151,6 @@ export default function ProductFormPage() {
         variants: [],
         sourceId: product.sourceId ?? undefined,
       })
-      setSelectedSource(product.source ? { id: product.source.id, name: product.source.name, is_accsmarket: false } : null)
       // Show already-saved variants as-is; only re-detect from the Source when the admin
       // explicitly clicks "Refresh" (auto-fetching on every visit kept resurrecting opsi
       // that were intentionally deleted).
@@ -185,33 +166,25 @@ export default function ProductFormPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product, reset])
 
+  const selectedSourceId = watch("sourceId")
+
   function handleRefreshVariants() {
-    if (!selectedSource) return
+    if (!selectedSourceId) return
     const currentVariants = (watch("variants") ?? []).map((v, i) => ({
       id: i,
       name: v.name,
       price: v.price,
       targetFollowers: v.targetFollowers,
     }))
-    loadVariantCandidates(selectedSource.id, currentVariants)
+    loadVariantCandidates(selectedSourceId, currentVariants)
   }
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      api.get("/management/sources", { params: { search: sourceSearch, limit: 20 } })
-        .then((r) => setSourceResults(r.data?.sources ?? []))
-        .catch(() => {})
-    }, 250)
-    return () => clearTimeout(t)
-  }, [sourceSearch])
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (sourceDropdownRef.current && !sourceDropdownRef.current.contains(e.target as Node)) setShowSourceDropdown(false)
-    }
-    if (showSourceDropdown) document.addEventListener("mousedown", handler)
-    return () => document.removeEventListener("mousedown", handler)
-  }, [showSourceDropdown])
+  const { data: sourcesData } = useQuery<Source[]>({
+    queryKey: ["product-form-sources"],
+    queryFn: () =>
+      api.get("/management/sources").then((r) => r.data?.sources ?? []),
+  })
+  const sources = sourcesData ?? []
 
   const handlePickImage = () => fileInputRef.current?.click()
 
@@ -369,78 +342,21 @@ export default function ProductFormPage() {
           <Card>
             <CardContent className="p-5 space-y-5">
               <div className="space-y-2">
-                <Label>Souce</Label>
-                <div ref={sourceDropdownRef} className="relative">
-                  {selectedSource ? (
-                    <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
-                      <span className="text-sm font-medium">{selectedSource.name}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-7"
-                        onClick={() => {
-                          setSelectedSource(null)
-                          setValue("sourceId", undefined as unknown as number, { shouldValidate: true })
-                          replaceVariants([])
-                        }}
-                      >
-                        <X className="size-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <div ref={sourceInputWrapRef} className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Cari source..."
-                          value={sourceSearch}
-                          onChange={(e) => setSourceSearch(e.target.value)}
-                          onFocus={() => setShowSourceDropdown(true)}
-                          className="pl-9"
-                        />
-                      </div>
-                      {showSourceDropdown && (() => {
-                        const rect = sourceInputWrapRef.current?.getBoundingClientRect()
-                        return (
-                          <div
-                            className="fixed z-50 rounded-md border bg-popover shadow-lg max-h-48 overflow-y-auto"
-                            style={{ top: (rect?.bottom ?? 0) + 4, left: rect?.left ?? 0, width: rect?.width ?? "auto" }}
-                          >
-                            {sourceResults.length === 0 ? (
-                              <p className="px-3 py-2 text-xs text-muted-foreground">Tidak ada source ditemukan</p>
-                            ) : (
-                              sourceResults.map((s) => {
-                                const linkedElsewhere = !!s.product && s.product.id !== (product?.id ?? -1)
-                                return (
-                                  <button
-                                    key={s.id}
-                                    type="button"
-                                    disabled={linkedElsewhere}
-                                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between"
-                                    onClick={() => {
-                                      setSelectedSource(s)
-                                      setValue("sourceId", s.id, { shouldValidate: true })
-                                      setShowSourceDropdown(false)
-                                      loadVariantCandidates(s.id)
-                                    }}
-                                  >
-                                    <span>{s.name}</span>
-                                    {linkedElsewhere && <span className="text-xs text-muted-foreground">sudah dipakai</span>}
-                                  </button>
-                                )
-                              })
-                            )}
-                          </div>
-                        )
-                      })()}
-                    </>
-                  )}
-                </div>
+                <Label>Source</Label>
+                <Dropdown
+                  options={sources.map((s) => ({ value: String(s.id), label: s.name }))}
+                  value={selectedSourceId ? String(selectedSourceId) : ""}
+                  onChange={(v) => {
+                    const id = parseInt(v, 10)
+                    setValue("sourceId", id, { shouldValidate: true })
+                    loadVariantCandidates(id)
+                  }}
+                  className="w-full"
+                />
                 {errors.sourceId && <p className="text-xs text-destructive">{errors.sourceId.message}</p>}
               </div>
 
-              {selectedSource && (
+              {selectedSourceId && (
                 <div className="space-y-2 border-t pt-4">
                   <div className="flex items-center justify-between">
                     <Label>Variasi Harga</Label>

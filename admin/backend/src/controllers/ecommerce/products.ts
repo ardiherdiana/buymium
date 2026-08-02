@@ -2,51 +2,36 @@ import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import db from '../../config/database'
 import { generateUniqueSlug } from '../../utils/slug'
+import { logger } from '../../utils/logger'
 
-// The "done" account status is stored inconsistently across Account ("Completed") and
-// Accsmarket ("completed") rows - match both casings rather than relying on one.
+// The "done" account status has historically been stored inconsistently across
+// sheets ("Completed" vs "completed") - match both casings rather than one.
 const DONE_STATUSES = ['Completed', 'completed']
 
-// Accsmarket-backed sources additionally require the account to be at least 2 years
-// old (Account has no `year` field, so this only ever applies to Accsmarket rows).
-function eligibilityWhere(sourceId: number, isAccsmarket: boolean): Record<string, unknown> {
-  const base: Record<string, unknown> = {
+function eligibilityWhere(sourceId: number): Record<string, unknown> {
+  return {
     sourceId,
     isSold: false,
     accountStatus: { in: DONE_STATUSES },
     reservedOrderId: null,
   }
-  if (isAccsmarket) {
-    const cutoffYear = new Date().getFullYear() - 2
-    base.year = { lte: String(cutoffYear) }
-  }
-  return base
 }
 
 type ProductWithVariants = { id: number; sourceId?: number | null; variants?: { id: number; targetFollowers?: number | null }[] }
 
-// Merges the count of available (unsold, status "Selesai") Account/Accsmarket rows into
-// each product's variants, since stock is now always derived from the linked Source rather
-// than a manual number or upload.
+// Merges the count of available (unsold, status "Selesai") Account rows into
+// each product's variants, since stock is now always derived from the linked
+// Source rather than a manual number or upload.
 async function attachVariantStock<T extends ProductWithVariants>(products: T[]): Promise<T[]> {
-  const sourceIds = [...new Set(products.filter((p) => p.sourceId).map((p) => p.sourceId as number))]
-  if (sourceIds.length === 0) return products
-
-  const sources = await db.source.findMany({ where: { id: { in: sourceIds } } })
-  const isAccsmarketBySourceId = new Map(sources.map((s) => [s.id, s.isAccsmarket]))
-
   for (const product of products) {
     if (!product.variants || !product.sourceId) continue
-    const isAccsmarket = isAccsmarketBySourceId.get(product.sourceId) ?? false
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const table: any = isAccsmarket ? db.accsmarket : db.account
 
     product.variants = await Promise.all(
       product.variants.map(async (v) => ({
         ...v,
-        availableStock: await table.count({
+        availableStock: await db.account.count({
           where: {
-            ...eligibilityWhere(product.sourceId as number, isAccsmarket),
+            ...eligibilityWhere(product.sourceId as number),
             targetFollowers: v.targetFollowers ?? null,
           },
         }),
@@ -95,7 +80,7 @@ export class ProductsController {
         meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
       })
     } catch (err) {
-      console.error('[Products List Error]', err)
+      logger.error('[Products List Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch products' })
     }
   }
@@ -120,7 +105,7 @@ export class ProductsController {
       const [withVariantStock] = await attachVariantStock([product])
       res.json(withVariantStock)
     } catch (err) {
-      console.error('[Product Detail Error]', err)
+      logger.error('[Product Detail Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch product detail' })
     }
   }
@@ -146,7 +131,7 @@ export class ProductsController {
 
       res.status(201).json(product)
     } catch (err) {
-      console.error('[Create Product Error]', err)
+      logger.error('[Create Product Error]', err)
       res.status(500).json({ success: false, error: 'Failed to create product' })
     }
   }
@@ -177,7 +162,7 @@ export class ProductsController {
 
       res.json(product)
     } catch (err) {
-      console.error('[Update Product Error]', err)
+      logger.error('[Update Product Error]', err)
       res.status(500).json({ success: false, error: 'Failed to update product' })
     }
   }
@@ -218,39 +203,35 @@ export class ProductsController {
 
       res.json({ data: updatedVariants })
     } catch (err) {
-      console.error('[Replace Product Variants Error]', err)
+      logger.error('[Replace Product Variants Error]', err)
       res.status(500).json({ success: false, error: 'Failed to save product price variants' })
     }
   }
 
-  // Auto-detects price-tier candidates for a Source: distinct targetFollowers values among
-  // its unsold, "Selesai"-status Account/Accsmarket rows, so the admin only has to fill in price.
+  // Auto-detects price-tier candidates for a Source: distinct targetFollowers values
+  // among its unsold, "Selesai"-status Account rows, so the admin only has to fill in price.
   static async detectVariants(req: Request, res: Response): Promise<void> {
     try {
       const sourceId = parseInt(req.params.sourceId)
-      const source = await db.source.findUnique({ where: { id: sourceId } })
-      if (!source) { res.status(404).json({ success: false, error: 'Source not found' }); return }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const table: any = source.isAccsmarket ? db.accsmarket : db.account
-      const rows = await table.groupBy({
+      const rows = await db.account.groupBy({
         by: ['targetFollowers'],
-        where: eligibilityWhere(sourceId, source.isAccsmarket),
+        where: eligibilityWhere(sourceId),
         _count: true,
       })
 
       const candidates = rows
-        .filter((r: { targetFollowers: number | null }) => r.targetFollowers !== null)
-        .map((r: { targetFollowers: number | null; _count: number }) => ({
+        .filter((r) => r.targetFollowers !== null)
+        .map((r) => ({
           targetFollowers: r.targetFollowers,
           count: r._count,
           suggestedName: `${(r.targetFollowers as number).toLocaleString('id-ID')}+ Followers`,
         }))
-        .sort((a: { targetFollowers: number | null }, b: { targetFollowers: number | null }) => (a.targetFollowers ?? 0) - (b.targetFollowers ?? 0))
+        .sort((a, b) => (a.targetFollowers ?? 0) - (b.targetFollowers ?? 0))
 
       res.json({ data: candidates })
     } catch (err) {
-      console.error('[Detect Variants Error]', err)
+      logger.error('[Detect Variants Error]', err)
       res.status(500).json({ success: false, error: 'Failed to detect variant candidates' })
     }
   }
@@ -265,7 +246,7 @@ export class ProductsController {
 
       res.json({ message: 'Product deleted successfully' })
     } catch (err) {
-      console.error('[Delete Product Error]', err)
+      logger.error('[Delete Product Error]', err)
       res.status(500).json({ success: false, error: 'Failed to delete product' })
     }
   }

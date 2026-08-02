@@ -17,7 +17,9 @@ interface VendorTier { id: number; name: string; target_followers: number; vendo
 interface Item {
   id: number
   username: string
+  starting_followers: number | null
   current_followers: number | null
+  target_followers: number
   status: "progress" | "selesai"
   capital: number
   unit_sale_price: number
@@ -157,7 +159,10 @@ export default function UpfollOrdersPage() {
                       <TableCell className="text-muted-foreground">{item.vendor_tier.name}</TableCell>
                       <TableCell className="text-muted-foreground">{item.vendor_tier.vendor.name}</TableCell>
                       <TableCell className="text-right">
-                        {item.current_followers?.toLocaleString("id-ID") ?? "-"} / {item.vendor_tier.target_followers.toLocaleString("id-ID")}
+                        {item.current_followers?.toLocaleString("id-ID") ?? "-"} / {item.target_followers.toLocaleString("id-ID")}
+                        {item.starting_followers != null && (
+                          <p className="text-[10px] text-muted-foreground">awal {item.starting_followers.toLocaleString("id-ID")}</p>
+                        )}
                       </TableCell>
                       <TableCell className={`text-right ${item.profit >= 0 ? "text-emerald-600" : "text-destructive"}`}>
                         {formatIDR(item.profit)}

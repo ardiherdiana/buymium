@@ -53,8 +53,8 @@ coverage/
 # Uploads (user-generated content)
 **/uploads/*
 !**/uploads/.gitkeep
-**/autoposting/*
-!**/autoposting/.gitkeep
+admin/backend/uploads/autoposting/*
+!admin/backend/uploads/autoposting/.gitkeep
 
 # Credentials & secrets
 **/credentials/

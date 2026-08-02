@@ -171,7 +171,7 @@ export default function ProductsPage() {
                   <div className="min-w-0 space-y-1">
                     <p className="font-medium text-sm leading-tight truncate">{product.title}</p>
                     {product.source && (
-                      <Badge variant="outline" className="text-[10px]">Source: {product.source.name}</Badge>
+                      <Badge variant="outline" className="text-[10px]">Source: {product.source?.name}</Badge>
                     )}
                     <div className="flex items-center gap-3 flex-wrap">
                       <span className="font-semibold text-sm">{formatIDR(product.price)}</span>

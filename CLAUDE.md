@@ -110,8 +110,8 @@ The admin backend also has k6 load test scripts (`.js`) under `src/tests/load/` 
 
 **User backend** (`/api/`):
 - `auth` — login, Google OAuth, registration, password reset
-- `products`, `orders`, `stocks`, `bank-accounts`, `testimonials`, `sitemap`, `admin`
-- Static file serving at `/api/uploads`
+- `products` (admin CRUD actions guarded by `requireAdmin` on POST/PUT/DELETE — no separate `admin` route file), `orders`, `bank-accounts`, `testimonials`, `sitemap`
+- Payment proof images served from `/api/uploads/payment-proofs/:filename`, gated by a short-lived signed token (`?token=`) or Bearer auth (owner/admin) — not open static serving.
 - Payment is manual bank transfer / QRIS only (buyer uploads proof, admin confirms) — no payment gateway integration.
 
 ### Frontend Routing
@@ -143,7 +143,7 @@ Unlike the admin backend (controllers + services), the user backend uses a flat 
 
 ### State Management
 - Admin: Zustand (with localStorage persistence) for auth/alerts; React Query for server state
-- User: Redux Toolkit for global state; Next.js built-in caching for server state
+- User: React Context (`contexts/auth-context.tsx`) + local component state — no Redux/global store; Next.js built-in caching for server state
 
 ### Database
 Prisma 5 with MySQL, two independent schemas (see note above). Common models across both: `User`, `Role`, `Product`, `Order`, `Stock`, `BankAccount`, `Channel`, `Testimonial`. Admin-only models: `Customer`, `Source`, `Account`, `Accsmarket`, `Sale`/`SaleLine`, `AutopostingPost`/`AutopostingSchedule`, `ProductSection`.

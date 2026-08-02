@@ -12,7 +12,7 @@ export const SalesController = {
       const page = parseInt(req.query.page as string) || 1
       const limit = 15
       const searchQuery = req.query.search as string
-      const sourceFilter = req.query.source as string
+      const sourceFilter = req.query.source_id ? parseInt(req.query.source_id as string) : undefined
       const dateFromQuery = req.query.date_from as string
       const dateToQuery = req.query.date_to as string
 
@@ -42,7 +42,7 @@ export const SalesController = {
       // Base where: selected date range + optional source
       const buildWhere = (extra: Prisma.SaleWhereInput = {}): Prisma.SaleWhereInput => {
         const w: Prisma.SaleWhereInput = { createdAt: { gte: rangeStart, lte: rangeEnd }, ...extra }
-        if (sourceFilter) w.sourceId = parseInt(sourceFilter)
+        if (sourceFilter) w.sourceId = sourceFilter
         return w
       }
 
@@ -118,7 +118,7 @@ export const SalesController = {
         if (sourceFilter) {
           // OR must not break the source filter — re-apply as AND
           listWhere.AND = [
-            { sourceId: parseInt(sourceFilter) },
+            { sourceId: sourceFilter },
             { OR: listWhere.OR },
           ]
           delete listWhere.OR
@@ -139,6 +139,10 @@ export const SalesController = {
 
       const total = await prisma.sale.count({ where: listWhere })
 
+      // All registered sources — used for the filter dropdown (stable regardless of
+      // whether a sheet has been renamed since a given sale happened).
+      const sources = await prisma.source.findMany({ orderBy: { id: 'asc' } })
+
       const salesWithMapping = sales.map(sale => ({
         id: sale.id,
         salesNumber: sale.salesNumber,
@@ -146,17 +150,13 @@ export const SalesController = {
         totalSalePrice: sale.totalSalePrice,
         totalProfit: sale.totalProfit,
         isShopee: sale.isShopee,
-        sourceId: sale.sourceId,
+        source: sale.source ? { id: sale.source.id, name: sale.source.name } : undefined,
         origin: sale.orderId ? 'storefront' : 'manual',
         createdAt: sale.createdAt,
         updatedAt: sale.updatedAt,
         customer: sale.customer ? {
           id: sale.customer.id,
           usernameSh: sale.customer.usernameSh,
-        } : undefined,
-        source: sale.source ? {
-          id: sale.source.id,
-          name: sale.source.name,
         } : undefined,
         buyer: sale.order?.user ? {
           name: sale.order.user.name,
@@ -179,6 +179,7 @@ export const SalesController = {
           totalProfit,
         },
         chartData,
+        sources,
       })
     } catch (error) {
       logger.error('Error fetching sales:', error)
@@ -199,7 +200,6 @@ export const SalesController = {
           saleLines: {
             include: {
               account: true,
-              accsmarket: true,
             },
           },
         },
@@ -216,7 +216,7 @@ export const SalesController = {
         total_sale_price: sale.totalSalePrice,
         total_profit: sale.totalProfit,
         is_shopee: sale.isShopee,
-        source_id: sale.sourceId,
+        source: sale.source ? { id: sale.source.id, name: sale.source.name } : undefined,
         origin: sale.orderId ? 'storefront' : 'manual',
         status: 'completed',
         created_at: sale.createdAt,
@@ -226,21 +226,16 @@ export const SalesController = {
           usernameSh: sale.customer.usernameSh,
           nomorHp: sale.customer.nomorHp,
         } : undefined,
-        source: sale.source ? {
-          id: sale.source.id,
-          name: sale.source.name,
-        } : undefined,
         buyer: sale.order?.user ? {
           name: sale.order.user.name,
           email: sale.order.user.email,
         } : undefined,
         sale_lines: sale.saleLines?.map(line => {
-          const item = line.account ?? line.accsmarket
+          const item = line.account
           return {
             id: line.id,
             sale_id: line.saleId,
             account_id: line.accountId,
-            accsmarket_id: line.accsmarketId,
             unit_sale_price: line.unitSalePrice,
             profit: line.profit,
             created_at: line.createdAt,
@@ -269,50 +264,35 @@ export const SalesController = {
         return res.status(400).json({ error: 'Required fields missing' })
       }
 
-      // Extract account and accsmarket IDs first (before creating sale)
+      // Extract account IDs first (before creating sale)
       const accountIds: number[] = []
-      const accsmarketIds: number[] = []
 
       if (items && Array.isArray(items)) {
         for (const item of items) {
           if (item.account_id) {
             accountIds.push(parseInt(item.account_id))
           }
-          if (item.accsmarket_id) {
-            accsmarketIds.push(parseInt(item.accsmarket_id))
-          }
         }
       }
 
-      // Fetch accounts and accsmarkets to get sourceId if not provided
+      // Fetch accounts to get sourceId if not provided
       let sourceIdForSale = source_id ? parseInt(source_id) : null
-      let itemsToUpdateSheets: { id: number; email?: string | null; username?: string | null; phoneModel?: string | null; year?: string | null; sourceId?: number | null; source?: { id: number; spreadsheetId?: string | null } | null; isSold?: boolean }[] = []
+      let itemsToUpdateSheets: { id: number; email?: string | null; username?: string | null; sourceSheetName?: string | null; sourceId?: number | null; source?: { id: number; spreadsheetId?: string | null } | null; isSold?: boolean }[] = []
 
-      if (accountIds.length > 0 || accsmarketIds.length > 0) {
-        const accountsToUpdate = accountIds.length > 0
-          ? await prisma.account.findMany({
-              where: { id: { in: accountIds } },
-              include: { source: true },
-            })
-          : []
+      if (accountIds.length > 0) {
+        itemsToUpdateSheets = await prisma.account.findMany({
+          where: { id: { in: accountIds } },
+          include: { source: true },
+        })
 
-        const accsmarketsToUpdate = accsmarketIds.length > 0
-          ? await prisma.accsmarket.findMany({
-              where: { id: { in: accsmarketIds } },
-              include: { source: true },
-            })
-          : []
-
-        itemsToUpdateSheets = [...accountsToUpdate, ...accsmarketsToUpdate]
-
-        // If source_id not provided, use from first account/accsmarket
+        // If source_id not provided, use from first account
         if (!sourceIdForSale && itemsToUpdateSheets.length > 0) {
           sourceIdForSale = itemsToUpdateSheets[0].sourceId ?? null
         }
       }
 
       logger.info(`[Sale] Received ${items?.length || 0} items to process`)
-      logger.info(`[Sale] Collecting items - accountIds: ${accountIds.join(',')}, accsmarketIds: ${accsmarketIds.join(',')}`)
+      logger.info(`[Sale] Collecting items - accountIds: ${accountIds.join(',')}`)
 
       const sale = await prisma.sale.create({
         data: {
@@ -322,6 +302,7 @@ export const SalesController = {
           totalProfit: parseFloat(total_profit),
           isShopee: is_shopee || false,
           sourceId: sourceIdForSale,
+          sourceSheetName: itemsToUpdateSheets[0]?.sourceSheetName ?? null,
         },
         include: { customer: true, source: true },
       })
@@ -334,27 +315,24 @@ export const SalesController = {
             id: i.id,
             email: i.email,
             username: i.username,
-            type: 'year' in i ? 'Accsmarket' : 'Account',
-            sheetName: ('year' in i) ? i.year : i.phoneModel,
+            sheetName: i.sourceSheetName,
             sourceId: i.sourceId,
           })),
         })
       }
 
-      // Create sale lines and mark accounts/accsmarkets as sold — all in one transaction
+      // Create sale lines and mark accounts as sold — all in one transaction
       if (items && Array.isArray(items) && items.length > 0) {
-        const lineOps = items.flatMap((item: { account_id?: string | number; accsmarket_id?: string | number; unit_sale_price?: string | number; profit?: string | number }) => {
+        const lineOps = items.flatMap((item: { account_id?: string | number; unit_sale_price?: string | number; profit?: string | number }) => {
           const accountId = item.account_id ? parseInt(String(item.account_id)) : null
-          const accsmarketId = item.accsmarket_id ? parseInt(String(item.accsmarket_id)) : null
 
-          logger.debug(`[Sale] Processing item - accountId: ${accountId}, accsmarketId: ${accsmarketId}`)
+          logger.debug(`[Sale] Processing item - accountId: ${accountId}`)
 
           const ops: Prisma.PrismaPromise<unknown>[] = [
             prisma.saleLine.create({
               data: {
                 saleId: sale.id,
                 accountId,
-                accsmarketId,
                 unitSalePrice: parseFloat(String(item.unit_sale_price ?? 0)) || 0,
                 price: parseFloat(String(item.unit_sale_price ?? 0)) || 0,
                 profit: parseFloat(String(item.profit ?? 0)) || 0,
@@ -364,8 +342,6 @@ export const SalesController = {
 
           if (accountId) {
             ops.push(prisma.account.update({ where: { id: accountId }, data: { isSold: true } }))
-          } else if (accsmarketId) {
-            ops.push(prisma.accsmarket.update({ where: { id: accsmarketId }, data: { isSold: true } }))
           }
 
           return ops
@@ -382,7 +358,6 @@ export const SalesController = {
           saleLines: {
             include: {
               account: true,
-              accsmarket: true,
             },
           },
         },
@@ -395,7 +370,7 @@ export const SalesController = {
         total_sale_price: saleWithLines?.totalSalePrice,
         total_profit: saleWithLines?.totalProfit,
         is_shopee: saleWithLines?.isShopee,
-        source_id: saleWithLines?.sourceId,
+        source: saleWithLines?.source ? { id: saleWithLines.source.id, name: saleWithLines.source.name } : undefined,
         status: 'completed',
         created_at: saleWithLines?.createdAt,
         updated_at: saleWithLines?.updatedAt,
@@ -403,15 +378,10 @@ export const SalesController = {
           id: saleWithLines.customer.id,
           username_shopee: saleWithLines.customer.usernameSh,
         } : undefined,
-        source: saleWithLines?.source ? {
-          id: saleWithLines.source.id,
-          name: saleWithLines.source.name,
-        } : undefined,
         saleLines: saleWithLines?.saleLines?.map(line => ({
           id: line.id,
           sale_id: line.saleId,
           account_id: line.accountId,
-          accsmarket_id: line.accsmarketId,
           unit_sale_price: line.unitSalePrice,
           price: line.price,
           profit: line.profit,
@@ -420,11 +390,6 @@ export const SalesController = {
             id: line.account.id,
             username: line.account.username,
             email: line.account.email,
-          } : undefined,
-          accsmarket: line.accsmarket ? {
-            id: line.accsmarket.id,
-            username: line.accsmarket.username,
-            email: line.accsmarket.email,
           } : undefined,
         })) || [],
       }
@@ -436,11 +401,8 @@ export const SalesController = {
         logger.info(`[Sale] Triggering Google Sheets update for ${itemsToUpdateSheets.length} items`, {
           items: itemsToUpdateSheets.map((i) => ({
             id: i.id,
-            type: 'year' in i ? 'Accsmarket' : 'Account',
-            sheetName: 'year' in i ? i.year : i.phoneModel,
-            spreadsheetId: 'year' in i
-              ? '1riOQRkG-76-SdlvVw_cxK2igSoTpgcqtBWz_RLztxdg'
-              : i.source?.spreadsheetId,
+            sheetName: i.sourceSheetName,
+            spreadsheetId: i.source?.spreadsheetId,
           })),
         })
 

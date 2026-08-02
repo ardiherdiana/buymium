@@ -2,12 +2,14 @@ import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import { logger } from '../../utils/logger'
 import db from '../../config/database'
+import { UpfollService } from '../../services/management/upfollService'
 
 const prisma = db
 
 const mapItem = (item: {
   id: number
   username: string
+  startingFollowers: number | null
   currentFollowers: number | null
   status: string
   capital: number
@@ -17,7 +19,9 @@ const mapItem = (item: {
 }) => ({
   id: item.id,
   username: item.username,
+  starting_followers: item.startingFollowers,
   current_followers: item.currentFollowers,
+  target_followers: (item.startingFollowers ?? 0) + item.vendorTier.targetFollowers,
   status: item.status,
   capital: item.capital,
   unit_sale_price: item.unitSalePrice,
@@ -168,6 +172,24 @@ export const UpfollOrdersController = {
         }
       }
 
+      // Scan each username's current follower count before creating anything, so the
+      // real completion target is (baseline + package target) rather than the flat
+      // package target — e.g. an account with 2.400 followers ordering a "5.000
+      // followers" package actually needs to reach 7.400, not just 5.000. Scanning
+      // upfront (sequentially, to stay within RapidAPI rate limits) also catches
+      // typo'd/nonexistent usernames before the order is created.
+      const startingFollowersByUsername = new Map<string, number>()
+      for (const item of items) {
+        const username = item.username.trim()
+        try {
+          const count = await UpfollService.fetchFollowerCount(username)
+          startingFollowersByUsername.set(username, count)
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : 'Gagal memindai followers'
+          return res.status(400).json({ error: `Gagal scan username '${username}': ${msg}` })
+        }
+      }
+
       const totalSalePriceNum = parseFloat(String(total_sale_price))
       const unitSalePrice = totalSalePriceNum / items.length
       const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
@@ -179,9 +201,13 @@ export const UpfollOrdersController = {
         const capital = tierById.get(vendorTierId)!.price
         const profit = unitSalePrice - capital
         totalProfit += profit
+        const username = item.username.trim()
+        const startingFollowers = startingFollowersByUsername.get(username) ?? null
         return {
-          username: item.username.trim(),
+          username,
           vendorTierId,
+          startingFollowers,
+          currentFollowers: startingFollowers,
           capital,
           unitSalePrice,
           profit,

@@ -7,7 +7,7 @@ import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
+import { StatCard } from "@/components/ui/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -23,7 +23,7 @@ interface Sale {
   id: number
   salesNumber: string
   customer: { usernameSh: string }
-  source: Source
+  source?: Source
   totalSalePrice: number
   totalProfit: number
   createdAt: string
@@ -37,47 +37,19 @@ interface SalesResponse {
   pagination: { page: number; limit: number; total: number; pages: number }
   stats: Stats
   chartData: ChartPoint[]
-}
-
-function StatCard({ title, value, icon: Icon, valueClass, loading }: {
-  title: string; value: string; icon: React.ElementType; valueClass?: string; loading: boolean
-}) {
-  return (
-    <Card>
-      {/* Mobile: compact */}
-      <CardContent className="sm:hidden p-3 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground truncate">{title}</p>
-          {loading ? <Skeleton className="h-5 w-20 mt-0.5" /> : (
-            <p className={`text-base font-bold leading-tight ${valueClass ?? "text-foreground"}`}>{value}</p>
-          )}
-        </div>
-        <Icon className="size-5 shrink-0 text-muted-foreground" />
-      </CardContent>
-      {/* Desktop: original */}
-      <CardHeader className="hidden sm:flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="size-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent className="hidden sm:block">
-        {loading ? <Skeleton className="h-7 w-36" /> : (
-          <p className={`text-2xl font-bold ${valueClass ?? "text-foreground"}`}>{value}</p>
-        )}
-      </CardContent>
-    </Card>
-  )
+  sources: Source[]
 }
 
 const buyerLabel = (sale: Sale) => sale.buyer?.name ?? sale.customer?.usernameSh ?? "-"
 
 function OriginBadge({ origin }: { origin: Sale["origin"] }) {
   return origin === "storefront" ? (
-    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-      Storefront
+    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+      Website
     </span>
   ) : (
-    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
-      Manual
+    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+      Shopee
     </span>
   )
 }
@@ -112,16 +84,11 @@ export default function SalesPage() {
         params: {
           page,
           search: search || undefined,
-          source: sourceFilter || undefined,
+          source_id: sourceFilter || undefined,
           date_from: dateFrom,
           date_to: dateTo,
         },
       }).then((r) => r.data),
-  })
-
-  const { data: sourcesData } = useQuery<{ sources: Source[] }>({
-    queryKey: ["management-sources"],
-    queryFn: () => api.get("/management/sources").then((r) => r.data),
   })
 
   const deleteMut = useMutation({
@@ -151,10 +118,10 @@ export default function SalesPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <StatCard title="Total Penjualan" value={(stats?.totalSales ?? 0).toLocaleString("id-ID")} icon={ShoppingCart} loading={isLoading || isFetching} />
-        <StatCard title="Total Modal" value={formatIDR(stats?.totalCapital ?? 0)} icon={Wallet} loading={isLoading} />
-        <StatCard title="Total Harga Jual" value={formatIDR(stats?.totalSalePrice ?? 0)} icon={BarChart2} loading={isLoading} />
-        <StatCard title="Total Profit" value={formatIDR(stats?.totalProfit ?? 0)} icon={TrendingUp} valueClass="text-green-600" loading={isLoading} />
+        <StatCard title="Total Penjualan" value={(stats?.totalSales ?? 0).toLocaleString("id-ID")} icon={ShoppingCart} color="blue" loading={isLoading || isFetching} />
+        <StatCard title="Total Modal" value={formatIDR(stats?.totalCapital ?? 0)} icon={Wallet} color="amber" loading={isLoading} />
+        <StatCard title="Total Harga Jual" value={formatIDR(stats?.totalSalePrice ?? 0)} icon={BarChart2} color="violet" loading={isLoading} />
+        <StatCard title="Total Profit" value={formatIDR(stats?.totalProfit ?? 0)} icon={TrendingUp} valueClass="text-green-600" color="emerald" loading={isLoading} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -225,7 +192,7 @@ export default function SalesPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all">Semua Source</SelectItem>
-            {sourcesData?.sources.map((s) => (
+            {data?.sources.map((s) => (
               <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
             ))}
           </SelectContent>
@@ -246,6 +213,7 @@ export default function SalesPage() {
                 <TableHead className="w-10">NO</TableHead>
                 <TableHead>Sales Number</TableHead>
                 <TableHead>Pelanggan</TableHead>
+                <TableHead>Asal</TableHead>
                 <TableHead>Source</TableHead>
                 <TableHead>Tanggal</TableHead>
                 <TableHead className="text-right">Total</TableHead>
@@ -255,20 +223,18 @@ export default function SalesPage() {
             </TableHeader>
             <TableBody>
               {isLoading || isFetching ? (
-                <LoadingRow colSpan={8} />
+                <LoadingRow colSpan={9} />
               ) : sales.length === 0 ? (
-                <EmptyRow colSpan={8} message="Tidak ada data penjualan" />
+                <EmptyRow colSpan={9} message="Tidak ada data penjualan" />
               ) : sales.map((sale, idx) => (
                 <TableRow key={sale.id}>
                   <TableCell className="text-muted-foreground">
                     {((pagination?.page ?? 1) - 1) * (pagination?.limit ?? 20) + idx + 1}
                   </TableCell>
                   <TableCell className="font-mono text-xs">{sale.salesNumber}</TableCell>
+                  <TableCell>{buyerLabel(sale)}</TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      {buyerLabel(sale)}
-                      <OriginBadge origin={sale.origin} />
-                    </div>
+                    <OriginBadge origin={sale.origin} />
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
@@ -310,8 +276,8 @@ export default function SalesPage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-mono text-xs text-muted-foreground">{sale.salesNumber}</p>
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-medium text-sm">{buyerLabel(sale)}</p>
+                  <p className="font-medium text-sm">{buyerLabel(sale)}</p>
+                  <div className="mt-1">
                     <OriginBadge origin={sale.origin} />
                   </div>
                 </div>

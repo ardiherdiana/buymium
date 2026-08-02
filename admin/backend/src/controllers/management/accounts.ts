@@ -1,4 +1,4 @@
-﻿import { Request, Response } from 'express'
+import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import { logger } from '../../utils/logger'
 import { AccountsService } from '../../services/management/accountsService'
@@ -16,20 +16,14 @@ export class AccountsController {
       const limit = 100
       const skip = (page - 1) * limit
 
-      // Get sources (only non-accsmarket sources) — used for filter options and scoping the list
-      const nonAccsmarketSources = await prisma.source.findMany({
-        where: { isAccsmarket: false },
-        orderBy: [{ id: 'asc' }],
-      })
-      const nonAccsmarketSourceIds = nonAccsmarketSources.map((s) => s.id)
+      const sources = await prisma.source.findMany({ orderBy: { id: 'asc' } })
+      const sourceIds = sources.map((s) => s.id)
 
       // Build where clause
       const where: Prisma.AccountWhereInput = { isSold: false }
 
       if (req.query.source_id && req.query.source_id !== 'all') {
         where.sourceId = parseInt(req.query.source_id as string)
-      } else {
-        where.sourceId = { in: nonAccsmarketSourceIds }
       }
 
       if (req.query.search) {
@@ -48,8 +42,8 @@ export class AccountsController {
         where.targetFollowers = parseInt(req.query.target_followers as string)
       }
 
-      if (req.query.phone_model && req.query.phone_model !== 'all') {
-        where.phoneModel = req.query.phone_model as string
+      if (req.query.year && req.query.year !== 'all') {
+        where.year = req.query.year as string
       }
 
       // Get accounts with pagination
@@ -58,7 +52,7 @@ export class AccountsController {
           where,
           include: { source: true },
           orderBy: [
-            { source: { name: 'asc' } },
+            { sourceId: 'asc' },
             { orderIndex: 'asc' },
             { id: 'asc' },
           ],
@@ -68,52 +62,49 @@ export class AccountsController {
         prisma.account.count({ where }),
       ])
 
-      const sources = nonAccsmarketSources
-
-      // Get phone models
-      let phoneModels: string[] = []
+      // Get years
+      let years: string[] = []
       if (req.query.source_id && req.query.source_id !== 'all') {
-        const effectiveSourceId = parseInt(req.query.source_id as string)
-        const phoneModelsData = await prisma.account.findMany({
+        const yearsData = await prisma.account.findMany({
           where: {
-            phoneModel: { not: null },
+            year: { not: null },
             isSold: false,
-            sourceId: effectiveSourceId,
+            sourceId: parseInt(req.query.source_id as string),
           },
-          select: { phoneModel: true },
-          distinct: ['phoneModel'],
+          select: { year: true },
+          distinct: ['year'],
         })
-        phoneModels = phoneModelsData
-          .map((m) => m.phoneModel)
+        years = yearsData
+          .map((m) => m.year)
           .filter((m): m is string => m !== null)
       } else {
-        const phoneModelsData = await prisma.account.findMany({
-          where: { phoneModel: { not: null }, isSold: false },
-          select: { phoneModel: true, sourceId: true },
-          distinct: ['phoneModel'],
+        const yearsData = await prisma.account.findMany({
+          where: { year: { not: null }, isSold: false },
+          select: { year: true, sourceId: true },
+          distinct: ['year'],
         })
-        const sourcesOrdered = sources.map((s) => s.id)
         const groupedBySource: Record<number, string[]> = {}
-        phoneModelsData.forEach((m) => {
-          if (m.sourceId && m.phoneModel) {
+        yearsData.forEach((m) => {
+          if (m.sourceId && m.year) {
             if (!groupedBySource[m.sourceId]) {
               groupedBySource[m.sourceId] = []
             }
-            groupedBySource[m.sourceId].push(m.phoneModel)
+            groupedBySource[m.sourceId].push(m.year)
           }
         })
-        const addedModels = new Set<string>()
-        for (const sourceId of sourcesOrdered) {
+        const addedYears = new Set<string>()
+        for (const sourceId of sourceIds) {
           if (groupedBySource[sourceId]) {
-            groupedBySource[sourceId].forEach((model) => {
-              if (!addedModels.has(model)) {
-                phoneModels.push(model)
-                addedModels.add(model)
+            groupedBySource[sourceId].forEach((year) => {
+              if (!addedYears.has(year)) {
+                years.push(year)
+                addedYears.add(year)
               }
             })
           }
         }
       }
+      years.sort()
 
       // Get target followers
       const targetFollowersData = await prisma.account.findMany({
@@ -122,7 +113,7 @@ export class AccountsController {
           isSold: false,
           ...(req.query.source_id && req.query.source_id !== 'all'
             ? { sourceId: parseInt(req.query.source_id as string) }
-            : { sourceId: { in: nonAccsmarketSourceIds } }),
+            : {}),
         },
         select: { targetFollowers: true },
         distinct: ['targetFollowers'],
@@ -132,12 +123,10 @@ export class AccountsController {
         .filter((t): t is number => t !== null)
         .sort((a, b) => a - b)
 
-      // Get stats — same source scoping as main query
+      // Get stats — same scoping as main query
       const statsWhere: Prisma.AccountWhereInput = { isSold: false }
       if (req.query.source_id && req.query.source_id !== 'all') {
         statsWhere.sourceId = parseInt(req.query.source_id as string)
-      } else {
-        statsWhere.sourceId = { in: nonAccsmarketSourceIds }
       }
       if (req.query.search) {
         statsWhere.OR = [
@@ -152,11 +141,11 @@ export class AccountsController {
       if (req.query.target_followers && req.query.target_followers !== 'all') {
         statsWhere.targetFollowers = parseInt(req.query.target_followers as string)
       }
-      if (req.query.phone_model && req.query.phone_model !== 'all') {
-        statsWhere.phoneModel = req.query.phone_model as string
+      if (req.query.year && req.query.year !== 'all') {
+        statsWhere.year = req.query.year as string
       }
 
-      const [totalAccounts, totalFollowersSum, totalTargetFollowersSum, completedAccounts] = await Promise.all([
+      const [totalAccounts, totalFollowersSum, totalTargetFollowersSum, completedAccounts, totalCapitalSum] = await Promise.all([
         prisma.account.count({ where: statsWhere }),
         prisma.account.aggregate({
           where: statsWhere,
@@ -169,6 +158,10 @@ export class AccountsController {
         prisma.account.count({
           where: { ...statsWhere, accountStatus: 'completed' },
         }),
+        prisma.account.aggregate({
+          where: statsWhere,
+          _sum: { capital: true },
+        }),
       ])
 
       const pagination = {
@@ -179,9 +172,9 @@ export class AccountsController {
       }
 
       res.json({
-        accounts: accounts.map((a) => ({ ...a, password: safeDecrypt(a.password) })),
+        accounts: accounts.map((a) => ({ ...a, password: safeDecrypt(a.password), passwordEmail: safeDecrypt(a.passwordEmail), twoFactorAuth: safeDecrypt(a.twoFactorAuth) })),
         sources,
-        phoneModels,
+        years,
         targetFollowers,
         pagination,
         stats: {
@@ -189,6 +182,7 @@ export class AccountsController {
           total_followers: totalFollowersSum._sum.currentFollowers ?? 0,
           target_followers: totalTargetFollowersSum._sum.targetFollowers ?? 0,
           completed_accounts: completedAccounts,
+          total_capital: totalCapitalSum._sum.capital ?? 0,
         },
       })
     } catch (error) {
@@ -209,8 +203,8 @@ export class AccountsController {
         where.sourceId = parseInt(req.query.source_id as string)
       }
 
-      if (req.query.phone_model && req.query.phone_model !== 'all') {
-        where.phoneModel = req.query.phone_model as string
+      if (req.query.year && req.query.year !== 'all') {
+        where.year = req.query.year as string
       }
 
       if (req.query.target_followers && req.query.target_followers !== 'all') {

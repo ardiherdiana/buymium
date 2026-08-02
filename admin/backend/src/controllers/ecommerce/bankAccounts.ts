@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import db from '../../config/database'
+import { logger } from '../../utils/logger'
 
 export class BankAccountsController {
   static async index(_req: Request, res: Response): Promise<void> {
@@ -7,7 +8,7 @@ export class BankAccountsController {
       const accounts = await db.bankAccount.findMany({ orderBy: { id: 'asc' } })
       res.json(accounts)
     } catch (err) {
-      console.error('[BankAccounts List Error]', err)
+      logger.error('[BankAccounts List Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch bank accounts' })
     }
   }
@@ -20,7 +21,7 @@ export class BankAccountsController {
       })
       res.status(201).json(account)
     } catch (err) {
-      console.error('[BankAccount Create Error]', err)
+      logger.error('[BankAccount Create Error]', err)
       res.status(500).json({ success: false, error: 'Failed to create bank account' })
     }
   }
@@ -31,7 +32,7 @@ export class BankAccountsController {
       const account = await db.bankAccount.update({ where: { id }, data: req.body })
       res.json(account)
     } catch (err) {
-      console.error('[BankAccount Update Error]', err)
+      logger.error('[BankAccount Update Error]', err)
       res.status(500).json({ success: false, error: 'Failed to update bank account' })
     }
   }
@@ -42,7 +43,7 @@ export class BankAccountsController {
       await db.bankAccount.delete({ where: { id } })
       res.json({ message: 'Bank account deleted' })
     } catch (err) {
-      console.error('[BankAccount Delete Error]', err)
+      logger.error('[BankAccount Delete Error]', err)
       res.status(500).json({ success: false, error: 'Failed to delete bank account' })
     }
   }

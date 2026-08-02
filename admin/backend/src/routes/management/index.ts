@@ -2,7 +2,6 @@ import express from 'express'
 import { requireAdmin } from '../../middleware/auth'
 import { userRateLimit } from '../../middleware/userRateLimit'
 import accountsRouter from './accounts'
-import accsmarketsRouter from './accsmarkets'
 import customersRouter from './customers'
 import dashboardRouter from './dashboard'
 import analyticsRouter from './analytics'
@@ -19,7 +18,6 @@ router.use(requireAdmin)
 router.use(userRateLimit)
 
 router.use('/accounts', accountsRouter)
-router.use('/accsmarkets', accsmarketsRouter)
 router.use('/customers', customersRouter)
 router.use('/dashboard', dashboardRouter)
 router.use('/analytics', analyticsRouter)

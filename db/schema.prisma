@@ -126,7 +126,6 @@ model Order {
   product             Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
   bankAccount         BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
   reservedAccounts    Account[]
-  reservedAccsmarkets Accsmarket[]
   sale                Sale?
 
   @@index([userId])
@@ -215,34 +214,22 @@ model AutopostingSchedule {
   @@map("schedules")
 }
 
-model Source {
-  id            Int      @id @default(autoincrement())
-  name          String   @db.VarChar(255)
-  spreadsheetId String?  @db.VarChar(500) @map("spreadsheet_id")
-  isAccsmarket  Boolean  @default(false) @map("is_accsmarket")
-  createdAt     DateTime @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt     DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
-
-  accounts    Account[]
-  accsmarkets Accsmarket[]
-  sales       Sale[]
-  product     Product?
-
-  @@map("sources")
-}
-
 model Account {
   id               Int      @id @default(autoincrement())
   orderIndex       Int?     @map("order_index")
   email            String?  @db.VarChar(255)
+  passwordEmail    String?  @db.VarChar(255) @map("password_email")
   username         String?  @db.VarChar(255)
   password         String?  @db.VarChar(255)
+  twoFactorAuth    String?  @db.VarChar(255) @map("two_factor_auth")
+  year             String?  @db.VarChar(255)
   targetFollowers  Int?     @map("target_followers")
   currentFollowers Int?     @map("current_followers")
   accountStatus    String?  @db.VarChar(50) @map("account_status")
   loginApp         String?  @db.VarChar(255) @map("login_app")
   capital          Float?
   phoneModel       String?  @db.VarChar(255) @map("phone_model")
+  sourceSheetName  String?  @db.VarChar(255) @map("source_sheet_name")
   sourceId         Int?     @map("source_id")
   isSold           Boolean  @default(false) @map("is_sold")
   reservedOrderId  Int?     @map("reserved_order_id")
@@ -256,11 +243,26 @@ model Account {
   @@index([email])
   @@index([username])
   @@index([isSold])
+  @@index([sourceSheetName])
   @@index([sourceId])
   @@index([orderIndex])
   @@index([accountStatus])
   @@index([reservedOrderId])
   @@map("accounts")
+}
+
+model Source {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique @db.VarChar(255)
+  spreadsheetId String   @db.VarChar(500) @map("spreadsheet_id")
+  createdAt     DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt     DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  accounts Account[]
+  sales    Sale[]
+  product  Product?
+
+  @@map("sources")
 }
 
 model Customer {
@@ -337,6 +339,7 @@ model UpfollItem {
   orderId          Int      @map("order_id")
   vendorTierId     Int      @map("vendor_tier_id")
   username         String   @db.VarChar(255)
+  startingFollowers Int?    @map("starting_followers")
   currentFollowers Int?     @map("current_followers")
   capital          Float    @default(0)
   unitSalePrice    Float    @map("unit_sale_price")
@@ -355,50 +358,18 @@ model UpfollItem {
   @@map("upfoll_items")
 }
 
-model Accsmarket {
-  id               Int      @id @default(autoincrement())
-  orderIndex       Int?     @map("order_index")
-  email            String?  @db.VarChar(255)
-  passwordEmail    String?  @db.VarChar(255) @map("password_email")
-  username         String?  @db.VarChar(255)
-  password         String?  @db.VarChar(255)
-  twoFactorAuth    String?  @db.VarChar(255) @map("two_factor_auth")
-  targetFollowers  Int?     @map("target_followers")
-  currentFollowers Int?     @map("current_followers")
-  accountStatus    String?  @db.VarChar(50) @map("account_status")
-  capital          Float?
-  year             String?  @db.VarChar(255)
-  sourceId         Int?     @map("source_id")
-  isSold           Boolean  @default(false) @map("is_sold")
-  reservedOrderId  Int?     @map("reserved_order_id")
-  createdAt        DateTime @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt        DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
-
-  source        Source?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  reservedOrder Order?     @relation(fields: [reservedOrderId], references: [id], onDelete: SetNull)
-  saleLines     SaleLine[]
-
-  @@index([email])
-  @@index([username])
-  @@index([isSold])
-  @@index([sourceId])
-  @@index([orderIndex])
-  @@index([accountStatus])
-  @@index([reservedOrderId])
-  @@map("accsmarkets")
-}
-
 model Sale {
-  id             Int      @id @default(autoincrement())
-  salesNumber    String   @db.VarChar(255) @map("sales_number")
-  customerId     Int?     @map("customer_id")
-  totalSalePrice Float    @map("total_sale_price")
-  totalProfit    Float    @map("total_profit")
-  isShopee       Boolean  @default(false) @map("is_shopee")
-  sourceId       Int?     @map("source_id")
-  orderId        Int?     @unique @map("order_id")
-  createdAt      DateTime @db.DateTime(3) @default(now()) @map("created_at")
-  updatedAt      DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+  id              Int      @id @default(autoincrement())
+  salesNumber     String   @db.VarChar(255) @map("sales_number")
+  customerId      Int?     @map("customer_id")
+  totalSalePrice  Float    @map("total_sale_price")
+  totalProfit     Float    @map("total_profit")
+  isShopee        Boolean  @default(false) @map("is_shopee")
+  sourceSheetName String?  @db.VarChar(255) @map("source_sheet_name")
+  sourceId        Int?     @map("source_id")
+  orderId         Int?     @unique @map("order_id")
+  createdAt       DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt       DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
   customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   source      Source?      @relation(fields: [sourceId], references: [id], onDelete: SetNull)
@@ -407,6 +378,7 @@ model Sale {
   upfollOrder UpfollOrder?
 
   @@index([customerId])
+  @@index([sourceSheetName])
   @@index([sourceId])
   @@index([createdAt])
   @@index([isShopee])
@@ -417,19 +389,16 @@ model SaleLine {
   id            Int      @id @default(autoincrement())
   saleId        Int      @map("sale_id")
   accountId     Int?     @map("account_id")
-  accsmarketId  Int?     @map("accsmarket_id")
   unitSalePrice Float?   @map("unit_sale_price")
   price         Float    @default(0)
   profit        Float    @default(0)
   createdAt     DateTime @db.DateTime(3) @default(now()) @map("created_at")
 
-  sale       Sale        @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  account    Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  accsmarket Accsmarket? @relation(fields: [accsmarketId], references: [id], onDelete: SetNull)
+  sale    Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  account Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
   @@index([saleId])
   @@index([accountId])
-  @@index([accsmarketId])
   @@map("sale_lines")
 }
 

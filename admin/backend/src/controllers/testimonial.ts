@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import { TestimonialService } from '../services/testimonial'
+import { logger } from '../utils/logger'
 
 export class TestimonialController {
   static async index(req: Request, res: Response): Promise<void> {
@@ -8,7 +9,7 @@ export class TestimonialController {
       const testimonials = await TestimonialService.getAll(productId)
       res.json(testimonials)
     } catch (err) {
-      console.error('[Testimonials List Error]', err)
+      logger.error('[Testimonials List Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch testimonials' })
     }
   }
@@ -24,7 +25,7 @@ export class TestimonialController {
       const testimonial = await TestimonialService.update(id, data)
       res.json(testimonial)
     } catch (err) {
-      console.error('[Testimonial Update Error]', err)
+      logger.error('[Testimonial Update Error]', err)
       res.status(500).json({ success: false, error: 'Failed to update testimonial' })
     }
   }
@@ -35,7 +36,7 @@ export class TestimonialController {
       await TestimonialService.remove(id)
       res.json({ message: 'Testimonial deleted successfully' })
     } catch (err) {
-      console.error('[Testimonial Delete Error]', err)
+      logger.error('[Testimonial Delete Error]', err)
       res.status(500).json({ success: false, error: 'Failed to delete testimonial' })
     }
   }

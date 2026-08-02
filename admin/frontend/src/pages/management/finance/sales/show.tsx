@@ -19,7 +19,7 @@ interface SaleDetail {
   id: number
   sales_number?: string
   customer?: { usernameSh: string; nomorHp?: string }
-  source?: { name: string }
+  source?: { id: number; name: string }
   total_sale_price: number
   total_profit: number
   is_shopee: boolean
@@ -70,7 +70,7 @@ export default function SaleDetailPage() {
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Asal</span>
-              <span className="font-medium">{sale.origin === "storefront" ? "Storefront" : "Manual"}</span>
+              <span className="font-medium">{sale.origin === "storefront" ? "Website" : "Shopee"}</span>
             </div>
             {sale.origin === "storefront" ? (
               <>

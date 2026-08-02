@@ -6,7 +6,7 @@ import {
 } from "recharts"
 import { DollarSign, Wallet, TrendingUp, Percent } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
+import { StatCard } from "@/components/ui/stat-card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
@@ -27,7 +27,7 @@ interface Summary {
 interface TrendPoint { date: string | number; revenue: number; profit: number }
 interface CountPoint { date: string | number; count: number }
 interface SourceProfit { name: string; value: number; color?: string }
-interface Source { id: number; name: string; color: string }
+interface Source { id: number; name: string }
 interface AnalyticsData {
   summary: Summary
   trendData: TrendPoint[]
@@ -44,47 +44,6 @@ const MONTH_OPTIONS = [
     label: new Intl.DateTimeFormat("id-ID", { month: "long" }).format(new Date(2024, i, 1)),
   })),
 ]
-
-function ComparisonBadge({ change, label, invert }: { change: number; label: string; invert?: boolean }) {
-  const isUp = change >= 0
-  const positive = invert ? !isUp : isUp
-  return (
-    <p className={`text-xs mt-1 flex items-center gap-0.5 ${positive ? "text-green-600" : "text-red-500"}`}>
-      <span>{isUp ? "↑" : "↓"}</span>
-      <span>{Math.abs(change)}% {label}</span>
-    </p>
-  )
-}
-
-function StatCard({
-  title, value, icon: Icon, comparison, invert, loading, valueClass,
-}: {
-  title: string; value: string; icon: React.ElementType
-  comparison?: Comparison; invert?: boolean; loading: boolean; valueClass?: string
-}) {
-  return (
-    <Card>
-      <CardContent className="pt-5">
-        <div className="flex items-start justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
-          <div className="rounded-md p-1.5 bg-primary/10">
-            <Icon className="size-4 text-primary" />
-          </div>
-        </div>
-        {loading ? (
-          <Skeleton className="h-7 w-36 mt-2" />
-        ) : (
-          <>
-            <p className={`text-2xl font-bold mt-2 ${valueClass ?? "text-foreground"}`}>{value}</p>
-            {comparison && comparison.label && (
-              <ComparisonBadge change={comparison.change} label={comparison.label} invert={invert} />
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -161,23 +120,23 @@ export default function AnalyticsPage() {
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Pendapatan" icon={DollarSign} loading={isLoading}
+          title="Pendapatan" icon={DollarSign} color="blue" loading={isLoading}
           value={formatIDR(summary?.revenue ?? 0)}
           comparison={summary?.comparisons.revenue}
         />
         <StatCard
-          title="Modal" icon={Wallet} loading={isLoading}
+          title="Modal" icon={Wallet} color="amber" loading={isLoading}
           value={formatIDR(summary?.capital ?? 0)}
           comparison={summary?.comparisons.capital}
         />
         <StatCard
-          title="Profit" icon={TrendingUp} loading={isLoading}
+          title="Profit" icon={TrendingUp} color="emerald" loading={isLoading}
           value={formatIDR(summary?.profit ?? 0)}
           valueClass="text-green-600"
           comparison={summary?.comparisons.profit}
         />
         <StatCard
-          title="Margin" icon={Percent} loading={isLoading}
+          title="Margin" icon={Percent} color="violet" loading={isLoading}
           value={`${summary?.margin ?? 0}%`}
           valueClass="text-green-600"
           comparison={summary?.comparisons.margin}

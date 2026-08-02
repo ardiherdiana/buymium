@@ -3,6 +3,7 @@ import PDFDocument = require('pdfkit')
 import multer from 'multer'
 import fs from 'fs'
 import path from 'path'
+import { Prisma } from '@prisma/client'
 import db from '../config/database'
 import { requireAuth } from '../middleware/auth'
 import { validate } from '../middleware/validate'
@@ -11,6 +12,8 @@ import { userRateLimit } from '../middleware/userRateLimit'
 import { sendOrderCreated, sendProofUploaded } from '../utils/email'
 import { reserveInventory, releaseInventory, countAvailableInventory, getVariantPrice, getOrderVariantLabel } from '../utils/inventory'
 import { safeDecrypt } from '../utils/encrypt'
+import { buildProofUrl } from '../utils/fileAccessToken'
+import { sniffImageTypeFromFile, extensionFor } from '../utils/imageSniff'
 
 const router = Router()
 
@@ -18,11 +21,12 @@ const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'payment-proofs')
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 
 const upload = multer({
+  // No extension here — the real one is derived from sniffed magic bytes below, since
+  // both the client-supplied mimetype and originalname's extension are spoofable.
   storage: multer.diskStorage({
     destination: UPLOAD_DIR,
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase()
-      cb(null, `proof-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`)
+    filename: (_req, _file, cb) => {
+      cb(null, `proof-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tmp`)
     },
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -37,12 +41,15 @@ function generateGroupId(prefix: string, userId: number): string {
   return `BUYMIUM-${prefix}-${userId}-${Date.now()}`
 }
 
-async function reserveForProduct(orderId: number, productId: number, quantity: number, variantId?: number, stockIds?: number[]): Promise<boolean> {
-  const product = await db.product.findUnique({ where: { id: productId }, select: { sourceId: true } })
+async function reserveForProduct(orderId: number, productId: number, quantity: number, variantId?: number, stockIds?: number[], tx?: Prisma.TransactionClient): Promise<boolean> {
+  const conn = tx ?? db
+  const product = await conn.product.findUnique({ where: { id: productId }, select: { sourceId: true } })
   if (!product?.sourceId) return true
-  const reserved = await reserveInventory(orderId, productId, product.sourceId, quantity, variantId, stockIds)
+  const reserved = await reserveInventory(orderId, productId, product.sourceId, quantity, variantId, stockIds, tx)
   return reserved >= quantity
 }
+
+class InsufficientStockError extends Error {}
 
 router.post('/', requireAuth, userRateLimit, validate(CreateOrderSchema), async (req: Request, res: Response) => {
   const { userId } = req.user!
@@ -65,16 +72,22 @@ router.post('/', requireAuth, userRateLimit, validate(CreateOrderSchema), async 
   const totalPrice = subtotal
   const groupId = generateGroupId('SO', userId)
 
-  const order = await db.order.create({
-    data: { userId, productId, quantity, totalPrice, status: 'pending', groupId },
-  })
-
-  const reserved = await reserveForProduct(order.id, productId, quantity, variantId, stockIds)
-  if (!reserved) {
-    await releaseInventory([order.id])
-    await db.order.update({ where: { id: order.id }, data: { status: 'cancelled' } })
-    res.status(409).json({ error: 'Stok baru saja habis dibeli orang lain, silakan pilih produk/variasi lain' })
-    return
+  let order: { id: number }
+  try {
+    order = await db.$transaction(async (tx) => {
+      const o = await tx.order.create({
+        data: { userId, productId, quantity, totalPrice, status: 'pending', groupId },
+      })
+      const reserved = await reserveForProduct(o.id, productId, quantity, variantId, stockIds, tx)
+      if (!reserved) throw new InsufficientStockError()
+      return o
+    })
+  } catch (err) {
+    if (err instanceof InsufficientStockError) {
+      res.status(409).json({ error: 'Stok baru saja habis dibeli orang lain, silakan pilih produk/variasi lain' })
+      return
+    }
+    throw err
   }
 
   const user = await db.user.findUnique({ where: { id: userId } })
@@ -109,23 +122,31 @@ router.post('/cart', requireAuth, userRateLimit, validate(CartOrderSchema), asyn
 
   const groupId = generateGroupId('CART', userId)
 
-  const orders = await Promise.all(
-    items.map((it, i) => {
-      const subtotal = Math.round(unitPrices[i] * it.quantity)
-      const totalPrice = subtotal
-      return db.order.create({
-        data: { userId, productId: it.productId, quantity: it.quantity, totalPrice, status: 'pending', groupId },
-      })
+  let orders: { id: number; totalPrice: number }[]
+  try {
+    orders = await db.$transaction(async (tx) => {
+      const created: { id: number; totalPrice: number }[] = []
+      for (let i = 0; i < items.length; i++) {
+        const totalPrice = Math.round(unitPrices[i] * items[i].quantity)
+        const o = await tx.order.create({
+          data: { userId, productId: items[i].productId, quantity: items[i].quantity, totalPrice, status: 'pending', groupId },
+        })
+        created.push(o)
+      }
+      // Sequential, not Promise.all: an interactive transaction runs on a single
+      // connection and can't safely serve concurrent queries.
+      for (let i = 0; i < items.length; i++) {
+        const reserved = await reserveForProduct(created[i].id, items[i].productId, items[i].quantity, items[i].variantId, items[i].stockIds, tx)
+        if (!reserved) throw new InsufficientStockError()
+      }
+      return created
     })
-  )
-
-  const reservations = await Promise.all(items.map((it, i) => reserveForProduct(orders[i].id, it.productId, it.quantity, it.variantId, it.stockIds)))
-  if (!reservations.every(Boolean)) {
-    const orderIds = orders.map((o) => o.id)
-    await releaseInventory(orderIds)
-    await db.order.updateMany({ where: { id: { in: orderIds } }, data: { status: 'cancelled' } })
-    res.status(409).json({ error: 'Sebagian stok di keranjang baru saja habis dibeli orang lain, silakan cek ulang keranjang kamu' })
-    return
+  } catch (err) {
+    if (err instanceof InsufficientStockError) {
+      res.status(409).json({ error: 'Sebagian stok di keranjang baru saja habis dibeli orang lain, silakan cek ulang keranjang kamu' })
+      return
+    }
+    throw err
   }
 
   const totalAll = orders.reduce((s, o) => s + o.totalPrice, 0)
@@ -146,13 +167,22 @@ router.post('/:id/proof', requireAuth, userRateLimit, upload.single('proof'), as
   if (!req.file) { res.status(400).json({ error: 'File bukti transfer wajib diupload' }); return }
   if (isNaN(orderId)) { res.status(400).json({ error: 'ID pesanan tidak valid' }); return }
 
+  const sniffed = sniffImageTypeFromFile(req.file.path)
+  if (!sniffed) {
+    fs.unlink(req.file.path, () => {})
+    res.status(400).json({ error: 'File harus berupa gambar JPG/PNG/WEBP yang valid' }); return
+  }
+  const finalFilename = req.file.filename.replace(/\.tmp$/, extensionFor(sniffed))
+  const finalPath = path.join(UPLOAD_DIR, finalFilename)
+  fs.renameSync(req.file.path, finalPath)
+
   const order = await db.order.findFirst({ where: { id: orderId, userId } })
   if (!order) {
-    fs.unlink(req.file.path, () => {})
+    fs.unlink(finalPath, () => {})
     res.status(404).json({ error: 'Pesanan tidak ditemukan' }); return
   }
   if (order.status !== 'pending' && order.status !== 'awaiting_confirmation') {
-    fs.unlink(req.file.path, () => {})
+    fs.unlink(finalPath, () => {})
     res.status(400).json({ error: 'Pesanan ini tidak bisa di-update' }); return
   }
 
@@ -160,7 +190,7 @@ router.post('/:id/proof', requireAuth, userRateLimit, upload.single('proof'), as
   if (bankId) {
     const bank = await db.bankAccount.findFirst({ where: { id: bankId, isActive: true } })
     if (!bank) {
-      fs.unlink(req.file.path, () => {})
+      fs.unlink(finalPath, () => {})
       res.status(400).json({ error: 'Rekening tidak valid' }); return
     }
   }
@@ -170,7 +200,7 @@ router.post('/:id/proof', requireAuth, userRateLimit, upload.single('proof'), as
     fs.unlink(oldPath, () => {})
   }
 
-  const relativePath = path.join('uploads', 'payment-proofs', req.file.filename).replace(/\\/g, '/')
+  const relativePath = path.join('uploads', 'payment-proofs', finalFilename).replace(/\\/g, '/')
 
   const updateData: { paymentProof: string; proofUploadedAt: Date; status: string; bankAccountId?: number | null } = {
     paymentProof: relativePath,
@@ -306,6 +336,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     ...order,
     subtotal: order.totalPrice,
     variantLabel,
+    paymentProofUrl: buildProofUrl(order.paymentProof),
     relatedOrders: relatedOrders,
     hasTestimonial: !!existingTestimonial,
     testimonial: existingTestimonial,
@@ -336,7 +367,7 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
     data: { orderId: order.id, userId, ip: req.ip ?? null },
   })
 
-  type InventoryRef = { type: 'account' | 'accsmarket'; id: number }
+  type InventoryRef = { id: number }
   const inventoryRefs: InventoryRef[] = (() => {
     try { return order.inventoryRefs ? JSON.parse(order.inventoryRefs) : [] } catch { return [] }
   })()
@@ -351,29 +382,15 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
   textContent += `TANGGAL: ${new Date(order.createdAt).toLocaleString('id-ID')}\n`
   textContent += `==========================================\n\n`
 
-  const accountIds = inventoryRefs.filter(r => r.type === 'account').map(r => r.id)
-  const accsmarketIds = inventoryRefs.filter(r => r.type === 'accsmarket').map(r => r.id)
-  const [accounts, accsmarkets] = await Promise.all([
-    accountIds.length ? db.account.findMany({ where: { id: { in: accountIds } } }) : [],
-    accsmarketIds.length ? db.accsmarket.findMany({ where: { id: { in: accsmarketIds } } }) : [],
-  ])
+  const accountIds = inventoryRefs.map(r => r.id)
+  const accounts = accountIds.length ? await db.account.findMany({ where: { id: { in: accountIds } } }) : []
+
   let index = 0
   let hasBuymiumStoreEmail = false
   let hasHotmailOutlookEmail = false
   let hasTwoFactor = false
 
   for (const acc of accounts) {
-    index += 1
-    textContent += `AKUN #${index}\n`
-    if (acc.email) textContent += `Email: ${acc.email}\n`
-    if (acc.username) textContent += `Username: ${acc.username}\n`
-    if (acc.password) textContent += `Password: ${safeDecrypt(acc.password)}\n`
-    textContent += `------------------------------------------\n`
-    const email = (acc.email || '').toLowerCase()
-    if (email.endsWith('@buymium.store')) hasBuymiumStoreEmail = true
-    if (email.endsWith('@hotmail.com') || email.endsWith('@outlook.com')) hasHotmailOutlookEmail = true
-  }
-  for (const acc of accsmarkets) {
     index += 1
     textContent += `AKUN #${index}\n`
     if (acc.email) textContent += `Email: ${acc.email}\n`

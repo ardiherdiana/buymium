@@ -37,15 +37,16 @@ describe('startScheduler', () => {
     )
   })
 
-  it('registers exactly two cron jobs', () => {
+  it('registers exactly three cron jobs', () => {
     startScheduler()
-    expect(mockScheduleFn).toHaveBeenCalledTimes(2)
+    expect(mockScheduleFn).toHaveBeenCalledTimes(3)
   })
 
   it('scheduled callback finds and updates scheduled posts that are due', async () => {
     let schedulerCallback: (() => Promise<void>) | undefined
-    // First call is midnight sync — skip it; second call is the 60s posts scheduler
-    mockScheduleFn.mockImplementationOnce(() => { /* midnight sync, ignore */ })
+    // First call is the order-expiry job — skip it; second call is the 60s posts scheduler;
+    // third is the midnight sync job (unused here).
+    mockScheduleFn.mockImplementationOnce(() => { /* order expiry, ignore */ })
     mockScheduleFn.mockImplementationOnce((_expr: string, cb: () => Promise<void>) => {
       schedulerCallback = cb
     })
@@ -59,7 +60,7 @@ describe('startScheduler', () => {
     ]
 
     mockDb.autopostingPost.findMany.mockResolvedValueOnce(mockScheduledPosts)
-    mockDb.autopostingPost.updateMany = vi.fn().mockResolvedValueOnce({ count: 2 })
+    mockDb.autopostingPost.update = vi.fn().mockResolvedValue({})
 
     await schedulerCallback!()
 
@@ -68,9 +69,17 @@ describe('startScheduler', () => {
         where: expect.objectContaining({ status: 'scheduled' }),
       })
     )
-    expect(mockDb.autopostingPost.updateMany).toHaveBeenCalledWith(
+    // The scheduler updates posts one at a time (not a batch updateMany)
+    expect(mockDb.autopostingPost.update).toHaveBeenCalledTimes(2)
+    expect(mockDb.autopostingPost.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: { in: [10, 11] } }),
+        where: { id: 10 },
+        data: expect.objectContaining({ status: 'published' }),
+      })
+    )
+    expect(mockDb.autopostingPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 11 },
         data: expect.objectContaining({ status: 'published' }),
       })
     )
@@ -78,7 +87,7 @@ describe('startScheduler', () => {
 
   it('scheduled callback does not call updateMany when no due posts', async () => {
     let schedulerCallback: (() => Promise<void>) | undefined
-    mockScheduleFn.mockImplementationOnce(() => { /* midnight sync, ignore */ })
+    mockScheduleFn.mockImplementationOnce(() => { /* order expiry, ignore */ })
     mockScheduleFn.mockImplementationOnce((_expr: string, cb: () => Promise<void>) => {
       schedulerCallback = cb
     })
@@ -86,17 +95,17 @@ describe('startScheduler', () => {
     startScheduler()
 
     mockDb.autopostingPost.findMany.mockResolvedValueOnce([])
-    mockDb.autopostingPost.updateMany = vi.fn()
+    mockDb.autopostingPost.update = vi.fn()
 
     await schedulerCallback!()
 
     expect(mockDb.autopostingPost.findMany).toHaveBeenCalled()
-    expect(mockDb.autopostingPost.updateMany).not.toHaveBeenCalled()
+    expect(mockDb.autopostingPost.update).not.toHaveBeenCalled()
   })
 
   it('scheduled callback handles db errors gracefully without throwing', async () => {
     let schedulerCallback: (() => Promise<void>) | undefined
-    mockScheduleFn.mockImplementationOnce(() => { /* midnight sync, ignore */ })
+    mockScheduleFn.mockImplementationOnce(() => { /* order expiry, ignore */ })
     mockScheduleFn.mockImplementationOnce((_expr: string, cb: () => Promise<void>) => {
       schedulerCallback = cb
     })

@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   ShoppingCart, Package, Users, Star,
-  BarChart3, ShoppingBag, TrendingUp, PieChart, UserSquare, Database,
+  BarChart3, TrendingUp, PieChart, UserSquare, Database,
   LayoutDashboard, Plus, Trash2, Sun, Moon, Gift, Store,
 } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
@@ -59,8 +59,7 @@ const MANAGEMENT_NAV: NavGroup[] = [
   {
     group: "Stok Akun",
     items: [
-      { label: "Instagram", href: "/stock/accounts", icon: Users },
-      { label: "Accsmarket", href: "/stock/accsmarket", icon: ShoppingBag },
+      { label: "Akun", href: "/stock/accounts", icon: Users },
     ],
   },
   {

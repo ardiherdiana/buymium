@@ -4,7 +4,7 @@ import { AccountsController } from '../../controllers/management/accounts'
 import { AccountsService } from '../../services/management/accountsService'
 import { logger } from '../../utils/logger'
 import { validate } from '../../middleware/validate'
-import { CreateAccountSchema, UpdateAccountSchema, SyncAccountSchema } from '../../validators/management'
+import { CreateAccountSchema, UpdateAccountSchema } from '../../validators/management'
 
 const prisma = db
 
@@ -46,54 +46,31 @@ router.get('/search/customers', async (req: Request, res: Response) => {
   }
 })
 
-router.post('/sync', validate(SyncAccountSchema), async (req: Request, res: Response) => {
+router.post('/sync', async (req: Request, res: Response) => {
   try {
-    const { source_id } = req.body
+    const sourceId = req.body?.source_id ? parseInt(req.body.source_id) : undefined
 
-    if (source_id) {
-      const result = await AccountsService.sync(source_id)
+    if (sourceId) {
+      const source = await prisma.source.findUnique({ where: { id: sourceId } })
+      if (!source) {
+        res.status(404).json({ success: false, error: 'Source not found' })
+        return
+      }
+      const result = await AccountsService.syncSource(source)
       res.json({
         success: true,
-        message: `Successfully synced ${result.syncedCount} accounts from ${result.totalSheets} sheet(s).`,
-        syncedCount: result.syncedCount,
-        totalSheets: result.totalSheets,
+        message: `Successfully synced ${result.syncedCount} account(s) from ${result.totalSheets} sheet(s) in source '${source.name}'.`,
+        ...result,
       })
-    } else {
-      // Sync all non-accsmarket sources if source_id is not provided
-      const sources = await prisma.source.findMany({
-        where: { isAccsmarket: false },
-        orderBy: [{ id: 'asc' }],
-      })
-
-      if (!sources.length) {
-        return res.status(400).json({ success: false, error: 'No sources found' })
-      }
-
-      let totalSyncedCount = 0
-      let totalSheets = 0
-      const results = []
-
-      for (const source of sources) {
-        try {
-          const result = await AccountsService.sync(source.id.toString())
-          totalSyncedCount += result.syncedCount
-          totalSheets += result.totalSheets
-          results.push({ source: source.name, ...result })
-        } catch (error) {
-          logger.error(`Error syncing source '${source.name}':`, error)
-          results.push({ source: source.name, error: error instanceof Error ? error.message : 'Failed to sync' })
-        }
-      }
-
-      res.json({
-        success: true,
-        message: `Successfully synced ${totalSyncedCount} accounts from ${totalSheets} sheet(s) across ${sources.length} source(s).`,
-        syncedCount: totalSyncedCount,
-        totalSheets,
-        totalSources: sources.length,
-        results,
-      })
+      return
     }
+
+    const result = await AccountsService.syncAll()
+    res.json({
+      success: true,
+      message: `Successfully synced ${result.syncedCount} account(s) from ${result.totalSheets} sheet(s) across ${result.totalSources} source(s).`,
+      ...result,
+    })
   } catch (error) {
     logger.error('Error syncing accounts:', error)
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to sync accounts' })

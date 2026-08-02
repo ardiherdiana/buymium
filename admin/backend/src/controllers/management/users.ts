@@ -1,7 +1,7 @@
 ﻿import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import db from '../../config/database'
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 import { logger } from '../../utils/logger'
 
 const prisma = db
@@ -27,14 +27,10 @@ export const UsersController = {
       })
 
       const roles = await prisma.role.findMany()
-      const sources = await prisma.source.findMany({
-        orderBy: [{ id: 'asc' }],
-      })
 
       res.json({
         users: usersWithoutPassword,
         roles,
-        sources,
         pagination: {
           page,
           limit,

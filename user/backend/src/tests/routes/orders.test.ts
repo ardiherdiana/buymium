@@ -20,7 +20,6 @@ const mockProduct = {
   updatedAt: new Date(),
 }
 
-const mockSource = { id: 1, isAccsmarket: false }
 
 const mockUser = {
   id: 1,
@@ -74,7 +73,6 @@ describe('POST /api/orders', () => {
     mockDb.product.findUnique.mockResolvedValue(mockProduct)
     mockDb.user.findUnique.mockResolvedValue(mockUser)
     mockDb.order.create.mockResolvedValue({ id: 1, userId: 1, productId: 1, quantity: 1, totalPrice: 52000, status: 'pending', groupId: 'BUYMIUM-SO-1-123' })
-    mockDb.source.findUnique.mockResolvedValue(mockSource)
     mockDb.account.count.mockResolvedValue(5)
     mockDb.account.findMany.mockResolvedValue([{ id: 1 }])
     mockDb.account.updateMany.mockResolvedValue({ count: 1 })
@@ -106,7 +104,6 @@ describe('POST /api/orders', () => {
   it('returns 400 when stock is insufficient', async () => {
     mockDb.product.findUnique.mockResolvedValue(mockProduct)
     mockDb.user.findUnique.mockResolvedValue(mockUser)
-    mockDb.source.findUnique.mockResolvedValue(mockSource)
     mockDb.account.count.mockResolvedValue(1)
 
     const res = await request(app)
@@ -174,7 +171,6 @@ describe('GET /api/orders/:id', () => {
     const orderWithProduct = {
       ...mockOrder,
       product: { id: 1, title: 'Netflix', section: null },
-      midtransId: null,
     }
     mockDb.order.findFirst.mockResolvedValue(orderWithProduct)
 
@@ -250,7 +246,6 @@ describe('POST /api/orders/cart', () => {
     mockDb.user.findUnique.mockResolvedValue(mockUser)
     mockDb.product.findUnique.mockResolvedValue(mockProduct)
     mockDb.order.create.mockResolvedValue({ id: 1, userId: 1, productId: 1, quantity: 1, totalPrice: 52000, status: 'pending', groupId: 'BUYMIUM-CART-1-123' })
-    mockDb.source.findUnique.mockResolvedValue(mockSource)
     mockDb.account.count.mockResolvedValue(5)
     mockDb.account.findMany.mockResolvedValue([{ id: 1 }])
     mockDb.account.updateMany.mockResolvedValue({ count: 1 })
@@ -283,7 +278,6 @@ describe('POST /api/orders/cart', () => {
   it('returns 400 when cart product has insufficient stock', async () => {
     mockDb.user.findUnique.mockResolvedValue(mockUser)
     mockDb.product.findUnique.mockResolvedValue(mockProduct)
-    mockDb.source.findUnique.mockResolvedValue(mockSource)
     mockDb.account.count.mockResolvedValue(1)
 
     const res = await request(app)
@@ -351,7 +345,6 @@ describe('GET /api/orders/:id/download', () => {
     mockDb.account.findMany.mockResolvedValue([
       { id: 1, email: 'account@netflix.com', username: 'netflixuser', password: 'secret' },
     ])
-    mockDb.accsmarket.findMany.mockResolvedValue([])
 
     const res = await request(app)
       .get('/api/orders/1/download')

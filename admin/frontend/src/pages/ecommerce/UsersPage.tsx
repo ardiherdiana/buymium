@@ -57,7 +57,7 @@ function UserGrowthChart() {
               <Tooltip
                 contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--popover-foreground)" }}
                 formatter={(v) => [v as number, "Pengguna Baru"]}
-                labelFormatter={(v: string) => `Tanggal ${v.slice(-2)}`}
+                labelFormatter={(v) => `Tanggal ${String(v).slice(-2)}`}
               />
               <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} dot={false} name="Pengguna Baru" />
             </LineChart>

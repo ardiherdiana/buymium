@@ -1,13 +1,16 @@
-﻿import { Request, Response } from 'express'
+import { Request, Response } from 'express'
 import { logger } from '../../utils/logger'
 import db from '../../config/database'
-import { Prisma } from '@prisma/client'
 
 const prisma = db
 
 export const DashboardController = {
   async index(req: Request, res: Response) {
     try {
+      // `year` (Tahun Dibuat) is only ever populated for what used to be
+      // "Accsmarket"-type sheets (2FA/Hotmail) — accounts-type sheets
+      // (Buymium/Konten) never populate it, so it still cleanly separates the
+      // two stock views below now that both live in the same `accounts` table.
       const [
         totalUsers,
         completedAccounts,
@@ -16,37 +19,36 @@ export const DashboardController = {
         activeAccsmarketsCount,
         totalCustomers,
         salesAgg,
+        sources,
       ] = await Promise.all([
         prisma.user.count(),
-        prisma.account.count({ where: { accountStatus: 'Completed', isSold: false } }),
-        prisma.accsmarket.count({ where: { accountStatus: 'completed', isSold: false } }),
-        prisma.account.count({ where: { isSold: false } }),
-        prisma.accsmarket.count({ where: { isSold: false } }),
+        prisma.account.count({ where: { accountStatus: { in: ['Completed', 'completed'] }, isSold: false, year: null } }),
+        prisma.account.count({ where: { accountStatus: { in: ['Completed', 'completed'] }, isSold: false, year: { not: null } } }),
+        prisma.account.count({ where: { isSold: false, year: null } }),
+        prisma.account.count({ where: { isSold: false, year: { not: null } } }),
         prisma.customer.count(),
         prisma.sale.aggregate({ _sum: { totalSalePrice: true, totalProfit: true } }),
+        prisma.source.findMany({ orderBy: { id: 'asc' } }),
       ])
+
+      const sourceNameById = new Map(sources.map((s) => [s.id, s.name]))
 
       const totalAccounts = completedAccounts + completedAccsmarkets
       const activeAccounts = activeAccountsCount + activeAccsmarketsCount
 
-      // ── Accounts: grouped by source ──────────────────────────────────────────
-      const sources = await prisma.source.findMany({ orderBy: [{ id: 'asc' }] })
-
-      // Use groupBy instead of loading all account rows into memory
+      // ── Accounts: grouped by Source ──────────────────────────────────────────
       const [stockAcc, accDistRaw] = await Promise.all([
         prisma.account.groupBy({
           by: ['sourceId'],
-          where: { accountStatus: 'Completed', isSold: false,  },
+          where: { accountStatus: { in: ['Completed', 'completed'] }, isSold: false, year: null },
           _count: true,
         }),
         prisma.account.groupBy({
           by: ['sourceId', 'targetFollowers'],
-          where: { accountStatus: 'Completed', isSold: false,  },
+          where: { accountStatus: { in: ['Completed', 'completed'] }, isSold: false, year: null },
           _count: true,
         }),
       ])
-
-      const sourcesMap = new Map(sources.map((s) => [s.id, s]))
 
       // Build distribution map: sourceId → targetFollowers → count
       const distMap = new Map<number, Map<string, number>>()
@@ -57,22 +59,23 @@ export const DashboardController = {
         distMap.get(srcId)!.set(key, row._count)
       })
 
-      let accountsStock: { id: number | null | undefined; name: string; image: string | null; total_stock: number; distribution: { range: string; count: number }[] }[] = []
+      const accountsStock: { id: number | string; name: string; image: string | null; total_stock: number; distribution: { range: string; count: number }[] }[] = []
       let totalAccountsStock = 0
 
       for (const row of stockAcc) {
         const accountsCount = row._count
         totalAccountsStock += accountsCount
-        const source = sourcesMap.get(row.sourceId ?? -1)
+        const srcId = row.sourceId ?? -1
+        const name = sourceNameById.get(srcId) ?? 'Unknown'
 
-        const innerDist = distMap.get(row.sourceId ?? -1) ?? new Map()
+        const innerDist = distMap.get(srcId) ?? new Map()
         const formattedAccDistribution = Array.from(innerDist.entries())
           .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
           .map(([key, count]) => ({ range: formatFollowerRange(key), count }))
 
         accountsStock.push({
-          id: source?.id ?? row.sourceId,
-          name: source?.name ?? 'Unknown',
+          id: row.sourceId ?? 'unknown',
+          name,
           image: null,
           total_stock: accountsCount,
           distribution: formattedAccDistribution,
@@ -80,12 +83,11 @@ export const DashboardController = {
       }
 
       const stockBySourceAccData = stockAcc
-        .filter((item) => !sourcesMap.get(item.sourceId ?? -1)?.isAccsmarket)
         .map((item) => {
-          const source = sourcesMap.get(item.sourceId ?? -1)
+          const name = sourceNameById.get(item.sourceId ?? -1) ?? 'Unknown'
           const percentage = totalAccountsStock > 0 ? (item._count / totalAccountsStock) * 100 : 0
           return {
-            name: source?.name || 'Unknown',
+            name,
             value: item._count,
             percentage: Math.round(percentage * 100) / 100,
             source_id: item.sourceId,
@@ -93,11 +95,12 @@ export const DashboardController = {
         })
         .sort((a, b) => b.value - a.value)
 
-      // ── Accsmarket: grouped by source → year ────────────────────────────────
-      const accsmarketsRaw = await prisma.accsmarket.findMany({
+      // ── Accsmarket-style rows: grouped by Source → year ─────────────────────
+      const accsmarketsRaw = await prisma.account.findMany({
         where: {
-          accountStatus: 'completed',
+          accountStatus: { in: ['Completed', 'completed'] },
           isSold: false,
+          year: { not: null },
         },
         select: { year: true, targetFollowers: true, sourceId: true },
       })
@@ -105,7 +108,6 @@ export const DashboardController = {
       const totalAccsmarketStock = accsmarketsRaw.length
 
       // Group by (sourceId, yearKey) → follower counts
-      // Each (source, year) pair becomes one card
       const srcYearFollowersMap = new Map<string, { srcId: number; yearKey: string; followers: number[] }>()
       accsmarketsRaw.forEach((acc) => {
         const srcId = acc.sourceId ?? -1
@@ -119,7 +121,7 @@ export const DashboardController = {
 
       const accsmarketStock: { id: string; name: string; subtitle: string; image: string | null; total_stock: number; distribution: { range: string; count: number }[] }[] = []
       srcYearFollowersMap.forEach(({ srcId, yearKey, followers }) => {
-        const source = sourcesMap.get(srcId)
+        const name = sourceNameById.get(srcId) ?? 'Unknown'
         const dist: { [k: string]: number } = {}
         followers.forEach((f) => { const k = String(f); dist[k] = (dist[k] || 0) + 1 })
         const distribution = Object.keys(dist)
@@ -128,7 +130,7 @@ export const DashboardController = {
 
         accsmarketStock.push({
           id: `${srcId}-${yearKey}`,
-          name: source?.name ?? 'Unknown',
+          name,
           subtitle: yearKey,
           image: null,
           total_stock: followers.length,
@@ -136,31 +138,27 @@ export const DashboardController = {
         })
       })
 
-      // Sort: by source order (from sources list), then 2014-2024 first, then year asc
-      const sourceOrder = sources.map((s) => s.id)
+      // Sort: by source name, then 2014-2024 first, then year asc
       accsmarketStock.sort((a, b) => {
-        const aSrcId = parseInt(a.id.split('-')[0])
-        const bSrcId = parseInt(b.id.split('-')[0])
-        const srcDiff = sourceOrder.indexOf(aSrcId) - sourceOrder.indexOf(bSrcId)
+        const srcDiff = a.name.localeCompare(b.name)
         if (srcDiff !== 0) return srcDiff
         if (a.subtitle === '2014 - 2024') return -1
         if (b.subtitle === '2014 - 2024') return 1
         return parseInt(a.subtitle) - parseInt(b.subtitle)
       })
 
-      // Distribution pie chart for accsmarket — simple groupBy sourceId from DB
-      const accsmarketDistRaw = await prisma.accsmarket.groupBy({
+      // Distribution pie chart for accsmarket-style rows
+      const accsmarketDistRaw = await prisma.account.groupBy({
         by: ['sourceId'],
-        where: { accountStatus: 'completed', isSold: false },
+        where: { accountStatus: { in: ['Completed', 'completed'] }, isSold: false, year: { not: null } },
         _count: true,
       })
       const accsmarketTotal = accsmarketDistRaw.reduce((s, r) => s + r._count, 0)
       const stockBySourceMarketData = accsmarketDistRaw
-        .filter((item) => sourcesMap.get(item.sourceId ?? -1)?.isAccsmarket)
         .map((item) => {
-          const source = sourcesMap.get(item.sourceId ?? -1)
+          const name = sourceNameById.get(item.sourceId ?? -1) ?? 'Unknown'
           return {
-            name: source?.name ?? 'Unknown',
+            name,
             value: item._count,
             percentage: accsmarketTotal > 0 ? Math.round((item._count / accsmarketTotal) * 10000) / 100 : 0,
             source_id: item.sourceId,
@@ -195,6 +193,7 @@ export const DashboardController = {
           platforms: accsmarketStock,
           distribution: stockBySourceMarketData,
         },
+        sources,
         user: {
           name: userWithRole?.name,
           role: roleName,

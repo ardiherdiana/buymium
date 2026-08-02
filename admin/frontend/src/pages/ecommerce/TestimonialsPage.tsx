@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Check, X, Star } from "lucide-react"
+import { X, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -44,16 +44,6 @@ export default function TestimonialsPage() {
     queryFn: () => api.get("/testimonials").then((r) => r.data),
   })
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ id, isPublished }: { id: number; isPublished: boolean }) =>
-      api.patch(`/testimonials/${id}`, { isPublished }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["testimonials"] })
-      alert.success("Berhasil", "Testimoni berhasil diperbarui")
-    },
-    onError: () => alert.error("Gagal", "Gagal memperbarui testimoni"),
-  })
-
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/testimonials/${id}`),
     onSuccess: () => {
@@ -62,9 +52,6 @@ export default function TestimonialsPage() {
     },
     onError: () => alert.error("Gagal", "Gagal menghapus testimoni"),
   })
-
-  const handlePublish = (id: number, publish: boolean) =>
-    toggleMutation.mutate({ id, isPublished: publish })
 
   const handleDelete = async (t: Testimonial) => {
     const ok = await alert.confirm("Hapus Testimoni", `Hapus testimoni dari "${t.customerName}"?`)
@@ -128,15 +115,6 @@ export default function TestimonialsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={`size-8 ${t.isPublished ? "text-muted-foreground" : "text-emerald-600 hover:text-emerald-600"}`}
-                          onClick={() => handlePublish(t.id, !t.isPublished)}
-                          title={t.isPublished ? "Sembunyikan" : "Tayangkan"}
-                        >
-                          <Check className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
                           className="size-8 text-destructive hover:text-destructive"
                           onClick={() => handleDelete(t)}
                           title="Hapus"
@@ -182,15 +160,6 @@ export default function TestimonialsPage() {
                 </div>
                 <p className="text-sm text-muted-foreground line-clamp-2">{t.message}</p>
                 <div className="flex items-center justify-end gap-1 pt-1 border-t">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`size-8 ${t.isPublished ? "text-muted-foreground" : "text-emerald-600 hover:text-emerald-600"}`}
-                    onClick={() => handlePublish(t.id, !t.isPublished)}
-                    title={t.isPublished ? "Sembunyikan" : "Tayangkan"}
-                  >
-                    <Check className="size-4" />
-                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"

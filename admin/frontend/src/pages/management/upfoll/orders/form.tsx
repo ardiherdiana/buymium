@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAlert } from "@/stores/alertStore"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
+import { useCustomerSearch } from "@/hooks/use-customer-search"
 
 interface Customer {
   id: number
@@ -40,9 +41,9 @@ export default function UpfollOrderFormPage() {
   const alert = useAlert()
 
   const [rows, setRows] = useState<Row[]>([newRow()])
-  const [customers, setCustomers] = useState<Customer[]>([])
+  const { customers, searchQuery: customerSearchQuery, setSearchQuery: setCustomerSearchQuery } =
+    useCustomerSearch("/management/accounts/search/customers")
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [customerSearchQuery, setCustomerSearchQuery] = useState("")
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
   const [isShopee, setIsShopee] = useState(false)
   const [shopeeOrderNumber, setShopeeOrderNumber] = useState("")
@@ -65,21 +66,6 @@ export default function UpfollOrderFormPage() {
 
   const capitalFor = (vendorId: string, vendorTierId: string) =>
     vendors.find((v) => String(v.id) === vendorId)?.tiers.find((t) => String(t.id) === vendorTierId)?.price ?? null
-
-  useEffect(() => {
-    api.get("/management/accounts/search/customers").then((r) => setCustomers(r.data?.customers ?? [])).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (customerSearchQuery) {
-        api.get("/management/accounts/search/customers", { params: { search: customerSearchQuery } })
-          .then((r) => setCustomers(r.data?.customers ?? []))
-          .catch(() => {})
-      }
-    }, 300)
-    return () => clearTimeout(t)
-  }, [customerSearchQuery])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -273,8 +259,13 @@ export default function UpfollOrderFormPage() {
 
           <Button type="submit" size="lg" className="w-full mt-auto"
             disabled={submitting || validRows.length === 0 || !selectedCustomer || !totalSalesInput}>
-            {submitting ? "Memproses..." : `Buat Pesanan (${validRows.length} username)`}
+            {submitting ? "Memindai followers & membuat pesanan..." : `Buat Pesanan (${validRows.length} username)`}
           </Button>
+          {submitting && (
+            <p className="text-xs text-muted-foreground text-center -mt-2">
+              Setiap username di-scan dulu untuk followers awal, mohon tunggu...
+            </p>
+          )}
         </div>
       </form>
     </div>

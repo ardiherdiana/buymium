@@ -45,7 +45,7 @@ export default function ProfilPage() {
   const [passSuccess, setPassSuccess] = useState(false)
   const [passError, setPassError] = useState("")
 
-  const hasPassword = (user as any)?.hasPassword ?? true
+  const hasPassword = user?.hasPassword ?? true
 
   async function handleSaveProfile(e: FormEvent) {
     e.preventDefault()

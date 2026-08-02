@@ -1,12 +1,17 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   DollarSign, TrendingUp, Users, Package, Activity, UserSquare,
 } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { StatCard, type StatCardColor } from "@/components/ui/stat-card"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
+
+interface Source {
+  id: number
+  name: string
+}
 
 interface DashboardResponse {
   statistics: {
@@ -27,10 +32,11 @@ interface DashboardResponse {
     platforms: AccsmarketPlatform[]
     distribution: DistItem[]
   }
+  sources: Source[]
 }
 
 interface Platform {
-  id: number | null | undefined
+  id: number | string | null | undefined
   name: string
   image: string | null
   total_stock: number
@@ -52,24 +58,6 @@ interface DistItem {
   percentage: number
   source_id: number | null | undefined
   color?: string | null
-}
-
-function StatCard({
-  title, value, icon: Icon, loading,
-}: { title: string; value: string; icon: React.ElementType; loading: boolean }) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-1 sm:pb-2 pt-3 sm:pt-6 px-3 sm:px-6">
-        <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="size-3.5 sm:size-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-        {loading
-          ? <Skeleton className="h-6 sm:h-7 w-24 sm:w-32" />
-          : <p className="text-lg sm:text-2xl font-bold text-foreground">{value}</p>}
-      </CardContent>
-    </Card>
-  )
 }
 
 function PlatformCard({ name, image, total_stock, distribution }: Platform) {
@@ -145,10 +133,8 @@ function AccsmarketCard({ name, subtitle, image, total_stock, distribution }: Ac
   )
 }
 
-type StockTab = "accounts" | "accsmarket"
-
 export default function ManagementDashboard() {
-  const [activeTab, setActiveTab] = useState<StockTab>("accounts")
+  const [activeSourceId, setActiveSourceId] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery<DashboardResponse>({
     queryKey: ["management-dashboard"],
@@ -158,15 +144,31 @@ export default function ManagementDashboard() {
   const stats = data?.statistics
   const accountsStock = data?.accounts_stock
   const accsmarketStock = data?.accsmarket_stock
+  const sources = data?.sources ?? []
 
-  const statCards = [
-    { title: "Total Pendapatan", value: formatIDR(stats?.total_revenue ?? 0), icon: DollarSign },
-    { title: "Total Profit", value: formatIDR(stats?.total_profit ?? 0), icon: TrendingUp },
-    { title: "Total Pengguna", value: (stats?.total_users ?? 0).toLocaleString("id-ID"), icon: Users },
-    { title: "Total Akun", value: (stats?.total_accounts ?? 0).toLocaleString("id-ID"), icon: Package },
-    { title: "Akun Aktif", value: (stats?.active_accounts ?? 0).toLocaleString("id-ID"), icon: Activity },
-    { title: "Total Pelanggan", value: (stats?.total_customers ?? 0).toLocaleString("id-ID"), icon: UserSquare },
+  // Default to the first source once the list loads
+  useEffect(() => {
+    if (activeSourceId === null && sources.length > 0) {
+      setActiveSourceId(sources[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sources.length])
+
+  const statCards: { title: string; value: string; icon: React.ElementType; color: StatCardColor }[] = [
+    { title: "Total Pendapatan", value: formatIDR(stats?.total_revenue ?? 0), icon: DollarSign, color: "emerald" },
+    { title: "Total Profit", value: formatIDR(stats?.total_profit ?? 0), icon: TrendingUp, color: "emerald" },
+    { title: "Total Pengguna", value: (stats?.total_users ?? 0).toLocaleString("id-ID"), icon: Users, color: "blue" },
+    { title: "Total Akun", value: (stats?.total_accounts ?? 0).toLocaleString("id-ID"), icon: Package, color: "blue" },
+    { title: "Akun Aktif", value: (stats?.active_accounts ?? 0).toLocaleString("id-ID"), icon: Activity, color: "violet" },
+    { title: "Total Pelanggan", value: (stats?.total_customers ?? 0).toLocaleString("id-ID"), icon: UserSquare, color: "amber" },
   ]
+
+  // Cards for the active source: plain platform card (year-less) plus any
+  // year-split accsmarket-style cards ("<sourceId>-<yearKey>") for that source.
+  const activePlatforms = (accountsStock?.platforms ?? []).filter((p) => p.id === activeSourceId)
+  const activeAccsmarketPlatforms = (accsmarketStock?.platforms ?? []).filter((p) => p.id.startsWith(`${activeSourceId}-`))
+  const activeTotalStock = activePlatforms.reduce((s, p) => s + p.total_stock, 0)
+    + activeAccsmarketPlatforms.reduce((s, p) => s + p.total_stock, 0)
 
   return (
     <div className="space-y-6">
@@ -176,9 +178,9 @@ export default function ManagementDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
         {statCards.map((s) => (
-          <StatCard key={s.title} title={s.title} value={s.value} icon={s.icon} loading={isLoading} />
+          <StatCard key={s.title} title={s.title} value={s.value} icon={s.icon} color={s.color} loading={isLoading} />
         ))}
       </div>
 
@@ -186,32 +188,33 @@ export default function ManagementDashboard() {
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Ringkasan Stok</h2>
-          <p className="text-xs text-muted-foreground">Distribusi stok berdasarkan platform dan tipe produk</p>
+          <p className="text-xs text-muted-foreground">Distribusi stok berdasarkan source</p>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-border overflow-x-auto">
-          {([
-            { key: "accounts" as const, label: "Akun", total: accountsStock?.total_stock },
-            { key: "accsmarket" as const, label: "Accsmarket", total: accsmarketStock?.total_stock },
-          ]).map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                activeTab === tab.key
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-              {tab.total != null && !isLoading && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {tab.total.toLocaleString("id-ID")}
-                </span>
-              )}
-            </button>
-          ))}
+        {/* Tabs — one per Source */}
+        <div className="flex border-b border-border overflow-x-auto overflow-y-hidden">
+          {sources.map((s) => {
+            const total = (accountsStock?.platforms ?? []).filter((p) => p.id === s.id).reduce((sum, p) => sum + p.total_stock, 0)
+              + (accsmarketStock?.platforms ?? []).filter((p) => p.id.startsWith(`${s.id}-`)).reduce((sum, p) => sum + p.total_stock, 0)
+            return (
+              <button
+                key={s.id}
+                onClick={() => setActiveSourceId(s.id)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  activeSourceId === s.id
+                    ? "border-foreground text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {s.name}
+                {!isLoading && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {total.toLocaleString("id-ID")}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
         {/* Platform grid */}
@@ -221,15 +224,14 @@ export default function ManagementDashboard() {
               <Skeleton key={i} className="h-36" />
             ))}
           </div>
-        ) : activeTab === "accounts" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(accountsStock?.platforms ?? []).map((p) => (
-              <PlatformCard key={p.id ?? p.name} {...p} />
-            ))}
-          </div>
+        ) : activeTotalStock === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Belum ada stok untuk source ini.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(accsmarketStock?.platforms ?? []).map((p) => (
+            {activePlatforms.map((p) => (
+              <PlatformCard key={p.id ?? p.name} {...p} />
+            ))}
+            {activeAccsmarketPlatforms.map((p) => (
               <AccsmarketCard key={p.id} {...p} />
             ))}
           </div>

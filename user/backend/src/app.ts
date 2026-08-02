@@ -4,7 +4,6 @@ import multer from 'multer'
 import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
-import path from 'path'
 
 import authRoutes from './routes/auth'
 import productRoutes from './routes/products'
@@ -12,6 +11,7 @@ import orderRoutes from './routes/orders'
 import bankAccountRoutes from './routes/bankAccounts'
 import sitemapRoutes from './routes/sitemap'
 import testimonialRoutes from './routes/testimonials'
+import uploadsRoutes from './routes/uploads'
 
 import { securityLogger } from './utils/securityLogger'
 
@@ -84,10 +84,7 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
-app.use('/api/uploads', (_req, res, next) => {
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
-  next()
-}, express.static(path.join(process.cwd(), 'uploads')))
+app.use('/api/uploads', uploadsRoutes)
 
 app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)

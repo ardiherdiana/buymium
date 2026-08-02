@@ -23,6 +23,7 @@ describe('GET /api/management/sales', () => {
     vi.clearAllMocks()
     // Each new PrismaClient() call returns the same vi mock, get a reference
     prismaInstance = new PrismaClient() as MockedObject<PrismaClient>
+    prismaInstance.source.findMany.mockResolvedValue([])
   })
 
   it('returns 200 with sales data structure', async () => {
@@ -67,7 +68,7 @@ describe('GET /api/management/sales', () => {
       totalSalePrice: 150000,
       totalProfit: 50000,
       isShopee: false,
-      sourceId: 1,
+      sourceSheetName: 'Buymium',
       createdAt: new Date(),
       updatedAt: new Date(),
       _count: { saleLines: 0 },
@@ -76,7 +77,6 @@ describe('GET /api/management/sales', () => {
     const mockSaleForList = {
       ...mockSaleForChart,
       customer: { id: 10, usernameSh: 'john_buyer', sourceRel: null },
-      source: { id: 1, name: 'Main Source', color: '#ff0000' },
     }
 
     prismaInstance.sale.count.mockResolvedValue(1)
@@ -127,11 +127,10 @@ describe('GET /api/management/sales/:id', () => {
       totalSalePrice: 200000,
       totalProfit: 80000,
       isShopee: true,
-      sourceId: 1,
+      sourceSheetName: 'Buymium',
       createdAt: new Date(),
       updatedAt: new Date(),
       customer: { id: 10, usernameSh: 'buyer_xyz' },
-      source: { id: 1, name: 'Source A' },
       saleLines: [],
     }
 
@@ -174,11 +173,10 @@ describe('POST /api/management/sales', () => {
       totalSalePrice: 100000,
       totalProfit: 30000,
       isShopee: false,
-      sourceId: null,
+      sourceSheetName: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       customer: { id: 5, usernameSh: 'test_customer' },
-      source: null,
       saleLines: [],
     }
 

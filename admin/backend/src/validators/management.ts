@@ -14,6 +14,7 @@ export const CreateAccountSchema = z.object({
   login_app: z.string().optional().nullable(),
   capital: z.number().optional().nullable(),
   phone_model: z.string().optional().nullable(),
+  source_sheet_name: z.string().optional().nullable(),
   source_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable(),
   is_sold: z.boolean().optional(),
 })
@@ -26,25 +27,15 @@ export const SyncAccountSchema = z.object({
   source_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable(),
 })
 
-// ─── Accsmarkets ──────────────────────────────────────────────────────────────
-// Fields from AccsmarketsController.store / .update
+// ─── Sources ──────────────────────────────────────────────────────────────────
+// Fields from SourcesController.store / .update
 
-export const CreateAccsmarketSchema = z.object({
-  order_index: z.number().int().optional().nullable(),
-  email: z.string().email('Invalid email').optional().nullable(),
-  password_email: z.string().optional().nullable(),
-  username: z.string().optional().nullable(),
-  password: z.string().optional().nullable(),
-  two_factor_auth: z.string().optional().nullable(),
-  target_followers: z.number().int().nonnegative().optional().nullable(),
-  account_status: z.string().optional().nullable(),
-  capital: z.number().optional().nullable(),
-  year: z.string().optional().nullable(),
-  source_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable(),
-  is_sold: z.boolean().optional(),
+export const CreateSourceSchema = z.object({
+  name: z.string().min(1, 'name is required'),
+  spreadsheet_id: z.string().min(1, 'spreadsheet_id is required'),
 })
 
-export const UpdateAccsmarketSchema = CreateAccsmarketSchema.partial()
+export const UpdateSourceSchema = CreateSourceSchema
 
 // ─── Customers ────────────────────────────────────────────────────────────────
 // Fields from CustomersController.store / .update
@@ -70,7 +61,6 @@ export const UpdateCustomerSchema = z.object({
 
 const SaleItemSchema = z.object({
   account_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable(),
-  accsmarket_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable(),
   unit_sale_price: z.union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/)]).optional(),
   profit: z.union([z.number(), z.string().regex(/^-?\d+(\.\d+)?$/)]).optional(),
 })
@@ -83,23 +73,6 @@ export const CreateSaleSchema = z.object({
   is_shopee: z.boolean().optional(),
   source_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable(),
   items: z.array(SaleItemSchema).optional(),
-})
-
-// ─── Sources ──────────────────────────────────────────────────────────────────
-// Fields from SourcesController.store / .update
-// Note: sources also accept a file upload via multer — body fields only
-
-export const CreateSourceSchema = z.object({
-  name: z.string().min(1, 'name is required'),
-  spreadsheet_id: z.string().min(1, 'spreadsheet_id is required'),
-  is_accsmarket: z.union([z.boolean(), z.string()]).optional(),
-})
-
-export const UpdateSourceSchema = z.object({
-  name: z.string().min(1, 'name is required'),
-  spreadsheet_id: z.string().min(1, 'spreadsheet_id is required'),
-  index: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().nullable(),
-  is_accsmarket: z.union([z.boolean(), z.string()]).optional(),
 })
 
 // ─── Upfoll Vendors ───────────────────────────────────────────────────────────

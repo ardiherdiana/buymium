@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import db from '../../config/database'
+import { logger } from '../../utils/logger'
 
 export class StatsController {
   static async index(_req: Request, res: Response): Promise<void> {
@@ -40,7 +41,7 @@ export class StatsController {
         recentPaidOrders: recentOrders,
       })
     } catch (err) {
-      console.error('[Stats Error]', err)
+      logger.error('[Stats Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch statistics' })
     }
   }
@@ -62,7 +63,7 @@ export class StatsController {
         total: paid + pending + failed + cancelled,
       })
     } catch (err) {
-      console.error('[Order Stats Error]', err)
+      logger.error('[Order Stats Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch order statistics' })
     }
   }
@@ -87,7 +88,7 @@ export class StatsController {
         monthly: monthlyRevenue,
       })
     } catch (err) {
-      console.error('[Revenue Stats Error]', err)
+      logger.error('[Revenue Stats Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch revenue statistics' })
     }
   }

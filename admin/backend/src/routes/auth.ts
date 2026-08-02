@@ -5,6 +5,7 @@ import { generateToken, generateRefreshToken, verifyToken, JwtPayload } from '..
 import { validate } from '../middleware/validate'
 import { LoginSchema } from '../validators/auth'
 import { securityLogger } from '../utils/securityLogger'
+import { logger } from '../utils/logger'
 
 const router = Router()
 
@@ -64,7 +65,7 @@ router.post('/login', validate(LoginSchema), async (req: Request, res: Response)
       },
     })
   } catch (err) {
-    console.error('[Login Error]', err)
+    logger.error('[Login Error]', err)
     res.status(500).json({ success: false, error: 'Login failed' })
   }
 })

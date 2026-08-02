@@ -1,7 +1,8 @@
 import express from 'express'
+import { logger } from '../utils/logger'
 
 export function globalErrorHandler(err: { status?: number; statusCode?: number; message?: string }, req: express.Request, res: express.Response, next: express.NextFunction) {
-  console.error('[Error]', err)
+  logger.error('[Error]', err)
   const status = err.status || err.statusCode || 500
   const message = err.message || 'Internal server error'
   res.status(status).json({ success: false, error: message })

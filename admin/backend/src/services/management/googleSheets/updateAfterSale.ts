@@ -1,18 +1,14 @@
 import { sheets_v4 } from 'googleapis'
 import { getGoogleSheetsClient } from './client'
 import { logger } from '../../../utils/logger'
+import { SHEET_SCAN_RANGE, STATUS_COLUMN_INDEX } from './sheetColumns'
 
 interface ItemToUpdate {
   id: number
   email?: string | null
   username?: string | null
-  phoneModel?: string | null
-  year?: string | null
-  sourceId?: number | null
-  source?: {
-    id: number
-    spreadsheetId?: string | null
-  } | null
+  sourceSheetName?: string | null
+  source?: { id: number; spreadsheetId?: string | null } | null
   isSold?: boolean
 }
 
@@ -20,13 +16,11 @@ interface SheetGroup {
   spreadsheetId: string
   sheetName: string
   items: ItemToUpdate[]
-  sheetId?: number
 }
 
 /**
- * Update Google Sheets setelah sale dibuat
- * Menghapus/clear data account/accsmarket dari sheets
- * Logika 1-to-1 dari PHP SalesController.php
+ * Update Google Sheets after a sale is created — clears the sold account's row
+ * from its source sheet, grouped by each item's own Source spreadsheet.
  */
 export async function updateGoogleSheetsAfterSale(items: ItemToUpdate[]): Promise<void> {
   if (!items || items.length === 0) {
@@ -40,7 +34,6 @@ export async function updateGoogleSheetsAfterSale(items: ItemToUpdate[]): Promis
     const { sheets } = await getGoogleSheetsClient()
     logger.info('[GoogleSheets] Client initialized')
 
-    // Group items by source and sheet name (same as PHP)
     const groupedBySheet = groupItemsBySheet(items)
     logger.info(`[GoogleSheets] Grouped into ${Object.keys(groupedBySheet).length} sheets`)
 
@@ -55,57 +48,26 @@ export async function updateGoogleSheetsAfterSale(items: ItemToUpdate[]): Promis
   }
 }
 
-/**
- * Group items by spreadsheet and sheet name
- * Same logic as PHP: Group by key "spreadsheetId|sheetName"
- */
 function groupItemsBySheet(items: ItemToUpdate[]): Record<string, SheetGroup> {
   const grouped: Record<string, SheetGroup> = {}
 
   for (const item of items) {
-    const isAccsmarket = !!item.year // Accsmarket has 'year' field
-    const sheetName = isAccsmarket ? item.year : item.phoneModel
+    const sheetName = item.sourceSheetName
+    const spreadsheetId = item.source?.spreadsheetId
 
-    logger.debug(`[GoogleSheets] Grouping item ${item.id}:`, {
-      isAccsmarket,
-      sheetName,
-      email: item.email,
-      sourceId: item.sourceId,
-    })
-
-    // Validate: must have sheet name
     if (!sheetName) {
-      logger.warn(`[GoogleSheets] Skipping item ${item.id} - missing sheet name (phoneModel/year)`)
+      logger.warn(`[GoogleSheets] Skipping item ${item.id} - missing sheet name (sourceSheetName)`)
       continue
     }
 
-    // Validate: Account must have source, Accsmarket can use hardcoded
-    if (!isAccsmarket && !item.source) {
-      logger.warn(`[GoogleSheets] Skipping Account ${item.id} - missing source`)
-      continue
-    }
-
-    // Get spreadsheet ID
-    const spreadsheetId = isAccsmarket
-      ? '1riOQRkG-76-SdlvVw_cxK2igSoTpgcqtBWz_RLztxdg' // Hardcoded for Accsmarket
-      : item.source?.spreadsheetId
-
-    // Validate: must have spreadsheet ID
     if (!spreadsheetId) {
-      logger.warn(`[GoogleSheets] Skipping item ${item.id} - missing spreadsheetId`, {
-        isAccsmarket,
-        source: item.source,
-      })
+      logger.warn(`[GoogleSheets] Skipping item ${item.id} - missing spreadsheetId`, { source: item.source })
       continue
     }
 
     const key = `${spreadsheetId}|${sheetName}`
     if (!grouped[key]) {
-      grouped[key] = {
-        spreadsheetId,
-        sheetName,
-        items: [],
-      }
+      grouped[key] = { spreadsheetId, sheetName, items: [] }
     }
 
     grouped[key].items.push(item)
@@ -115,8 +77,7 @@ function groupItemsBySheet(items: ItemToUpdate[]): Record<string, SheetGroup> {
 }
 
 /**
- * Process a group of items for a specific sheet
- * Same logic as PHP: Read sheet, find rows, send batch requests
+ * Process a group of items for a specific sheet: read the sheet, find rows, send batch requests.
  */
 async function processSheetGroup(
   service: sheets_v4.Sheets,
@@ -127,8 +88,7 @@ async function processSheetGroup(
   try {
     logger.info(`[GoogleSheets] Reading sheet '${sheetName}' from spreadsheet '${spreadsheetId}'`)
 
-    // Read the sheet (A2:H110, same as PHP)
-    const range = `'${sheetName}'!A2:H110`
+    const range = `'${sheetName}'!${SHEET_SCAN_RANGE}`
     const response = await service.spreadsheets.values.get({
       spreadsheetId,
       range,
@@ -168,18 +128,16 @@ async function processSheetGroup(
     const requests: sheets_v4.Schema$Request[] = []
 
     for (const item of group.items) {
-      const isAccsmarket = !!item.year
-
-      logger.debug(`[GoogleSheets] Processing item ${item.id} (${isAccsmarket ? 'Accsmarket' : 'Account'})`, {
+      logger.debug(`[GoogleSheets] Processing item ${item.id}`, {
         email: item.email,
         username: item.username,
       })
 
-      const rowNumber = findRowNumber(values, item, isAccsmarket)
+      const rowNumber = findRowNumber(values, item)
 
       if (rowNumber === null) {
         logger.warn(
-          `[GoogleSheets] Could not find row for ${isAccsmarket ? 'Accsmarket' : 'Account'} ID ${item.id} in sheet '${sheetName}'`,
+          `[GoogleSheets] Could not find row for item ${item.id} in sheet '${sheetName}'`,
           {
             email: item.email,
             username: item.username,
@@ -191,7 +149,7 @@ async function processSheetGroup(
 
       logger.info(`[GoogleSheets] Found matching row ${rowNumber} for item ${item.id}`)
 
-      addUpdateRequests(requests, rowNumber, item, sheetId, isAccsmarket)
+      addUpdateRequests(requests, rowNumber, sheetId)
     }
 
     // Batch execute requests
@@ -213,24 +171,19 @@ async function processSheetGroup(
 }
 
 /**
- * Find row number for item by email or username
- * Same logic as PHP:
- * - Account: username at index 1
- * - Accsmarket: username at index 2
- * - Match if (!empty(email) && email === rowEmail) || (!empty(username) && username === rowUsername)
+ * Find row number for item by email or username.
+ * Unified column layout: Email(0), Password Email(1), Username(2), Password(3), ...
  */
 function findRowNumber(
   values: (string | number | boolean | null)[][],
-  item: ItemToUpdate,
-  isAccsmarket: boolean
+  item: ItemToUpdate
 ): number | null {
-  const usernameIndex = isAccsmarket ? 2 : 1
+  const usernameIndex = 2
 
   const itemEmail = item.email ? item.email.trim() : ''
   const itemUsername = item.username ? item.username.trim() : ''
 
   logger.debug(`[GoogleSheets] Finding row for item ${item.id}`, {
-    isAccsmarket,
     itemEmail,
     itemUsername,
     usernameIndex,
@@ -240,14 +193,9 @@ function findRowNumber(
   for (let i = 0; i < values.length; i++) {
     const row = values[i]
 
-    // Get email from index 0 (same as PHP)
     const rowEmail = row[0] ? (typeof row[0] === 'string' ? row[0].trim() : '') : ''
-
-    // Get username from index 1 (Account) or 2 (Accsmarket) - same as PHP
     const rowUsername = row[usernameIndex] ? (typeof row[usernameIndex] === 'string' ? row[usernameIndex].trim() : '') : ''
 
-    // Match logic from PHP:
-    // if ((!empty($itemEmail) && $rowEmail === $itemEmail) || (!empty($itemUsername) && $rowUsername === $itemUsername))
     const emailMatch = itemEmail && rowEmail === itemEmail
     const usernameMatch = itemUsername && rowUsername === itemUsername
 
@@ -280,175 +228,59 @@ function findRowNumber(
 }
 
 /**
- * Add update requests for Google Sheets
- * Account: Clear A-D, reset color D, set F to "Rp0"
- * Accsmarket: Clear A-F, reset color F, clear G, set H to 0
+ * Add update requests for Google Sheets, using the unified column layout:
+ * Email(0), Password Email(1), Username(2), Password(3), 2FA(4), Tahun Dibuat(5),
+ * Target Followers(6, status column), Hp(7), Aplikasi(8), Modal(9)
  */
 function addUpdateRequests(
   requests: sheets_v4.Schema$Request[],
   rowNumber: number,
-  item: ItemToUpdate,
-  sheetId: number,
-  isAccsmarket: boolean
+  sheetId: number
 ): void {
-  if (!isAccsmarket) {
-    // Account: Clear A-D (indices 0-3)
+  const clearColumns = (startColumnIndex: number, count: number) => {
     requests.push({
       updateCells: {
-        range: {
-          sheetId,
-          startRowIndex: rowNumber - 1,
-          endRowIndex: rowNumber,
-          startColumnIndex: 0,
-          endColumnIndex: 4,
-        },
-        rows: [
-          {
-            values: [
-              { userEnteredValue: {} }, // A
-              { userEnteredValue: {} }, // B
-              { userEnteredValue: {} }, // C
-              { userEnteredValue: {} }, // D
-            ],
-          },
-        ],
+        range: { sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber, startColumnIndex, endColumnIndex: startColumnIndex + count },
+        rows: [{ values: Array.from({ length: count }, () => ({ userEnteredValue: {} })) }],
         fields: 'userEnteredValue',
       },
     })
-
-    // Account: Reset background color in D (index 3)
-    requests.push({
-      updateCells: {
-        range: {
-          sheetId,
-          startRowIndex: rowNumber - 1,
-          endRowIndex: rowNumber,
-          startColumnIndex: 3,
-          endColumnIndex: 4,
-        },
-        rows: [
-          {
-            values: [
-              {
-                userEnteredFormat: {
-                  backgroundColor: {
-                    red: 1.0,
-                    green: 1.0,
-                    blue: 1.0,
-                  },
-                },
-              },
-            ],
-          },
-        ],
-        fields: 'userEnteredFormat.backgroundColor',
-      },
-    })
-
-    // Account: Set F to "Rp0" (index 5)
-    requests.push({
-      updateCells: {
-        range: {
-          sheetId,
-          startRowIndex: rowNumber - 1,
-          endRowIndex: rowNumber,
-          startColumnIndex: 5,
-          endColumnIndex: 6,
-        },
-        rows: [
-          {
-            values: [
-              {
-                userEnteredValue: {
-                  stringValue: 'Rp0',
-                },
-              },
-            ],
-          },
-        ],
-        fields: 'userEnteredValue',
-      },
-    })
-
-    logger.debug(`[GoogleSheets] Added Account update requests for row ${rowNumber}`)
-  } else {
-    // Accsmarket: Clear A-F (indices 0-5)
-    requests.push({
-      updateCells: {
-        range: {
-          sheetId,
-          startRowIndex: rowNumber - 1,
-          endRowIndex: rowNumber,
-          startColumnIndex: 0,
-          endColumnIndex: 6,
-        },
-        rows: [
-          {
-            values: [
-              { userEnteredValue: {} }, // A
-              { userEnteredValue: {} }, // B
-              { userEnteredValue: {} }, // C
-              { userEnteredValue: {} }, // D
-              { userEnteredValue: {} }, // E
-              { userEnteredValue: {} }, // F
-            ],
-          },
-        ],
-        fields: 'userEnteredValue',
-      },
-    })
-
-    // Accsmarket: Reset background in F (index 5)
-    requests.push({
-      updateCells: {
-        range: {
-          sheetId,
-          startRowIndex: rowNumber - 1,
-          endRowIndex: rowNumber,
-          startColumnIndex: 5,
-          endColumnIndex: 6,
-        },
-        rows: [
-          {
-            values: [
-              {
-                userEnteredFormat: {
-                  backgroundColor: {
-                    red: 1.0,
-                    green: 1.0,
-                    blue: 1.0,
-                  },
-                },
-              },
-            ],
-          },
-        ],
-        fields: 'userEnteredFormat.backgroundColor',
-      },
-    })
-
-    // Accsmarket: Clear G (index 6) and set H (index 7) to 0
-    requests.push({
-      updateCells: {
-        range: {
-          sheetId,
-          startRowIndex: rowNumber - 1,
-          endRowIndex: rowNumber,
-          startColumnIndex: 6,
-          endColumnIndex: 8,
-        },
-        rows: [
-          {
-            values: [
-              { userEnteredValue: {} }, // G: Clear
-              { userEnteredValue: { numberValue: 0 } }, // H: Set to 0
-            ],
-          },
-        ],
-        fields: 'userEnteredValue',
-      },
-    })
-
-    logger.debug(`[GoogleSheets] Added Accsmarket update requests for row ${rowNumber}`)
   }
+
+  clearColumns(0, STATUS_COLUMN_INDEX) // Email, Password Email, Username, Password, 2FA, Tahun Dibuat
+
+  requests.push({
+    updateCells: {
+      range: {
+        sheetId,
+        startRowIndex: rowNumber - 1,
+        endRowIndex: rowNumber,
+        startColumnIndex: STATUS_COLUMN_INDEX,
+        endColumnIndex: STATUS_COLUMN_INDEX + 1,
+      },
+      rows: [
+        {
+          values: [
+            {
+              userEnteredValue: {},
+              userEnteredFormat: { backgroundColor: { red: 1.0, green: 1.0, blue: 1.0 } },
+            },
+          ],
+        },
+      ],
+      fields: 'userEnteredValue,userEnteredFormat.backgroundColor',
+    },
+  })
+
+  clearColumns(7, 2) // Hp, Aplikasi
+
+  requests.push({
+    updateCells: {
+      range: { sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber, startColumnIndex: 9, endColumnIndex: 10 },
+      rows: [{ values: [{ userEnteredValue: { stringValue: 'Rp0' } }] }],
+      fields: 'userEnteredValue',
+    },
+  })
+
+  logger.debug(`[GoogleSheets] Added update requests for row ${rowNumber}`)
 }

@@ -70,13 +70,14 @@ describe('requireAdmin middleware', () => {
     expect(req.user.roleName).toBe('admin')
   })
 
-  it('calls next() when role is superadmin', () => {
+  it('returns 403 when role is superadmin (requireAdmin only allows exact "admin")', () => {
     const token = generateToken(1, 'super@test.com', 'superadmin', 1)
     const req = makeReq(token) as unknown as import('express').Request
     const res = makeRes()
     let nextCalled = false
     requireAdmin(req, res, () => { nextCalled = true })
-    expect(nextCalled).toBe(true)
+    expect(nextCalled).toBe(false)
+    expect(res._status).toBe(403)
   })
 
   it('returns 401 when no token is provided', () => {
@@ -109,6 +110,8 @@ describe('requireAdmin middleware', () => {
   })
 })
 
+// requireSuperAdmin is currently an alias for requireAdmin (see middleware/auth.ts) —
+// there is no separate superadmin tier, so any admin-role token is authorized.
 describe('requireSuperAdmin middleware', () => {
   const mockNext = () => {}
   const makeReq = (token?: string) => ({
@@ -122,8 +125,18 @@ describe('requireSuperAdmin middleware', () => {
     return res
   }
 
-  it('calls next() when role is superadmin', () => {
+  it('returns 403 when role is superadmin (alias only allows exact "admin")', () => {
     const token = generateToken(1, 'super@test.com', 'superadmin', 1)
+    const req = makeReq(token) as unknown as import('express').Request
+    const res = makeRes()
+    let nextCalled = false
+    requireSuperAdmin(req, res, () => { nextCalled = true })
+    expect(nextCalled).toBe(false)
+    expect(res._status).toBe(403)
+  })
+
+  it('calls next() when role is admin (alias of requireAdmin)', () => {
+    const token = generateToken(1, 'admin@test.com', 'admin', 1)
     const req = makeReq(token) as unknown as import('express').Request
     const res = makeRes()
     let nextCalled = false
@@ -131,13 +144,17 @@ describe('requireSuperAdmin middleware', () => {
     expect(nextCalled).toBe(true)
   })
 
-  it('returns 403 when role is admin (not superadmin)', () => {
-    const token = generateToken(1, 'admin@test.com', 'admin', 1)
+  it('returns 403 when role is neither admin nor superadmin', () => {
+    const token = jwt.sign(
+      { userId: 99, email: 'user@test.com', roleName: 'user', roleId: 2 },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    )
     const req = makeReq(token) as unknown as import('express').Request
     const res = makeRes()
     requireSuperAdmin(req, res, mockNext as unknown as import('express').NextFunction)
     expect(res._status).toBe(403)
-    expect(res._body.error).toMatch(/superadmin/i)
+    expect(res._body.error).toMatch(/admin/i)
   })
 
   it('returns 401 when no token provided', () => {

@@ -31,7 +31,6 @@
     "react-hook-form": "^7.76.1",
     "react-router-dom": "^7.15.1",
     "recharts": "^3.8.1",
-    "shadcn": "^4.8.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.2.1",
@@ -51,6 +50,7 @@
     "globals": "^16.5.0",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
+    "shadcn": "^4.8.1",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.1",
     "vite": "^7.3.1"

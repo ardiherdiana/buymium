@@ -9,6 +9,7 @@ import swaggerUi from 'swagger-ui-express'
 import { swaggerSpec } from './config/swagger'
 import { securityLogger } from './utils/securityLogger'
 import apiRouter from './routes/index'
+import { logger } from './utils/logger'
 
 const app = express()
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173'
@@ -64,7 +65,7 @@ app.use(express.urlencoded({ extended: true }))
 
 // Request logging
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`)
+  logger.info(`[${new Date().toISOString()}] ${req.method} ${req.path}`)
   next()
 })
 
@@ -91,7 +92,7 @@ app.use('/api', apiRouter)
 
 // Error handling
 app.use((err: { status?: number; statusCode?: number; message?: string }, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('[Error]', err)
+  logger.error('[Error]', err)
   const status = err.status || err.statusCode || 500
   const isProduction = process.env.NODE_ENV === 'production'
   const message = isProduction && status === 500 ? 'Internal server error' : err.message || 'Internal server error'

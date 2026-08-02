@@ -2,6 +2,7 @@ import cron from 'node-cron'
 import { db } from '../config/database'
 import fs from 'fs'
 import path from 'path'
+import { logger } from '../utils/logger'
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'autoposting')
 
@@ -28,21 +29,21 @@ export function startCleanup() {
           try {
             if (fs.existsSync(filepath)) {
               fs.unlinkSync(filepath)
-              console.log(`[Cleanup] Deleted: ${filename}`)
+              logger.info(`[Cleanup] Deleted: ${filename}`)
             }
           } catch (err) {
-            console.error(`[Cleanup] Failed to delete ${filename}:`, err)
+            logger.error(`[Cleanup] Failed to delete ${filename}:`, err)
           }
         }
       }
 
       if (oldPosts.length > 0) {
-        console.log(`[Cleanup] Processed ${oldPosts.length} old posts`)
+        logger.info(`[Cleanup] Processed ${oldPosts.length} old posts`)
       }
     } catch (err) {
-      console.error('[Cleanup] Error:', err)
+      logger.error('[Cleanup] Error:', err)
     }
   })
 
-  console.log('[Cleanup] Started - runs daily at 00:00')
+  logger.info('[Cleanup] Started - runs daily at 00:00')
 }

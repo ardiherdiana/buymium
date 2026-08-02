@@ -14,9 +14,8 @@ function setupDashboardMocks(prismaInstance: MockedObject<PrismaClient>) {
   prismaInstance.user.count.mockResolvedValueOnce(5)
   prismaInstance.account.count
     .mockResolvedValueOnce(10)   // completedAccounts
-    .mockResolvedValueOnce(20)   // activeAccountsCount
-  prismaInstance.accsmarket.count
     .mockResolvedValueOnce(3)    // completedAccsmarkets
+    .mockResolvedValueOnce(20)   // activeAccountsCount
     .mockResolvedValueOnce(7)    // activeAccsmarketsCount
   prismaInstance.customer.count.mockResolvedValueOnce(8)
   prismaInstance.sale.aggregate
@@ -25,8 +24,8 @@ function setupDashboardMocks(prismaInstance: MockedObject<PrismaClient>) {
   prismaInstance.account.groupBy
     .mockResolvedValueOnce([])   // stockAcc
     .mockResolvedValueOnce([])   // accDistRaw
-  prismaInstance.accsmarket.findMany.mockResolvedValueOnce([])
-  prismaInstance.accsmarket.groupBy.mockResolvedValueOnce([])  // accsmarketDistRaw
+    .mockResolvedValueOnce([])  // accsmarketDistRaw
+  prismaInstance.account.findMany.mockResolvedValueOnce([])   // accsmarketsRaw
   prismaInstance.user.findUnique.mockResolvedValueOnce({
     id: 1, name: 'Admin', role: { name: 'admin' },
   })
@@ -75,7 +74,6 @@ describe('GET /api/management/dashboard', () => {
     prismaInstance.account.count
       .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(0)
-    prismaInstance.accsmarket.count
       .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(0)
     prismaInstance.customer.count.mockResolvedValueOnce(0)
@@ -85,8 +83,8 @@ describe('GET /api/management/dashboard', () => {
     prismaInstance.account.groupBy
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
-    prismaInstance.accsmarket.findMany.mockResolvedValueOnce([])
-    prismaInstance.accsmarket.groupBy.mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+    prismaInstance.account.findMany.mockResolvedValueOnce([])
     prismaInstance.user.findUnique.mockResolvedValueOnce({
       id: 1, name: 'Admin', role: { name: 'admin' },
     })

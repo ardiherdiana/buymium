@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { logger } from './logger'
 
 const API_KEY = process.env.RESEND_API_KEY
 const FROM_EMAIL = process.env.EMAIL_FROM || 'Buymium <noreply@buymium.id>'
@@ -18,13 +19,13 @@ interface SendArgs {
 
 async function send({ to, subject, html }: SendArgs): Promise<void> {
   if (!resend) {
-    console.warn('[email] RESEND_API_KEY not set, skipping email to', to)
+    logger.warn('[email] RESEND_API_KEY not set, skipping email to', to)
     return
   }
   try {
     await resend.emails.send({ from: FROM_EMAIL, to, subject, html })
   } catch (err) {
-    console.error('[email] failed to send to', to, err)
+    logger.error('[email] failed to send to ' + to, err)
   }
 }
 

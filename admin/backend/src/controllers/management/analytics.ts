@@ -9,7 +9,7 @@ export const AnalyticsController = {
     try {
       const year = req.query.year ? String(req.query.year) : String(new Date().getFullYear())
       const month = req.query.month ? String(req.query.month) : String(new Date().getMonth() + 1)
-      const sourceId = req.query.source_id ? String(req.query.source_id) : 'all'
+      const sourceIdParam = req.query.source_id ? String(req.query.source_id) : 'all'
 
       // Date ranges
       let startDate: Date
@@ -37,7 +37,7 @@ export const AnalyticsController = {
         comparisonLabel = `vs ${monthName}`
       }
 
-      const sourceFilter = sourceId !== 'all' ? parseInt(sourceId) : null
+      const sourceFilter = sourceIdParam !== 'all' ? parseInt(sourceIdParam) : null
 
       // Sales Trend
       const salesTrendData = await prisma.sale.findMany({
@@ -181,17 +181,15 @@ export const AnalyticsController = {
         orderBy: { _sum: { totalProfit: 'desc' } },
       })
 
-      // Fetch sources once — reused for profitBySource map and for the response
-      const allSources = await prisma.source.findMany()
-      const sourcesMap = new Map(allSources.map((s) => [s.id, { name: s.name }]))
+      // All registered sources — used for the filter dropdown (stable identity regardless
+      // of whether a sheet tab gets renamed after a sale happened).
+      const allSources = await prisma.source.findMany({ orderBy: { id: 'asc' } })
+      const sourcesMap = new Map(allSources.map((s) => [s.id, s.name]))
 
-      const profitBySource = profitBySourceData.map((item) => {
-        const source = sourcesMap.get(item.sourceId ?? -1)
-        return {
-          name: source?.name || 'Unknown',
-          value: item._sum.totalProfit || 0,
-        }
-      })
+      const profitBySource = profitBySourceData.map((item) => ({
+        name: sourcesMap.get(item.sourceId ?? -1) || 'Unknown',
+        value: item._sum.totalProfit || 0,
+      }))
 
       type ComparisonEntry = { change: number; label: string }
       type Comparisons = {
@@ -240,18 +238,16 @@ export const AnalyticsController = {
         }
       }
 
-      const sources = allSources
-
       res.json({
         trendData,
         salesCountTrend,
         salesByPlatform,
         profitBySource,
-        sources,
+        sources: allSources,
         filters: {
           year: year === 'all' ? 'all' : parseInt(year),
           month: month === 'all' ? 'all' : parseInt(month),
-          source_id: sourceId === 'all' ? 'all' : parseInt(sourceId),
+          source_id: sourceIdParam,
         },
         summary: {
           revenue: totalRevenue,

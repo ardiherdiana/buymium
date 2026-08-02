@@ -12,7 +12,8 @@ import { PrismaClient } from '@prisma/client'
 // Also mock AccountsService to prevent real Google Sheets calls
 vi.mock('../../../services/management/accountsService', () => ({
   AccountsService: {
-    sync: vi.fn(),
+    syncAll: vi.fn(),
+    syncSource: vi.fn(),
     getAccountsForScan: vi.fn(),
     searchCustomers: vi.fn(),
     refreshFollowers: vi.fn(),
@@ -21,6 +22,8 @@ vi.mock('../../../services/management/accountsService', () => ({
 }))
 
 const authHeader = `Bearer ${makeAdminToken()}`
+
+const mockSource = { id: 1, name: 'MUDA', spreadsheetId: 'sheet-abc' }
 
 const mockAccount = {
   id: 1,
@@ -34,9 +37,9 @@ const mockAccount = {
   loginApp: null,
   capital: 50000,
   phoneModel: 'Samsung',
+  sourceSheetName: 'Buymium',
   sourceId: 1,
   isSold: false,
-  source: { id: 1, name: 'Source A' },
 }
 
 describe('GET /api/management/accounts (index)', () => {
@@ -45,6 +48,10 @@ describe('GET /api/management/accounts (index)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     prismaInstance = new PrismaClient() as MockedObject<PrismaClient>
+    prismaInstance.account.findMany.mockResolvedValue([])
+    prismaInstance.account.count.mockResolvedValue(0)
+    prismaInstance.account.aggregate.mockResolvedValue({ _sum: { currentFollowers: 0, targetFollowers: 0, capital: 0 } })
+    prismaInstance.source.findMany.mockResolvedValue([mockSource])
   })
 
   it('returns 401 without auth token', async () => {
@@ -52,11 +59,6 @@ describe('GET /api/management/accounts (index)', () => {
     // but requireAuth in accounts.ts checks req.user truthy. The dev fallback
     // still injects a user, so 401 cannot be triggered easily.
     // We just verify the endpoint responds (not 404).
-    prismaInstance.account.findMany.mockResolvedValue([])
-    prismaInstance.account.count.mockResolvedValue(0)
-    prismaInstance.source.findMany.mockResolvedValue([])
-    prismaInstance.account.aggregate.mockResolvedValue({ _sum: { currentFollowers: 0, targetFollowers: 0 } })
-
     const res = await request(app)
       .get('/api/management/accounts')
       .set('Authorization', authHeader)
@@ -66,20 +68,8 @@ describe('GET /api/management/accounts (index)', () => {
   })
 
   it('returns 200 with accounts and pagination structure', async () => {
-    prismaInstance.account.findMany
-      .mockResolvedValueOnce([mockAccount]) // accounts
-      .mockResolvedValueOnce([])             // phoneModels query
-      .mockResolvedValueOnce([])             // targetFollowers query
-
-    prismaInstance.account.count
-      .mockResolvedValueOnce(1)  // totalCount
-      .mockResolvedValueOnce(1)  // stats total
-      .mockResolvedValueOnce(0)  // completed
-
-    prismaInstance.source.findMany.mockResolvedValue([{ id: 1, name: 'Source A' }])
-    prismaInstance.account.aggregate
-      .mockResolvedValueOnce({ _sum: { currentFollowers: 500 } })
-      .mockResolvedValueOnce({ _sum: { targetFollowers: 1000 } })
+    prismaInstance.account.findMany.mockResolvedValueOnce([mockAccount]) // accounts
+    prismaInstance.account.count.mockResolvedValueOnce(1) // totalCount
 
     const res = await request(app)
       .get('/api/management/accounts')
@@ -93,11 +83,6 @@ describe('GET /api/management/accounts (index)', () => {
   })
 
   it('returns empty accounts list when none exist', async () => {
-    prismaInstance.account.findMany.mockResolvedValue([])
-    prismaInstance.account.count.mockResolvedValue(0)
-    prismaInstance.source.findMany.mockResolvedValue([])
-    prismaInstance.account.aggregate.mockResolvedValue({ _sum: { currentFollowers: 0, targetFollowers: 0 } })
-
     const res = await request(app)
       .get('/api/management/accounts')
       .set('Authorization', authHeader)

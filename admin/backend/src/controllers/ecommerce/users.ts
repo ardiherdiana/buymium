@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import db from '../../config/database'
+import { logger } from '../../utils/logger'
 
 export class UsersController {
   static async index(req: Request, res: Response): Promise<void> {
@@ -59,7 +60,7 @@ export class UsersController {
         meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
       })
     } catch (err) {
-      console.error('[Users List Error]', err)
+      logger.error('[Users List Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch users' })
     }
   }
@@ -96,7 +97,7 @@ export class UsersController {
 
       res.json({ data: days, total: users.length })
     } catch (err) {
-      console.error('[User Growth Error]', err)
+      logger.error('[User Growth Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch user growth' })
     }
   }
@@ -124,7 +125,7 @@ export class UsersController {
 
       res.json(user)
     } catch (err) {
-      console.error('[User Detail Error]', err)
+      logger.error('[User Detail Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch user detail' })
     }
   }
@@ -142,7 +143,7 @@ export class UsersController {
 
       res.json(user)
     } catch (err) {
-      console.error('[Update Role Error]', err)
+      logger.error('[Update Role Error]', err)
       res.status(500).json({ success: false, error: 'Failed to update user role' })
     }
   }
@@ -157,7 +158,7 @@ export class UsersController {
 
       res.json({ message: 'User deleted successfully' })
     } catch (err) {
-      console.error('[Delete User Error]', err)
+      logger.error('[Delete User Error]', err)
       res.status(500).json({ success: false, error: 'Failed to delete user' })
     }
   }

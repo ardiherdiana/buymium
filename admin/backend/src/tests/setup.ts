@@ -55,16 +55,21 @@ const mockPrismaInstance = {
     findUnique: vi.fn(),
     findMany: vi.fn(),
     upsert: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
     delete: vi.fn(),
   },
   autopostingSchedule: {
     findMany: vi.fn(),
     create: vi.fn(),
+    createMany: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
     delete: vi.fn(),
   },
   autopostingPost: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
     findMany: vi.fn(),
     count: vi.fn(),
     create: vi.fn(),
@@ -75,14 +80,6 @@ const mockPrismaInstance = {
   role: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-  },
-  source: {
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
-    count: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
@@ -98,16 +95,13 @@ const mockPrismaInstance = {
     aggregate: vi.fn(),
     groupBy: vi.fn(),
   },
-  accsmarket: {
+  source: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
     count: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
-    updateMany: vi.fn(),
     delete: vi.fn(),
-    aggregate: vi.fn(),
-    groupBy: vi.fn(),
   },
   sale: {
     findUnique: vi.fn(),
@@ -134,6 +128,20 @@ const mockPrismaInstance = {
     update: vi.fn(),
     delete: vi.fn(),
   },
+  bankAccount: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
+  testimonial: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
   $transaction: vi.fn(),
   $disconnect: vi.fn(),
 }
@@ -151,12 +159,13 @@ vi.mock('@prisma/client', () => {
     autopostingPost = mockPrismaInstance.autopostingPost
     autopostingSchedule = mockPrismaInstance.autopostingSchedule
     role = mockPrismaInstance.role
-    source = mockPrismaInstance.source
     account = mockPrismaInstance.account
-    accsmarket = mockPrismaInstance.accsmarket
+    source = mockPrismaInstance.source
     sale = mockPrismaInstance.sale
     saleLine = mockPrismaInstance.saleLine
     customer = mockPrismaInstance.customer
+    bankAccount = mockPrismaInstance.bankAccount
+    testimonial = mockPrismaInstance.testimonial
     $transaction = mockPrismaInstance.$transaction
     $disconnect = mockPrismaInstance.$disconnect
   }

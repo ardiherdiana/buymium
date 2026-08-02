@@ -2,8 +2,6 @@ import { vi, beforeEach } from 'vitest'
 
 process.env.JWT_SECRET = 'test-secret-key-for-unit-tests-minimum-32-chars'
 process.env.GOOGLE_CLIENT_ID = 'test-google-client-id'
-process.env.MIDTRANS_SERVER_KEY = 'test-midtrans-server-key'
-process.env.MIDTRANS_CLIENT_KEY = 'test-midtrans-client-key'
 process.env.FRONTEND_URL = 'http://localhost:3000'
 
 export const mockDb = {
@@ -45,6 +43,7 @@ export const mockDb = {
   },
   productVariant: {
     findMany: vi.fn(),
+    findUnique: vi.fn(),
   },
   account: {
     findUnique: vi.fn(),
@@ -52,17 +51,6 @@ export const mockDb = {
     update: vi.fn(),
     updateMany: vi.fn(),
     count: vi.fn(),
-  },
-  accsmarket: {
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
-    update: vi.fn(),
-    updateMany: vi.fn(),
-    count: vi.fn(),
-  },
-  source: {
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
   },
   testimonial: {
     findUnique: vi.fn(),
@@ -91,33 +79,6 @@ export const mockDb = {
 }
 
 vi.mock('../config/database', () => ({ default: mockDb }))
-
-vi.mock('midtrans-client', () => {
-  const mockSnapInstance = {
-    createTransaction: vi.fn().mockResolvedValue({
-      token: 'snap-token',
-      redirect_url: 'https://pay.url',
-    }),
-    transaction: {
-      notification: vi.fn().mockResolvedValue({
-        order_id: 'BUYMIUM-1-123',
-        transaction_status: 'settlement',
-        fraud_status: 'accept',
-        payment_type: 'bank_transfer',
-      }),
-      status: vi.fn().mockResolvedValue({
-        transaction_status: 'settlement',
-        fraud_status: 'accept',
-        payment_type: 'bank_transfer',
-      }),
-    },
-  }
-  class MockSnap {
-    createTransaction = mockSnapInstance.createTransaction
-    transaction = mockSnapInstance.transaction
-  }
-  return { default: { Snap: MockSnap } }
-})
 
 vi.mock('google-auth-library', () => {
   const mockVerifyIdToken = vi.fn().mockResolvedValue({

@@ -1,6 +1,6 @@
 import { useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Search, RefreshCw, Sheet, Users, ArrowLeft, Heart, Target, CheckCircle2, Trash2, Copy, ScanLine, ShoppingCart, ClipboardList } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { Search, RefreshCw, Sheet, Users, ArrowLeft, CheckCircle2, Trash2, Wallet } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,12 +8,15 @@ import { Dropdown } from "@/components/ui/dropdown-select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyRow, LoadingRow, Pagination } from "@/components/ui/table-extras"
 import { Card, CardContent } from "@/components/ui/card"
+import { StatCard } from "@/components/ui/stat-card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAlert } from "@/stores/alertStore"
 import { useNavigate } from "react-router"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
+import { useStockListing, type StockEntityConfig } from "@/hooks/use-stock-listing"
+import { SyncScanDialogs } from "@/components/stock/sync-scan-dialogs"
+import { BulkActionBar } from "@/components/stock/bulk-action-bar"
 
 interface Account {
   id: number
@@ -26,10 +29,11 @@ interface Account {
   loginApp?: string
   capital?: number
   phoneModel?: string
+  year?: string
+  sourceSheetName?: string
   source?: { id: number; name: string }
   isSold: boolean
 }
-
 
 interface Source {
   id: number
@@ -39,7 +43,7 @@ interface Source {
 interface AccountsResponse {
   accounts: Account[]
   sources: Source[]
-  phoneModels: string[]
+  years: string[]
   targetFollowers: number[]
   pagination: { page: number; limit: number; total: number; pages: number }
   stats: {
@@ -47,6 +51,7 @@ interface AccountsResponse {
     total_followers: number
     target_followers: number
     completed_accounts: number
+    total_capital: number
   }
 }
 
@@ -59,40 +64,29 @@ const STATUS_OPTIONS = [
 
 const PAGE_SIZE = 100
 
-function formatFollowersLabel(value: number): string {
-  if (value >= 1000 && value % 1000 === 0) return `${value / 1000}K`
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`
-  return String(value)
+const ENTITY_CONFIG: StockEntityConfig<Account> = {
+  queryKey: "management-accounts",
+  basePath: "/management/accounts",
+  syncPath: "/management/accounts/sync",
+  scanListPath: "/management/accounts/scan/list",
+  scanListItemsKey: "accounts",
+  buildSyncBody: (sourceId) => ({ source_id: sourceId !== "all" ? sourceId : undefined }),
+  getItems: (data) => data ?? [],
+  labels: { scanDone: "akun berhasil di-scan" },
 }
 
-
 export default function AccountsPage() {
-  const queryClient = useQueryClient()
   const alert = useAlert()
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState("all")
   const [sourceId, setSourceId] = useState("all")
-  const [phoneModel, setPhoneModel] = useState("all")
+  const [year, setYear] = useState("all")
   const [targetFollowers, setTargetFollowers] = useState("all")
-  const [selectedIds, setSelectedIds] = useState<number[]>([])
-  const [syncDialogOpen, setSyncDialogOpen] = useState(false)
-  const [syncSourceId, setSyncSourceId] = useState("all")
-  const [syncProgress, setSyncProgress] = useState<{
-    status: "idle" | "syncing" | "done" | "error"
-    current: number; total: number; sourceNames: string[]; error?: string
-  }>({ status: "idle", current: 0, total: 0, sourceNames: [] })
-
-  const [scanDialogOpen, setScanDialogOpen] = useState(false)
-  const [scanSourceId, setScanSourceId] = useState("all")
-  const [scanProgress, setScanProgress] = useState<{
-    status: "idle" | "scanning" | "done" | "error"
-    current: number; total: number; sourceNames: string[]; error?: string
-  }>({ status: "idle", current: 0, total: 0, sourceNames: [] })
 
   const { data, isLoading } = useQuery<AccountsResponse>({
-    queryKey: ["management-accounts", page, search, status, sourceId, phoneModel, targetFollowers],
+    queryKey: ["management-accounts", page, search, status, sourceId, year, targetFollowers],
     queryFn: () =>
       api.get("/management/accounts", {
         params: {
@@ -100,43 +94,20 @@ export default function AccountsPage() {
           search: search || undefined,
           status: status !== "all" ? status : undefined,
           source_id: sourceId !== "all" ? sourceId : undefined,
-          phone_model: phoneModel !== "all" ? phoneModel : undefined,
+          year: year !== "all" ? year : undefined,
           target_followers: targetFollowers !== "all" ? targetFollowers : undefined,
         },
       }).then((r) => r.data),
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.delete(`/management/accounts/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["management-accounts"] })
-      alert.success("Berhasil", "Akun berhasil dihapus")
-    },
-    onError: () => alert.error("Gagal", "Gagal menghapus akun"),
-  })
+  const accounts = data?.accounts ?? []
+  const stats = data?.stats
 
-  const refreshMutation = useMutation({
-    mutationFn: (id: number) => api.post(`/management/accounts/${id}/refresh-followers`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["management-accounts"] })
-    },
-    onError: () => alert.error("Gagal", "Gagal memperbarui followers"),
-  })
-
-  // ── Scan selected ──────────────────────────────────────────────────────────
-  const handleBulkScan = async () => {
-    const toScan = (data?.accounts ?? []).filter((a) => selectedIds.includes(a.id))
-    if (!toScan.length) return
-    for (const acc of toScan) {
-      try { await api.post(`/management/accounts/${acc.id}/refresh-followers`) } catch { /* continue */ }
-    }
-    queryClient.invalidateQueries({ queryKey: ["management-accounts"] })
-    alert.success("Selesai", `${toScan.length} akun berhasil di-scan`)
-  }
+  const listing = useStockListing<Account>(ENTITY_CONFIG, accounts)
 
   // ── Copy credentials ───────────────────────────────────────────────────────
   const handleBulkCopy = () => {
-    const accs = (data?.accounts ?? []).filter((a) => selectedIds.includes(a.id))
+    const accs = accounts.filter((a) => listing.selectedIds.includes(a.id))
     if (!accs.length) return
     const lines = accs.map((acc, i) => {
       const parts: string[] = []
@@ -149,129 +120,25 @@ export default function AccountsPage() {
     alert.success("Disalin", `${accs.length} akun disalin ke clipboard`)
   }
 
-  // ── Copy available stock (all completed accounts, grouped by target) ──────
-  const copyStockMutation = useMutation({
-    mutationFn: () =>
-      api.get("/management/accounts/export/completed", {
-        params: {
-          source_id: sourceId !== "all" ? sourceId : undefined,
-          phone_model: phoneModel !== "all" ? phoneModel : undefined,
-          target_followers: targetFollowers !== "all" ? targetFollowers : undefined,
-          search: search || undefined,
-        },
-      }).then((r) => r.data as { accounts: { username: string | null; targetFollowers: number | null }[] }),
-    onSuccess: (result) => {
-      const accs = result.accounts.filter((a) => a.username)
-      if (!accs.length) {
-        alert.error("Kosong", "Tidak ada akun selesai yang tersedia")
-        return
-      }
-      const groups = new Map<number, string[]>()
-      for (const acc of accs) {
-        const target = acc.targetFollowers ?? 0
-        if (!groups.has(target)) groups.set(target, [])
-        groups.get(target)!.push(acc.username as string)
-      }
-      const sortedTargets = [...groups.keys()].sort((a, b) => a - b)
-      const currentYear = new Date().getFullYear()
-      const blocks = sortedTargets.map((target) => {
-        const label = formatFollowersLabel(target)
-        const usernames = groups.get(target)!
-        return `=== AKUN ${label} FOLLOWERS ${currentYear} (${usernames.length} Stok) ===\n${usernames.join("\n")}`
-      })
-      navigator.clipboard.writeText(blocks.join("\n\n"))
-      alert.success("Disalin", `${accs.length} akun stok disalin ke clipboard`)
-    },
-    onError: () => alert.error("Gagal", "Gagal mengambil stok akun"),
-  })
-
-  // ── Delete selected ────────────────────────────────────────────────────────
-  const handleBulkDelete = async () => {
-    const ok = await alert.confirm("Hapus Akun", `Hapus ${selectedIds.length} akun yang dipilih?`)
-    if (!ok) return
-    await Promise.all(selectedIds.map((id) => api.delete(`/management/accounts/${id}`).catch(() => {})))
-    queryClient.invalidateQueries({ queryKey: ["management-accounts"] })
-    alert.success("Berhasil", `${selectedIds.length} akun dihapus`)
-    setSelectedIds([])
-  }
-
-  const runSync = async () => {
-    const sources = data?.sources ?? []
-    const toSync = syncSourceId === "all" ? sources : sources.filter((s) => String(s.id) === syncSourceId)
-    const isSingleCall = syncSourceId !== "all" || toSync.length === 0
-    if (isSingleCall) {
-      setSyncProgress({ status: "syncing", current: 0, total: 1, sourceNames: [toSync[0]?.name ?? "All"] })
-      try {
-        await api.post("/management/accounts/sync", { source_id: syncSourceId !== "all" ? syncSourceId : undefined })
-        setSyncProgress((p) => ({ ...p, status: "done", current: 1 }))
-        queryClient.invalidateQueries({ queryKey: ["management-accounts"] })
-      } catch (err: unknown) {
-        setSyncProgress((p) => ({ ...p, status: "error", error: (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Gagal" }))
-      }
-      return
-    }
-    setSyncProgress({ status: "syncing", current: 0, total: toSync.length, sourceNames: toSync.map((s) => s.name) })
-    for (let i = 0; i < toSync.length; i++) {
-      try { await api.post("/management/accounts/sync", { source_id: String(toSync[i].id) }) } catch { /* continue */ }
-      setSyncProgress((p) => ({ ...p, current: i + 1 }))
-    }
-    setSyncProgress((p) => ({ ...p, status: "done" }))
-    queryClient.invalidateQueries({ queryKey: ["management-accounts"] })
-  }
-
-  const runScan = async () => {
-    const sourceParam = scanSourceId !== "all" ? scanSourceId : undefined
-    setScanProgress({ status: "scanning", current: 0, total: 0, sourceNames: [] })
-    let accountIds: number[] = []
-    try {
-      const list = await api.get("/management/accounts/scan/list", { params: { source_id: sourceParam } })
-      accountIds = (list.data?.accounts ?? []).map((a: { id: number }) => a.id)
-    } catch (err: unknown) {
-      setScanProgress((p) => ({ ...p, status: "error", error: (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Gagal" }))
-      return
-    }
-    setScanProgress((p) => ({ ...p, total: accountIds.length }))
-    for (let i = 0; i < accountIds.length; i++) {
-      try { await api.post(`/management/accounts/${accountIds[i]}/refresh-followers`) } catch { /* continue */ }
-      setScanProgress((p) => ({ ...p, current: i + 1 }))
-    }
-    setScanProgress((p) => ({ ...p, status: "done" }))
-    queryClient.invalidateQueries({ queryKey: ["management-accounts"] })
-  }
-
-  const handleDelete = async (acc: Account) => {
-    const ok = await alert.confirm("Hapus Akun", `Hapus akun "${acc.username ?? acc.email}"?`)
-    if (ok) deleteMutation.mutate(acc.id)
-  }
-
-  const accounts = data?.accounts ?? []
-  const stats = data?.stats
-
   const sourceOptions = [
     { value: "all", label: "Semua Source" },
     ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name })),
   ]
-  const phoneModelOptions = [
-    { value: "all", label: "Semua Model" },
-    ...(data?.phoneModels ?? []).map((m) => ({ value: m, label: m })),
+  const yearOptions = [
+    { value: "all", label: "Semua Tahun" },
+    ...(data?.years ?? []).map((y) => ({ value: y, label: y })),
   ]
   const targetFollowersOptions = [
     { value: "all", label: "Semua Target" },
     ...(data?.targetFollowers ?? []).map((f) => ({ value: String(f), label: f.toLocaleString("id-ID") })),
   ]
 
-  const allIds = accounts.map((a) => a.id)
-  const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.includes(id))
-  const toggleAll = () => setSelectedIds(allSelected ? [] : allIds)
-  const toggleOne = (id: number) =>
-    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
-
   const completedCount = stats?.completed_accounts ?? 0
   const totalCount = stats?.total_accounts ?? 0
 
   return (
     <div>
-      <div className={`space-y-5 ${selectedIds.length > 0 ? "pb-20 sm:pb-24" : ""}`}>
+      <div className={`space-y-5 ${listing.selectedIds.length > 0 ? "pb-20 sm:pb-24" : ""}`}>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="size-8" onClick={() => navigate(-1)}>
             <ArrowLeft className="size-4" />
@@ -280,76 +147,10 @@ export default function AccountsPage() {
         </div>
 
         {/* Stats */}
-        {/* Mobile: compact single-line rows */}
-        <div className="grid grid-cols-2 gap-2 sm:hidden">
-          {[
-            { label: "Total Akun", value: totalCount.toLocaleString("id-ID"), icon: Users, color: "text-blue-600" },
-            { label: "Total Followers", value: (stats?.total_followers ?? 0).toLocaleString("id-ID"), icon: Heart, color: "text-red-500" },
-            { label: "Target Followers", value: (stats?.target_followers ?? 0).toLocaleString("id-ID"), icon: Target, color: "text-blue-600" },
-            { label: "Selesai", value: `${completedCount.toLocaleString("id-ID")}/${totalCount.toLocaleString("id-ID")}`, icon: CheckCircle2, color: "text-emerald-600" },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <Card key={label}>
-              <CardContent className="p-3 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground truncate">{label}</p>
-                  <p className="text-base font-bold leading-tight">{value}</p>
-                </div>
-                <Icon className={`size-5 shrink-0 ${color}`} />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        {/* Desktop: original cards */}
-        <div className="hidden sm:grid grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Akun</p>
-                <p className="text-2xl font-bold mt-1">{totalCount.toLocaleString("id-ID")}</p>
-                <p className="text-xs text-muted-foreground">Akun aktif</p>
-              </div>
-              <div className="size-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <Users className="size-5 text-blue-600" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Followers</p>
-                <p className="text-2xl font-bold mt-1">{(stats?.total_followers ?? 0).toLocaleString("id-ID")}</p>
-                <p className="text-xs text-muted-foreground">Gabungan followers</p>
-              </div>
-              <div className="size-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                <Heart className="size-5 text-red-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Target Followers</p>
-                <p className="text-2xl font-bold mt-1">{(stats?.target_followers ?? 0).toLocaleString("id-ID")}</p>
-                <p className="text-xs text-muted-foreground">Total target</p>
-
-              </div>
-              <div className="size-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <Target className="size-5 text-blue-600" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Akun Selesai</p>
-                <p className="text-2xl font-bold mt-1">{completedCount.toLocaleString("id-ID")}/{totalCount.toLocaleString("id-ID")}</p>
-                <p className="text-xs text-muted-foreground">Akun selesai</p>
-              </div>
-              <div className="size-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                <CheckCircle2 className="size-5 text-emerald-600" />
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          <StatCard title="Total Akun" value={totalCount.toLocaleString("id-ID")} description="Akun aktif" icon={Users} color="blue" />
+          <StatCard title="Akun Selesai" value={completedCount.toLocaleString("id-ID")} description="Akun selesai" icon={CheckCircle2} color="emerald" />
+          <StatCard title="Total Modal" value={formatIDR(stats?.total_capital ?? 0)} description="Total modal akun" icon={Wallet} color="amber" />
         </div>
 
         {/* Search & Filter */}
@@ -375,8 +176,8 @@ export default function AccountsPage() {
                 <Dropdown options={STATUS_OPTIONS} value={status} onChange={(v) => { setStatus(v); setPage(1) }} className="w-full" />
               </div>
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground font-medium">Model HP</p>
-                <Dropdown options={phoneModelOptions} value={phoneModel} onChange={(v) => { setPhoneModel(v); setPage(1) }} className="w-full" />
+                <p className="text-xs text-muted-foreground font-medium">Tahun</p>
+                <Dropdown options={yearOptions} value={year} onChange={(v) => { setYear(v); setPage(1) }} className="w-full" />
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground font-medium">Target Followers</p>
@@ -391,29 +192,20 @@ export default function AccountsPage() {
           <Button
             variant="outline"
             className="w-full gap-2 border-blue-500 text-blue-600 hover:bg-blue-50"
-            onClick={() => { setScanSourceId("all"); setScanProgress({ status: "idle", current: 0, total: 0, sourceNames: [] }); setScanDialogOpen(true) }}
-            disabled={scanProgress.status === "scanning" || syncProgress.status === "syncing"}
+            onClick={listing.openScanDialog}
+            disabled={listing.scanProgress.status === "scanning" || listing.syncProgress.status === "syncing"}
           >
-            <RefreshCw className={`size-4 ${scanProgress.status === "scanning" ? "animate-spin" : ""}`} />
-            {scanProgress.status === "scanning" ? "Memindai..." : "Scan Followers"}
+            <RefreshCw className={`size-4 ${listing.scanProgress.status === "scanning" ? "animate-spin" : ""}`} />
+            {listing.scanProgress.status === "scanning" ? "Memindai..." : "Scan Followers"}
           </Button>
           <Button
             variant="outline"
             className="w-full gap-2 border-blue-500 text-blue-600 hover:bg-blue-50"
-            onClick={() => { setSyncSourceId("all"); setSyncProgress({ status: "idle", current: 0, total: 0, sourceNames: [] }); setSyncDialogOpen(true) }}
-            disabled={syncProgress.status === "syncing" || scanProgress.status === "scanning"}
+            onClick={listing.openSyncDialog}
+            disabled={listing.syncProgress.status === "syncing" || listing.scanProgress.status === "scanning"}
           >
-            <Sheet className={`size-4 ${syncProgress.status === "syncing" ? "animate-spin" : ""}`} />
-            {syncProgress.status === "syncing" ? "Menyinkronkan..." : "Sync Sheets"}
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full col-span-2 gap-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50"
-            onClick={() => copyStockMutation.mutate()}
-            disabled={copyStockMutation.isPending}
-          >
-            <ClipboardList className="size-4" />
-            {copyStockMutation.isPending ? "Menyalin..." : "Salin Stok"}
+            <Sheet className={`size-4 ${listing.syncProgress.status === "syncing" ? "animate-spin" : ""}`} />
+            {listing.syncProgress.status === "syncing" ? "Menyinkronkan..." : "Sync Sheets"}
           </Button>
         </div>
 
@@ -424,7 +216,7 @@ export default function AccountsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
-                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                    <Checkbox checked={listing.allSelected} onCheckedChange={listing.toggleAll} />
                   </TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Username</TableHead>
@@ -432,20 +224,19 @@ export default function AccountsPage() {
                   <TableHead>Saat Ini</TableHead>
                   <TableHead>Target</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Aplikasi Login</TableHead>
                   <TableHead>Modal</TableHead>
-                  <TableHead>HP</TableHead>
+                  <TableHead>Tahun</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? <LoadingRow colSpan={11} /> : !accounts.length ? (
-                  <EmptyRow colSpan={11} message="Tidak ada akun ditemukan." />
+                {isLoading ? <LoadingRow colSpan={10} /> : !accounts.length ? (
+                  <EmptyRow colSpan={10} message="Tidak ada akun ditemukan." />
                 ) : (
                   accounts.map((acc) => (
-                    <TableRow key={acc.id} className={selectedIds.includes(acc.id) ? "bg-muted/40" : ""}>
+                    <TableRow key={acc.id} className={listing.selectedIds.includes(acc.id) ? "bg-muted/40" : ""}>
                       <TableCell>
-                        <Checkbox checked={selectedIds.includes(acc.id)} onCheckedChange={() => toggleOne(acc.id)} />
+                        <Checkbox checked={listing.selectedIds.includes(acc.id)} onCheckedChange={() => listing.toggleOne(acc.id)} />
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{acc.email ?? "-"}</TableCell>
                       <TableCell className="font-medium text-sm">{acc.username ?? "-"}</TableCell>
@@ -457,21 +248,20 @@ export default function AccountsPage() {
                           {acc.accountStatus?.toLowerCase() === "completed" ? "Selesai" : acc.accountStatus?.toLowerCase() === "error" ? "Error" : "Proses"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{acc.loginApp ?? "-"}</TableCell>
                       <TableCell>{acc.capital ? formatIDR(acc.capital) : "-"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{acc.phoneModel ?? "-"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{acc.year ?? "-"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost" size="icon" className="size-8 text-blue-600 hover:text-blue-700"
-                            onClick={() => refreshMutation.mutate(acc.id)}
-                            disabled={refreshMutation.isPending}
+                            onClick={() => listing.refreshMutation.mutate(acc.id)}
+                            disabled={listing.refreshMutation.isPending}
                           >
                             <RefreshCw className="size-4" />
                           </Button>
                           <Button
                             variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(acc)}
+                            onClick={() => listing.handleDelete(acc.id, acc.username ?? acc.email ?? "")}
                           >
                             <Trash2 className="size-4" />
                           </Button>
@@ -494,11 +284,11 @@ export default function AccountsPage() {
             <p className="text-sm text-muted-foreground text-center py-8">Tidak ada akun ditemukan.</p>
           ) : (
             accounts.map((acc) => (
-              <Card key={acc.id} className={selectedIds.includes(acc.id) ? "ring-2 ring-primary" : ""}>
+              <Card key={acc.id} className={listing.selectedIds.includes(acc.id) ? "ring-2 ring-primary" : ""}>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <Checkbox checked={selectedIds.includes(acc.id)} onCheckedChange={() => toggleOne(acc.id)} className="shrink-0" />
+                      <Checkbox checked={listing.selectedIds.includes(acc.id)} onCheckedChange={() => listing.toggleOne(acc.id)} className="shrink-0" />
                       <div className="min-w-0">
                         <p className="font-medium text-sm truncate">{acc.username ?? "-"}</p>
                         <p className="text-xs text-muted-foreground truncate">{acc.email ?? "-"}</p>
@@ -522,23 +312,22 @@ export default function AccountsPage() {
                       <span className="font-medium">{acc.capital ? formatIDR(acc.capital) : "-"}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">HP</span>
-                      <span className="font-medium truncate">{acc.phoneModel ?? "-"}</span>
+                      <span className="text-muted-foreground">Tahun</span>
+                      <span className="font-medium truncate">{acc.year ?? "-"}</span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between pt-2 border-t">
-                    <span className="text-xs text-muted-foreground">{acc.loginApp ?? "-"}</span>
+                  <div className="flex items-center justify-end pt-2 border-t">
                     <div className="flex gap-1">
                       <Button
                         variant="ghost" size="icon" className="size-8 text-blue-600 hover:text-blue-700"
-                        onClick={() => refreshMutation.mutate(acc.id)}
-                        disabled={refreshMutation.isPending}
+                        onClick={() => listing.refreshMutation.mutate(acc.id)}
+                        disabled={listing.refreshMutation.isPending}
                       >
                         <RefreshCw className="size-4" />
                       </Button>
                       <Button
                         variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(acc)}
+                        onClick={() => listing.handleDelete(acc.id, acc.username ?? acc.email ?? "")}
                       >
                         <Trash2 className="size-4" />
                       </Button>
@@ -554,127 +343,29 @@ export default function AccountsPage() {
         </div>
       </div>
 
-      {/* ── Floating Bulk Action Bar ──────────────────────────────────────── */}
-      {selectedIds.length > 0 && (
-        <>
-          {/* Mobile: full-width bottom bar */}
-          <div className="sm:hidden fixed bottom-0 left-0 right-0 z-20 bg-background border-t shadow-2xl px-4 pt-2 pb-3 flex flex-col gap-2">
-            <span className="text-xs font-medium text-muted-foreground">{selectedIds.length} akun dipilih</span>
-            <div className="flex items-center gap-2">
-              <Button size="sm" className="flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/stock/accounts/pos", { state: { selectedIds } })}>
-                <ShoppingCart className="size-3.5" />
-                Terjual
-              </Button>
-              <Button size="sm" className="flex-1 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
-                <ScanLine className="size-3.5" />
-                Pindai
-              </Button>
-              <Button size="sm" className="flex-1 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
-                <Copy className="size-3.5" />
-                Salin
-              </Button>
-              <Button size="sm" variant="destructive" className="flex-1 gap-1.5" onClick={handleBulkDelete}>
-                <Trash2 className="size-3.5" />
-                Hapus
-              </Button>
-            </div>
-          </div>
-          {/* Desktop: centered floating pill */}
-          <div className="hidden sm:flex fixed bottom-4 left-1/2 -translate-x-1/2 z-20 bg-background border rounded-lg shadow-2xl px-4 py-3 items-center gap-3">
-            <span className="text-sm font-medium text-muted-foreground mr-1">{selectedIds.length} akun</span>
-            <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/stock/accounts/pos", { state: { selectedIds } })}>
-              <ShoppingCart className="size-3.5" />
-              Terjual
-            </Button>
-            <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkScan}>
-              <ScanLine className="size-3.5" />
-              Pindai
-            </Button>
-            <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleBulkCopy}>
-              <Copy className="size-3.5" />
-              Salin
-            </Button>
-            <Button size="sm" variant="destructive" className="gap-1.5" onClick={handleBulkDelete}>
-              <Trash2 className="size-3.5" />
-              Hapus
-            </Button>
-          </div>
-        </>
-      )}
+      <BulkActionBar
+        count={listing.selectedIds.length}
+        onSell={() => navigate("/stock/accounts/pos", { state: { selectedIds: listing.selectedIds } })}
+        onScan={listing.handleBulkScan}
+        onCopy={handleBulkCopy}
+        onDelete={listing.handleBulkDelete}
+      />
 
-      {/* Scan Dialog */}
-      <Dialog open={scanDialogOpen} onOpenChange={(open) => { if (scanProgress.status === "scanning") return; setScanDialogOpen(open) }}>
-        <DialogContent className="max-w-md">
-          {scanProgress.status === "idle" ? (
-            <>
-              <DialogHeader><DialogTitle>Scan Followers</DialogTitle></DialogHeader>
-              <div className="space-y-2 pt-2">
-                <p className="text-sm font-medium">Source</p>
-                <Dropdown options={[{ value: "all", label: "Semua Source" }, ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name }))]} value={scanSourceId} onChange={setScanSourceId} className="w-full" />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setScanDialogOpen(false)}>Batal</Button>
-                <Button onClick={runScan}>Pindai</Button>
-              </div>
-            </>
-          ) : (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <RefreshCw className={`size-5 ${scanProgress.status === "scanning" ? "animate-spin" : ""}`} />
-                  Scan Followers
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-2 pt-1">
-                <div className="flex justify-between text-sm"><span>Progress</span><span className="text-muted-foreground">{scanProgress.current} / {scanProgress.total || "..."}</span></div>
-                <div className="h-2 w-full bg-secondary overflow-hidden rounded">
-                  <div className="h-full bg-foreground transition-all" style={{ width: scanProgress.total > 0 ? `${(scanProgress.current / scanProgress.total) * 100}%` : "0%" }} />
-                </div>
-              </div>
-              {scanProgress.status === "done" && <div className="rounded bg-emerald-50 border border-emerald-200 px-4 py-3"><p className="text-sm font-medium text-emerald-700">Pemindaian selesai!</p></div>}
-              {scanProgress.status === "error" && <div className="rounded bg-destructive/10 border border-destructive/20 px-4 py-3"><p className="text-sm font-medium text-destructive">{scanProgress.error}</p></div>}
-              {(scanProgress.status === "done" || scanProgress.status === "error") && <div className="flex justify-end"><Button variant="outline" onClick={() => setScanDialogOpen(false)}>Tutup</Button></div>}
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Sync Dialog */}
-      <Dialog open={syncDialogOpen} onOpenChange={(open) => { if (syncProgress.status === "syncing") return; setSyncDialogOpen(open) }}>
-        <DialogContent className="max-w-md">
-          {syncProgress.status === "idle" ? (
-            <>
-              <DialogHeader><DialogTitle>Sync with Google Sheets</DialogTitle></DialogHeader>
-              <div className="space-y-2 pt-2">
-                <p className="text-sm font-medium">Source</p>
-                <Dropdown options={[{ value: "all", label: "Semua Source" }, ...(data?.sources ?? []).map((s) => ({ value: String(s.id), label: s.name }))]} value={syncSourceId} onChange={setSyncSourceId} className="w-full" />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Batal</Button>
-                <Button onClick={runSync}>Sinkron</Button>
-              </div>
-            </>
-          ) : (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <RefreshCw className={`size-5 ${syncProgress.status === "syncing" ? "animate-spin" : ""}`} />
-                  Sync Google Sheets
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-2 pt-1">
-                <div className="flex justify-between text-sm"><span>Progress</span><span className="text-muted-foreground">{syncProgress.current} / {syncProgress.total}</span></div>
-                <div className="h-2 w-full bg-secondary overflow-hidden rounded">
-                  <div className="h-full bg-foreground transition-all" style={{ width: syncProgress.total > 0 ? `${(syncProgress.current / syncProgress.total) * 100}%` : "0%" }} />
-                </div>
-              </div>
-              {syncProgress.status === "done" && <div className="rounded bg-emerald-50 border border-emerald-200 px-4 py-3"><p className="text-sm font-medium text-emerald-700">Sinkronisasi selesai!</p></div>}
-              {syncProgress.status === "error" && <div className="rounded bg-destructive/10 border border-destructive/20 px-4 py-3"><p className="text-sm font-medium text-destructive">{syncProgress.error}</p></div>}
-              {(syncProgress.status === "done" || syncProgress.status === "error") && <div className="flex justify-end"><Button variant="outline" onClick={() => setSyncDialogOpen(false)}>Tutup</Button></div>}
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <SyncScanDialogs
+        sourceOptions={sourceOptions}
+        syncDialogOpen={listing.syncDialogOpen}
+        onSyncOpenChange={listing.setSyncDialogOpen}
+        syncSourceId={listing.syncSourceId}
+        onSyncSourceIdChange={listing.setSyncSourceId}
+        syncProgress={listing.syncProgress}
+        onRunSync={() => listing.runSync(data?.sources ?? [])}
+        scanDialogOpen={listing.scanDialogOpen}
+        onScanOpenChange={listing.setScanDialogOpen}
+        scanSourceId={listing.scanSourceId}
+        onScanSourceIdChange={listing.setScanSourceId}
+        scanProgress={listing.scanProgress}
+        onRunScan={listing.runScan}
+      />
     </div>
   )
 }

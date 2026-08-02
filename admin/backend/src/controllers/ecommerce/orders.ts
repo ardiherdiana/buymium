@@ -3,14 +3,15 @@ import { Prisma } from '@prisma/client'
 import db from '../../config/database'
 import { sendOrderConfirmed, sendOrderRejected } from '../../utils/email'
 import { updateGoogleSheetsAfterSale } from '../../services/management/googleSheets/updateAfterSale'
+import { buildProofUrl } from '../../utils/fileAccessToken'
+import { logger } from '../../utils/logger'
+import { safeDecrypt } from '../../utils/encrypt'
 
 type ItemToUpdate = {
   id: number
   email?: string | null
   username?: string | null
-  phoneModel?: string | null
-  year?: string | null
-  sourceId?: number | null
+  sourceSheetName?: string | null
   source?: { id: number; spreadsheetId?: string | null } | null
   isSold?: boolean
   capital?: number | null
@@ -23,19 +24,12 @@ function generateSalesNumber(): string {
   return `BUYMIUM${date}-${Date.now().toString().slice(-3)}`
 }
 
-// Fulfills an order whose product is backed by management inventory (Account/Accsmarket,
+// Fulfills an order whose product is backed by management inventory (Account,
 // linked via Product.sourceId) instead of the storefront Stock table: consumes the rows
 // reserved at checkout, records a Sale/SaleLine (so it shows up in Finance > Sales), and
 // remembers which rows were consumed on Order.inventoryRefs so the buyer can download them.
 async function fulfillFromInventory(order: { id: number; quantity: number; totalPrice: number }, sourceId: number): Promise<ItemToUpdate[]> {
-  const source = await db.source.findUnique({ where: { id: sourceId } })
-  if (!source) return []
-
-  const isAccsmarket = source.isAccsmarket
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const table: any = isAccsmarket ? db.accsmarket : db.account
-
-  const reserved = await table.findMany({
+  const reserved = await db.account.findMany({
     where: { reservedOrderId: order.id },
     include: { source: true },
     take: order.quantity,
@@ -43,7 +37,7 @@ async function fulfillFromInventory(order: { id: number; quantity: number; total
   if (reserved.length === 0) return []
 
   const unitSalePrice = Math.floor(order.totalPrice / reserved.length)
-  const totalCapital = reserved.reduce((s: number, row: { capital?: number | null }) => s + (row.capital ?? 0), 0)
+  const totalCapital = reserved.reduce((s, row) => s + (row.capital ?? 0), 0)
   const totalProfit = order.totalPrice - totalCapital
 
   const sale = await db.sale.create({
@@ -51,59 +45,49 @@ async function fulfillFromInventory(order: { id: number; quantity: number; total
       salesNumber: generateSalesNumber(),
       orderId: order.id,
       sourceId,
+      sourceSheetName: reserved[0]?.sourceSheetName ?? null,
       totalSalePrice: order.totalPrice,
       totalProfit,
     },
   })
 
   await db.$transaction(
-    reserved.map((row: { id: number; capital?: number | null }) => {
+    reserved.map((row) => {
       const profit = unitSalePrice - (row.capital ?? 0)
-      return isAccsmarket
-        ? db.saleLine.create({ data: { saleId: sale.id, accsmarketId: row.id, unitSalePrice, price: unitSalePrice, profit } })
-        : db.saleLine.create({ data: { saleId: sale.id, accountId: row.id, unitSalePrice, price: unitSalePrice, profit } })
+      return db.saleLine.create({ data: { saleId: sale.id, accountId: row.id, unitSalePrice, price: unitSalePrice, profit } })
     })
   )
 
-  await table.updateMany({
-    where: { id: { in: reserved.map((r: { id: number }) => r.id) } },
+  await db.account.updateMany({
+    where: { id: { in: reserved.map((r) => r.id) } },
     data: { isSold: true, reservedOrderId: null },
   })
 
-  const inventoryRefs = (reserved as { id: number }[]).map((row) => ({ type: isAccsmarket ? 'accsmarket' : 'account', id: row.id }))
+  const inventoryRefs = reserved.map((row) => ({ id: row.id }))
   await db.order.update({ where: { id: order.id }, data: { inventoryRefs: JSON.stringify(inventoryRefs) } })
 
   return reserved as ItemToUpdate[]
 }
 
-type InventoryRef = { type: 'account' | 'accsmarket'; id: number }
+type InventoryRef = { id: number }
+
+function decryptAccount<T extends { password: string | null; passwordEmail: string | null; twoFactorAuth: string | null }>(a: T) {
+  return { ...a, password: safeDecrypt(a.password), passwordEmail: safeDecrypt(a.passwordEmail), twoFactorAuth: safeDecrypt(a.twoFactorAuth) }
+}
 
 async function resolveInventoryRefs(inventoryRefsJson: string | null): Promise<unknown[]> {
   if (!inventoryRefsJson) return []
   let refs: InventoryRef[] = []
   try { refs = JSON.parse(inventoryRefsJson) } catch { return [] }
 
-  const accountIds = refs.filter(r => r.type === 'account').map(r => r.id)
-  const accsmarketIds = refs.filter(r => r.type === 'accsmarket').map(r => r.id)
-  const [accounts, accsmarkets] = await Promise.all([
-    accountIds.length ? db.account.findMany({ where: { id: { in: accountIds } } }) : [],
-    accsmarketIds.length ? db.accsmarket.findMany({ where: { id: { in: accsmarketIds } } }) : [],
-  ])
-  return [
-    ...accounts.map((a) => ({ ...a, isAccsmarket: false })),
-    ...accsmarkets.map((a) => ({ ...a, isAccsmarket: true })),
-  ]
+  const accountIds = refs.map(r => r.id)
+  const accounts = accountIds.length ? await db.account.findMany({ where: { id: { in: accountIds } } }) : []
+  return accounts.map((a) => decryptAccount(a))
 }
 
 async function resolveReservedInventory(orderId: number): Promise<unknown[]> {
-  const [accounts, accsmarkets] = await Promise.all([
-    db.account.findMany({ where: { reservedOrderId: orderId } }),
-    db.accsmarket.findMany({ where: { reservedOrderId: orderId } }),
-  ])
-  return [
-    ...accounts.map((a) => ({ ...a, isAccsmarket: false })),
-    ...accsmarkets.map((a) => ({ ...a, isAccsmarket: true })),
-  ]
+  const accounts = await db.account.findMany({ where: { reservedOrderId: orderId } })
+  return accounts.map((a) => decryptAccount(a))
 }
 
 export class OrdersController {
@@ -171,7 +155,7 @@ export class OrdersController {
         meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
       })
     } catch (err) {
-      console.error('[Orders List Error]', err)
+      logger.error('[Orders List Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch orders' })
     }
   }
@@ -212,7 +196,7 @@ export class OrdersController {
 
       res.json({ data: days, total: orders.length })
     } catch (err) {
-      console.error('[Order Trend Error]', err)
+      logger.error('[Order Trend Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch order trend' })
     }
   }
@@ -281,11 +265,12 @@ export class OrdersController {
         ...order,
         variantLabel: orderVariantLabel,
         subtotal: orderBreakdown.subtotal,
+        paymentProofUrl: buildProofUrl(order.paymentProof),
         relatedOrders: relatedOrdersWithBreakdown,
         inventoryItems,
       })
     } catch (err) {
-      console.error('[Order Detail Error]', err)
+      logger.error('[Order Detail Error]', err)
       res.status(500).json({ success: false, error: 'Failed to fetch order detail' })
     }
   }
@@ -306,7 +291,7 @@ export class OrdersController {
 
       res.json(order)
     } catch (err) {
-      console.error('[Update Order Status Error]', err)
+      logger.error('[Update Order Status Error]', err)
       res.status(500).json({ success: false, error: 'Failed to update order status' })
     }
   }
@@ -338,7 +323,7 @@ export class OrdersController {
 
           const product = await db.product.findUnique({ where: { id: o.productId }, select: { sourceId: true } })
           if (!product?.sourceId) {
-            console.error(`[Confirm Order] Product ${o.productId} has no linked Source, cannot fulfill order ${o.id}`)
+            logger.error(`[Confirm Order] Product ${o.productId} has no linked Source, cannot fulfill order ${o.id}`)
             return
           }
 
@@ -348,7 +333,7 @@ export class OrdersController {
       )
 
       if (sheetsItems.length > 0) {
-        updateGoogleSheetsAfterSale(sheetsItems).catch(err => console.error('[Confirm Order] Google Sheets update failed:', err))
+        updateGoogleSheetsAfterSale(sheetsItems).catch(err => logger.error('[Confirm Order] Google Sheets update failed:', err))
       }
 
       const buyer = await db.user.findUnique({ where: { id: order.userId } })
@@ -366,7 +351,7 @@ export class OrdersController {
 
       res.json({ message: 'Pesanan dikonfirmasi', orderId: id })
     } catch (err) {
-      console.error('[Confirm Order Error]', err)
+      logger.error('[Confirm Order Error]', err)
       res.status(500).json({ success: false, error: 'Failed to confirm order' })
     }
   }
@@ -390,7 +375,6 @@ export class OrdersController {
 
       const groupOrderIds = groupOrders.map(o => o.id)
       await db.account.updateMany({ where: { reservedOrderId: { in: groupOrderIds } }, data: { reservedOrderId: null } })
-      await db.accsmarket.updateMany({ where: { reservedOrderId: { in: groupOrderIds } }, data: { reservedOrderId: null } })
 
       const buyer = await db.user.findUnique({ where: { id: order.userId } })
       if (buyer?.email) {
@@ -405,7 +389,7 @@ export class OrdersController {
 
       res.json({ message: 'Pesanan ditolak', orderId: id })
     } catch (err) {
-      console.error('[Reject Order Error]', err)
+      logger.error('[Reject Order Error]', err)
       res.status(500).json({ success: false, error: 'Failed to reject order' })
     }
   }
@@ -418,12 +402,11 @@ export class OrdersController {
       if (!order) { res.status(404).json({ success: false, error: 'Order not found' }); return }
 
       await db.account.updateMany({ where: { reservedOrderId: id }, data: { reservedOrderId: null } })
-      await db.accsmarket.updateMany({ where: { reservedOrderId: id }, data: { reservedOrderId: null } })
       await db.order.delete({ where: { id } })
 
       res.json({ message: 'Order deleted successfully' })
     } catch (err) {
-      console.error('[Delete Order Error]', err)
+      logger.error('[Delete Order Error]', err)
       res.status(500).json({ success: false, error: 'Failed to delete order' })
     }
   }

@@ -1,48 +1,86 @@
 import db from '../../config/database'
 import { getGoogleSheetsClientReadOnly, getGoogleSheetsClient, getHttpClient } from './googleSheets/client'
 import { logger } from '../../utils/logger'
-import axios from 'axios'
 import { enqueueRapidApiCall } from '../../utils/rapidApiQueue'
-import type { Source, Account } from '@prisma/client'
+import type { Account, Source } from '@prisma/client'
 import type { sheets_v4 } from 'googleapis'
 import { Prisma } from '@prisma/client'
 import { encrypt } from '../../utils/encrypt'
+import { detectSheetColumns, parseCapital, SHEET_HEADER_RANGE, SHEET_DATA_RANGE, SHEET_SCAN_RANGE, STATUS_COLUMN_INDEX } from './googleSheets/sheetColumns'
 
 const prisma = db
 
-export const AccountsService = {
-  async sync(sourceId: string) {
+// Short-lived cache for sheet metadata/values. A batch scan fires one HTTP request
+// per account, and each used to re-fetch the same spreadsheet metadata + values
+// (~3 Sheets API calls per account) — enough to exhaust the read quota and leave
+// rows silently uncolored. Cached per (spreadsheetId, sheetName) instead.
+const SHEETS_CACHE_TTL_MS = 5 * 60 * 1000
+const sheetIdCache = new Map<string, { value: number | null; at: number }>()
+const sheetValuesCache = new Map<string, { values: (string | number | boolean | null)[][]; at: number }>()
+
+function sheetsCacheKey(spreadsheetId: string, sheetName: string) {
+  return `${spreadsheetId}::${sheetName}`
+}
+
+function clearSheetsCache() {
+  sheetIdCache.clear()
+  sheetValuesCache.clear()
+}
+
+// Retry Google Sheets API calls on rate-limit/quota errors with backoff.
+async function withSheetsRetry<T>(fn: () => Promise<T>): Promise<T> {
+  const maxAttempts = 3
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const source = await prisma.source.findUnique({
-        where: { id: parseInt(sourceId) },
-      })
-
-      if (!source) {
-        throw new Error('Source not found')
+      return await fn()
+    } catch (err) {
+      const e = err as { code?: number; response?: { status?: number } }
+      const status = e.response?.status ?? e.code
+      if ((status === 429 || status === 503) && attempt < maxAttempts - 1) {
+        const delay = (attempt + 1) * 15000 // 15s, 30s
+        logger.warn(`Google Sheets API rate limited (${status}), retrying in ${delay / 1000}s...`)
+        await new Promise((r) => setTimeout(r, delay))
+        continue
       }
-
-      if (!source.spreadsheetId) {
-        throw new Error('Source does not have a spreadsheet ID configured')
-      }
-
-      const result = await this.syncSource(source)
-      return result
-    } catch (error) {
-      logger.error(`Error syncing source '${sourceId}':`, error)
-      throw error
+      throw err
     }
+  }
+  throw new Error('Max retries exceeded')
+}
+
+export const AccountsService = {
+  // Syncs every registered Source: for each, reads its own spreadsheet and iterates
+  // every tab within it. Each tab name becomes the account's `sourceSheetName`.
+  async syncAll() {
+    const sources = await prisma.source.findMany({ orderBy: { id: 'asc' } })
+
+    let syncedCount = 0
+    let totalSheets = 0
+    const perSource: { sourceId: number; sourceName: string; syncedCount: number; totalSheets: number }[] = []
+
+    for (const source of sources) {
+      try {
+        const result = await this.syncSource(source)
+        syncedCount += result.syncedCount
+        totalSheets += result.totalSheets
+        perSource.push({ sourceId: source.id, sourceName: source.name, ...result })
+      } catch (error) {
+        logger.error(`Error syncing source '${source.name}':`, error)
+      }
+    }
+
+    logger.info(`Successfully synced ${syncedCount} accounts from ${totalSheets} sheet(s) across ${sources.length} source(s)`)
+    return { syncedCount, totalSheets, totalSources: sources.length, perSource }
   },
 
+  // Syncs a single Source: reads its spreadsheet, iterates every tab, deletes existing
+  // unsold accounts for that source, and re-inserts fresh rows from all its tabs.
   async syncSource(source: Source) {
-    if (!source.spreadsheetId) {
-      throw new Error(`Source '${source.name}' does not have a spreadsheet ID configured`)
-    }
+    const spreadsheetId = source.spreadsheetId
 
     try {
       const { sheets } = await getGoogleSheetsClientReadOnly()
-      const spreadsheet = await sheets.spreadsheets.get({
-        spreadsheetId: source.spreadsheetId ?? undefined,
-      })
+      const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId })
 
       let sheetsData = spreadsheet.data.sheets || []
 
@@ -51,10 +89,9 @@ export const AccountsService = {
         return { syncedCount: 0, totalSheets: 0 }
       }
 
-      // Sort sheets by index to process in correct order (0, 1, 2, ...) matching PHP production behavior
       sheetsData = sheetsData.sort((a, b) => (a.properties?.index ?? 0) - (b.properties?.index ?? 0))
 
-      // Reset column D (index 3) background to white for rows 2-110 across all sheets before sync
+      // Reset status column (Target Followers) background to white for rows 2-500 across all sheets before sync
       try {
         const { sheets: sheetsWrite } = await getGoogleSheetsClient()
         const resetRequests = sheetsData
@@ -62,178 +99,153 @@ export const AccountsService = {
           .filter((id): id is number => id !== null && id !== undefined)
           .map(sheetId => ({
             repeatCell: {
-              range: { sheetId, startRowIndex: 1, endRowIndex: 110, startColumnIndex: 3, endColumnIndex: 4 },
+              range: { sheetId, startRowIndex: 1, endRowIndex: 500, startColumnIndex: STATUS_COLUMN_INDEX, endColumnIndex: STATUS_COLUMN_INDEX + 1 },
               cell: { userEnteredFormat: { backgroundColor: { red: 1.0, green: 1.0, blue: 1.0 } } },
               fields: 'userEnteredFormat.backgroundColor',
             },
           }))
         if (resetRequests.length > 0) {
           await sheetsWrite.spreadsheets.batchUpdate({
-            spreadsheetId: source.spreadsheetId ?? undefined,
+            spreadsheetId,
             requestBody: { requests: resetRequests },
           })
-          logger.info(`Reset column D colors for ${resetRequests.length} sheet(s) in source '${source.name}'`)
+          logger.info(`Reset status column colors for ${resetRequests.length} sheet(s) in source '${source.name}'`)
         }
       } catch (error) {
-        logger.warn(`Failed to reset column D colors for source '${source.name}': ${error}`)
+        logger.warn(`Failed to reset status column colors for source '${source.name}': ${error}`)
       }
 
-      // Wrap entire sync (deletion + insertions) in one transaction, matching PHP logic
+      // Wrap entire sync (deletion + insertions) in one transaction, matching prior logic
       // Increase timeout to 60s since sync can involve many Google Sheets API calls
       const result = await prisma.$transaction(
         async (tx) => {
           const deletedCount = await tx.account.deleteMany({
-          where: {
-            sourceId: source.id,
-            isSold: false,
-          },
-        })
-        logger.info(`Deleted ${deletedCount.count} existing accounts (is_sold = false) for source ID: ${source.id} (${source.name})`)
-
-        let syncedCount = 0
-        let orderIndex = 1
-        const totalSheets = sheetsData.length
-
-        for (const sheet of sheetsData) {
-          const sheetName = sheet.properties?.title
-          if (!sheetName) continue
-          const { sheets: sheetsForRead } = await getGoogleSheetsClientReadOnly()
-
-          const headerRange = `${sheetName}!A1:F1`
-          let headerRow: (string | number | boolean | null)[] = []
-          try {
-            const headerResponse = await sheetsForRead.spreadsheets.values.get({
-              spreadsheetId: source.spreadsheetId ?? undefined,
-              range: headerRange,
-            })
-            headerRow = (headerResponse.data.values?.[0] || []) as (string | number | boolean | null)[]
-          } catch (error) {
-            logger.warn(`Could not read header from sheet '${sheetName}': ${error}`)
-          }
-
-          let emailIndex = -1
-          let usernameIndex = -1
-          let passwordIndex = -1
-          let followersIndex = -1
-          let loginAppIndex = -1
-          let capitalIndex = -1
-
-          headerRow.forEach((header: string | number | boolean | null, index: number) => {
-            const headerLower = String(header).toLowerCase().trim()
-            if (headerLower.includes('email')) emailIndex = index
-            else if (headerLower.includes('username')) usernameIndex = index
-            else if (headerLower.includes('password')) passwordIndex = index
-            else if (headerLower.includes('jumlah') && headerLower.includes('followers')) followersIndex = index
-            else if (headerLower.includes('aplikasi') && headerLower.includes('login')) loginAppIndex = index
-            else if (headerLower.includes('modal')) capitalIndex = index
+            where: { sourceId: source.id, isSold: false },
           })
+          logger.info(`Deleted ${deletedCount.count} existing accounts (is_sold = false) for source '${source.name}'`)
 
-          if (emailIndex === -1) {
-            emailIndex = 0
-            usernameIndex = 1
-            passwordIndex = 2
-            followersIndex = 3
-            loginAppIndex = 4
-            capitalIndex = 5
-          }
+          let syncedCount = 0
+          let orderIndex = 1
+          const totalSheets = sheetsData.length
 
-          const range = `'${sheetName}'!A2:F110`
-          let values: (string | number | boolean | null)[][] = []
-          try {
-            const response = await sheetsForRead.spreadsheets.values.get({
-              spreadsheetId: source.spreadsheetId ?? undefined,
-              range,
-            })
-            values = (response.data.values || []) as (string | number | boolean | null)[][]
-          } catch (error) {
-            logger.warn(`Could not read data from sheet '${sheetName}': ${error}`)
-          }
+          for (const sheet of sheetsData) {
+            const sheetName = sheet.properties?.title
+            if (!sheetName) continue
+            const { sheets: sheetsForRead } = await getGoogleSheetsClientReadOnly()
 
-          if (!values.length) {
-            continue
-          }
+            const headerRange = `'${sheetName}'!${SHEET_HEADER_RANGE}`
+            let headerRow: (string | number | boolean | null)[] = []
+            try {
+              const headerResponse = await sheetsForRead.spreadsheets.values.get({
+                spreadsheetId,
+                range: headerRange,
+              })
+              headerRow = (headerResponse.data.values?.[0] || []) as (string | number | boolean | null)[]
+            } catch (error) {
+              logger.warn(`Could not read header from sheet '${sheetName}': ${error}`)
+            }
 
-          for (let i = 0; i < values.length; i++) {
-            const row = values[i]
+            const {
+              email: emailIndex,
+              passwordEmail: passwordEmailIndex,
+              username: usernameIndex,
+              password: passwordIndex,
+              twoFa: twoFaIndex,
+              year: yearIndex,
+              targetFollowers: followersIndex,
+              hp: hpIndex,
+              aplikasi: loginAppIndex,
+              capital: capitalIndex,
+            } = detectSheetColumns(headerRow)
 
-            if (!row || (row[emailIndex] && !String(row[emailIndex]).trim())) {
+            const range = `'${sheetName}'!${SHEET_DATA_RANGE}`
+            let values: (string | number | boolean | null)[][] = []
+            try {
+              const response = await sheetsForRead.spreadsheets.values.get({
+                spreadsheetId,
+                range,
+              })
+              values = (response.data.values || []) as (string | number | boolean | null)[][]
+            } catch (error) {
+              logger.warn(`Could not read data from sheet '${sheetName}': ${error}`)
+            }
+
+            if (!values.length) {
               continue
             }
 
-            const email = row[emailIndex] ? String(row[emailIndex]).trim() : null
-            const username = row[usernameIndex] ? String(row[usernameIndex]).trim() : null
-            const password = row[passwordIndex] ? String(row[passwordIndex]).trim() : null
+            for (let i = 0; i < values.length; i++) {
+              const row = values[i]
 
-            let targetFollowers: number | null = null
-            if (row[followersIndex] && String(row[followersIndex]).trim()) {
-              const followersValue = String(row[followersIndex]).trim()
-              const parsed = followersValue.replace(/[^0-9]/g, '')
-              targetFollowers = parsed ? parseInt(parsed) : null
-            }
+              if (!row || (row[emailIndex] && !String(row[emailIndex]).trim())) {
+                continue
+              }
 
-            const loginApp = row[loginAppIndex] ? String(row[loginAppIndex]).trim() : null
+              const email = row[emailIndex] ? String(row[emailIndex]).trim() : null
+              const username = row[usernameIndex] ? String(row[usernameIndex]).trim() : null
+              const password = row[passwordIndex] ? String(row[passwordIndex]).trim() : null
+              const passwordEmail = passwordEmailIndex >= 0 && row[passwordEmailIndex] ? String(row[passwordEmailIndex]).trim() : null
+              const twoFa = twoFaIndex >= 0 && row[twoFaIndex] ? String(row[twoFaIndex]).trim() : null
+              const year = yearIndex >= 0 && row[yearIndex] ? String(row[yearIndex]).trim() : null
 
-            let capital: number | null = null
-            if (row[capitalIndex] && String(row[capitalIndex]).trim()) {
-              let capitalValue = String(row[capitalIndex]).trim()
-              capitalValue = capitalValue.replace(/Rp\s*/i, '').replace(/[^\d.,]/g, '')
+              let targetFollowers: number | null = null
+              if (row[followersIndex] && String(row[followersIndex]).trim()) {
+                const followersValue = String(row[followersIndex]).trim()
+                const parsed = followersValue.replace(/[^0-9]/g, '')
+                targetFollowers = parsed ? parseInt(parsed) : null
+              }
 
-              if (capitalValue.includes(',')) {
-                capitalValue = capitalValue.replace(/\./g, '').replace(/,/g, '.')
-              } else {
-                const parts = capitalValue.split('.')
-                if (parts.length > 1) {
-                  const lastPart = parts[parts.length - 1]
-                  if (lastPart.length <= 2 && parts.length > 2) {
-                    capitalValue = parts.slice(0, -1).join('').replace(/\./g, '') + '.' + lastPart
-                  } else {
-                    capitalValue = capitalValue.replace(/\./g, '')
-                  }
+              const loginApp = row[loginAppIndex] ? String(row[loginAppIndex]).trim() : null
+              const phoneModel = row[hpIndex] ? String(row[hpIndex]).trim() : null
+              const capital = parseCapital(row[capitalIndex] ?? null)
+
+              if (!email && !username) {
+                continue
+              }
+
+              try {
+                await tx.account.create({
+                  data: {
+                    orderIndex,
+                    email: email || null,
+                    passwordEmail: passwordEmail ? encrypt(passwordEmail) : null,
+                    username: username || null,
+                    password: password ? encrypt(password) : null,
+                    twoFactorAuth: twoFa ? encrypt(twoFa) : null,
+                    year: year || null,
+                    targetFollowers: targetFollowers || 0,
+                    currentFollowers: null,
+                    accountStatus: null,
+                    loginApp: loginApp || null,
+                    capital: capital || null,
+                    phoneModel: phoneModel || null,
+                    sourceSheetName: sheetName,
+                    sourceId: source.id,
+                    isSold: false,
+                  },
+                })
+
+                syncedCount++
+                orderIndex++
+              } catch (error) {
+                if ((error as { code?: string })?.code === 'P2002') {
+                  const constraint = (error as { meta?: { target?: string[] } })?.meta?.target?.[0]
+                  logger.warn(`Skipping duplicate account row ${i + 1} from sheet '${sheetName}' - ${constraint} already exists`)
+                } else {
+                  logger.error(`Error syncing account row ${i + 1} from sheet '${sheetName}': ${error}`)
                 }
               }
-              capital = capitalValue ? parseFloat(capitalValue) : null
-            }
-
-            if (!email && !username) {
-              continue
-            }
-
-            try {
-              await tx.account.create({
-                data: {
-                  orderIndex,
-                  email: email || null,
-                  username: username || null,
-                  password: password ? encrypt(password) : null,
-                  targetFollowers: targetFollowers || 0,
-                  currentFollowers: null,
-                  accountStatus: null,
-                  loginApp: loginApp || null,
-                  capital: capital || null,
-                  phoneModel: sheetName,
-                  sourceId: source.id,
-                  isSold: false,
-                },
-              })
-
-              syncedCount++
-              orderIndex++
-            } catch (error) {
-              if ((error as { code?: string })?.code === 'P2002') {
-                const constraint = (error as { meta?: { target?: string[] } })?.meta?.target?.[0]
-                logger.warn(`Skipping duplicate account row ${i + 1} from sheet '${sheetName}' - ${constraint} already exists`)
-              } else {
-                logger.error(`Error syncing account row ${i + 1} from sheet '${sheetName}': ${error}`)
-              }
             }
           }
-        }
 
-        logger.info(`Successfully synced ${syncedCount} accounts from ${totalSheets} sheet(s) for source '${source.name}'`)
-        return { syncedCount, totalSheets }
-      },
-        { timeout: 60000 } // 60 second timeout for sync operation
+          logger.info(`Successfully synced ${syncedCount} accounts from ${totalSheets} sheet(s) for source '${source.name}'`)
+          return { syncedCount, totalSheets }
+        },
+        { timeout: 60000 }
       )
+
+      // Sync reshuffles row positions and resets colors — drop any cached sheet data
+      clearSheetsCache()
 
       return result
     } catch (error) {
@@ -301,17 +313,20 @@ export const AccountsService = {
           logger.error(`Failed to update Google Sheets for account ID ${account.id}: ${error}`)
         }
 
-        throw new Error(`Instagram account '${username}' tidak ditemukan. ${errorMessage}`)
+        const notFoundError = new Error(`Instagram account '${username}' tidak ditemukan. ${errorMessage}`) as Error & { errorStatusMarked?: boolean }
+        notFoundError.errorStatusMarked = true
+        throw notFoundError
       }
 
-      if (!data.follower_count) {
+      // 0 is a valid follower count — only treat missing/null as an error
+      if (data.follower_count === undefined || data.follower_count === null) {
         logger.warn(
           `Follower count not found in API response for account ID ${account.id} (${account.username}). Response keys: ${Object.keys(data || {}).join(', ')}`
         )
         throw new Error(data.errorMessage || 'Follower count tidak ditemukan dalam response API')
       }
 
-      const followerCount = parseInt(data.follower_count)
+      const followerCount = parseInt(String(data.follower_count))
 
       const status = account.targetFollowers != null && followerCount >= account.targetFollowers ? 'completed' : 'progress'
       const sheetStatus = account.targetFollowers != null && followerCount >= account.targetFollowers ? 'success_target_met' : 'success_below_target'
@@ -338,35 +353,69 @@ export const AccountsService = {
       }
     } catch (error) {
       logger.error(`Error refreshing followers for account ID ${accountId}: ${error}`)
+
+      // Any other failure (RapidAPI timeout/5xx, missing follower_count, etc.)
+      // must still mark the row as error in DB + sheet — otherwise the row stays
+      // silently white in the spreadsheet with no trace of what happened.
+      if (!(error as { errorStatusMarked?: boolean })?.errorStatusMarked) {
+        try {
+          const account = await prisma.account.findUnique({
+            where: { id: accountId },
+            include: { source: true },
+          })
+          if (account) {
+            await prisma.account.update({
+              where: { id: account.id },
+              data: { accountStatus: 'error' },
+            })
+            await this.updateGoogleSheetsScanStatus(account, 'error')
+          }
+        } catch (markError) {
+          logger.error(`Failed to mark scan error for account ID ${accountId}: ${markError}`)
+        }
+      }
+
       throw error
     }
   },
 
   async updateGoogleSheetsScanStatus(account: Account & { source?: { spreadsheetId?: string | null } | null }, status: string) {
-    if (!account.source?.spreadsheetId || !account.phoneModel) {
-      logger.warn(`Cannot update Google Sheets for account ID ${account.id}: missing source, spreadsheet_id, or phone_model`)
+    if (!account.source?.spreadsheetId || !account.sourceSheetName) {
+      logger.warn(`Cannot update Google Sheets for account ID ${account.id}: missing source, spreadsheet_id, or source_sheet_name`)
       return
     }
 
     try {
-      const { sheets } = await getGoogleSheetsClient()
       const spreadsheetId = account.source.spreadsheetId
-      const sheetName = account.phoneModel
+      const { sheets } = await getGoogleSheetsClient()
+      const sheetName = account.sourceSheetName
+      const cacheKey = sheetsCacheKey(spreadsheetId, sheetName)
 
-      const range = `${sheetName}!A2:F121`
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range,
-      })
-
-      const values = response.data.values || []
+      const cachedValues = sheetValuesCache.get(cacheKey)
+      let values: (string | number | boolean | null)[][]
+      if (cachedValues && Date.now() - cachedValues.at < SHEETS_CACHE_TTL_MS) {
+        values = cachedValues.values
+      } else {
+        const range = `'${sheetName}'!${SHEET_SCAN_RANGE}`
+        const response = await withSheetsRetry(() =>
+          sheets.spreadsheets.values.get({ spreadsheetId, range })
+        )
+        values = (response.data.values || []) as (string | number | boolean | null)[][]
+        sheetValuesCache.set(cacheKey, { values, at: Date.now() })
+      }
 
       if (!values.length) {
         logger.warn(`No data found in sheet '${sheetName}' for account ID ${account.id}`)
         return
       }
 
-      const sheetId = await this.getSheetId(sheets, spreadsheetId, sheetName)
+      const cachedSheetId = sheetIdCache.get(cacheKey)
+      let sheetId: number | null
+      if (cachedSheetId && Date.now() - cachedSheetId.at < SHEETS_CACHE_TTL_MS) {
+        sheetId = cachedSheetId.value
+      } else {
+        sheetId = await this.getSheetId(sheets, spreadsheetId, sheetName)
+      }
       if (sheetId === null) {
         logger.warn(`Could not find sheet '${sheetName}' in spreadsheet '${spreadsheetId}' for account ID ${account.id}`)
         return
@@ -376,7 +425,7 @@ export const AccountsService = {
       for (let i = 0; i < values.length; i++) {
         const row = values[i]
         const rowEmail = row[0] ? String(row[0]).trim() : ''
-        const rowUsername = row[1] ? String(row[1]).trim() : ''
+        const rowUsername = row[2] ? String(row[2]).trim() : ''
 
         const accountEmail = account.email ? String(account.email).trim() : ''
         const accountUsername = account.username ? String(account.username).trim() : ''
@@ -422,8 +471,8 @@ export const AccountsService = {
               sheetId,
               startRowIndex: rowNumber - 1,
               endRowIndex: rowNumber,
-              startColumnIndex: 3,
-              endColumnIndex: 4,
+              startColumnIndex: STATUS_COLUMN_INDEX,
+              endColumnIndex: STATUS_COLUMN_INDEX + 1,
             },
             rows: [
               {
@@ -441,14 +490,16 @@ export const AccountsService = {
         },
       ]
 
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: {
-          requests,
-        },
-      })
+      await withSheetsRetry(() =>
+        sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests,
+          },
+        })
+      )
 
-      logger.info(`Updated Google Sheets column D with background color (${status}) for account ID ${account.id} in sheet '${sheetName}'`)
+      logger.info(`Updated Google Sheets status column with background color (${status}) for account ID ${account.id} in sheet '${sheetName}'`)
     } catch (error) {
       logger.error(`Error updating Google Sheets scan status for account ID ${account.id}: ${error}`)
     }
@@ -456,18 +507,24 @@ export const AccountsService = {
 
   async getSheetId(sheets: sheets_v4.Sheets, spreadsheetId: string, sheetName: string): Promise<number | null> {
     try {
-      const spreadsheet = await sheets.spreadsheets.get({
-        spreadsheetId,
-      })
+      const spreadsheet = await withSheetsRetry(() =>
+        sheets.spreadsheets.get({ spreadsheetId })
+      )
 
+      // One metadata fetch covers every tab — cache them all
       const sheetsData = spreadsheet.data.sheets || []
+      let found: number | null = null
       for (const sheet of sheetsData) {
-        if (sheet.properties?.title === sheetName) {
-          return sheet.properties.sheetId ?? null
+        const title = sheet.properties?.title
+        if (!title) continue
+        const id = sheet.properties?.sheetId ?? null
+        sheetIdCache.set(sheetsCacheKey(spreadsheetId, title), { value: id, at: Date.now() })
+        if (title === sheetName) {
+          found = id
         }
       }
 
-      return null
+      return found
     } catch (error) {
       logger.error(`Error getting sheet ID for '${sheetName}': ${error}`)
       return null
@@ -476,20 +533,13 @@ export const AccountsService = {
 
   async getAccountsForScan(sourceId?: string) {
     try {
-      let where: Prisma.AccountWhereInput = {
+      const where: Prisma.AccountWhereInput = {
         username: { not: null },
         isSold: false,
       }
 
       if (sourceId && sourceId !== 'all') {
         where.sourceId = parseInt(sourceId)
-      } else {
-        // Only scan accounts from non-accsmarket sources
-        const nonAccsmarketSources = await prisma.source.findMany({
-          where: { isAccsmarket: false },
-          select: { id: true },
-        })
-        where.sourceId = { in: nonAccsmarketSources.map((s) => s.id) }
       }
 
       const accounts = await prisma.account.findMany({
@@ -537,17 +587,17 @@ export const AccountsService = {
   },
 
   async deleteAccountFromGoogleSheets(account: Account & { source?: { spreadsheetId?: string | null } | null }) {
-    if (!account.source?.spreadsheetId || !account.phoneModel) {
-      logger.warn(`Cannot delete from Google Sheets for account ID ${account.id}: missing source, spreadsheet_id, or phone_model`)
+    if (!account.source?.spreadsheetId || !account.sourceSheetName) {
+      logger.warn(`Cannot delete from Google Sheets for account ID ${account.id}: missing source, spreadsheet_id, or source_sheet_name`)
       return
     }
 
     try {
-      const { sheets } = await getGoogleSheetsClient()
       const spreadsheetId = account.source.spreadsheetId
-      const sheetName = account.phoneModel
+      const { sheets } = await getGoogleSheetsClient()
+      const sheetName = account.sourceSheetName
 
-      const range = `${sheetName}!A2:F121`
+      const range = `'${sheetName}'!${SHEET_SCAN_RANGE}`
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range,
@@ -570,7 +620,7 @@ export const AccountsService = {
       for (let i = 0; i < values.length; i++) {
         const row = values[i]
         const rowEmail = row[0] ? String(row[0]).trim() : ''
-        const rowUsername = row[1] ? String(row[1]).trim() : ''
+        const rowUsername = row[2] ? String(row[2]).trim() : ''
 
         const accountEmail = account.email ? String(account.email).trim() : ''
         const accountUsername = account.username ? String(account.username).trim() : ''
@@ -588,77 +638,42 @@ export const AccountsService = {
         return
       }
 
-      // Clear A-D columns and set F to Rp0
+      // Clear Email:Tahun Dibuat(A:F), status color(G), Hp/Aplikasi(H:I) and set Modal(J) to Rp0
       const requests = [
         {
           updateCells: {
-            range: {
-              sheetId,
-              startRowIndex: rowNumber - 1,
-              endRowIndex: rowNumber,
-              startColumnIndex: 0,
-              endColumnIndex: 4,
-            },
-            rows: [
-              {
-                values: [
-                  { userEnteredValue: {} },
-                  { userEnteredValue: {} },
-                  { userEnteredValue: {} },
-                  { userEnteredValue: {} },
-                ],
-              },
-            ],
+            range: { sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber, startColumnIndex: 0, endColumnIndex: STATUS_COLUMN_INDEX },
+            rows: [{ values: Array.from({ length: STATUS_COLUMN_INDEX }, () => ({ userEnteredValue: {} })) }],
             fields: 'userEnteredValue',
           },
         },
         {
           updateCells: {
-            range: {
-              sheetId,
-              startRowIndex: rowNumber - 1,
-              endRowIndex: rowNumber,
-              startColumnIndex: 3,
-              endColumnIndex: 4,
-            },
+            range: { sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber, startColumnIndex: STATUS_COLUMN_INDEX, endColumnIndex: STATUS_COLUMN_INDEX + 1 },
             rows: [
               {
                 values: [
                   {
-                    userEnteredFormat: {
-                      backgroundColor: {
-                        red: 1.0,
-                        green: 1.0,
-                        blue: 1.0,
-                      },
-                    },
+                    userEnteredValue: {},
+                    userEnteredFormat: { backgroundColor: { red: 1.0, green: 1.0, blue: 1.0 } },
                   },
                 ],
               },
             ],
-            fields: 'userEnteredFormat.backgroundColor',
+            fields: 'userEnteredValue,userEnteredFormat.backgroundColor',
           },
         },
         {
           updateCells: {
-            range: {
-              sheetId,
-              startRowIndex: rowNumber - 1,
-              endRowIndex: rowNumber,
-              startColumnIndex: 5,
-              endColumnIndex: 6,
-            },
-            rows: [
-              {
-                values: [
-                  {
-                    userEnteredValue: {
-                      stringValue: 'Rp0',
-                    },
-                  },
-                ],
-              },
-            ],
+            range: { sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber, startColumnIndex: 7, endColumnIndex: 9 },
+            rows: [{ values: [{ userEnteredValue: {} }, { userEnteredValue: {} }] }],
+            fields: 'userEnteredValue',
+          },
+        },
+        {
+          updateCells: {
+            range: { sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber, startColumnIndex: 9, endColumnIndex: 10 },
+            rows: [{ values: [{ userEnteredValue: { stringValue: 'Rp0' } }] }],
             fields: 'userEnteredValue',
           },
         },

@@ -15,10 +15,12 @@ if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length !== 64) {
 
 import app from './app'
 import { startOrderExpiryJob } from './services/orderExpiry'
+import { startAutoRatingJob } from './services/autoRating'
 
 const PORT = process.env.PORT || 5000
 
 app.listen(PORT, () => {
   console.log(`[Server] Running on http://localhost:${PORT}`)
   startOrderExpiryJob()
+  startAutoRatingJob()
 })

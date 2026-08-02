@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { logger } from './logger'
 
 const LOG_DIR = path.join(process.cwd(), 'logs')
 const SECURITY_LOG = path.join(LOG_DIR, 'security.log')
@@ -19,9 +20,9 @@ function writeLog(level: string, event: string, meta: Record<string, any>) {
     fs.appendFileSync(SECURITY_LOG, entry + '\n')
   } catch (err) {
     // Don't crash the server if logging fails — just warn to console
-    console.warn('[SecurityLogger] Failed to write log entry:', err)
+    logger.warn('[SecurityLogger] Failed to write log entry', err)
   }
-  console.log(`[Security][${level}] ${event}`, meta)
+  logger.info(`[Security][${level}] ${event}`, meta)
 }
 
 export const securityLogger = {

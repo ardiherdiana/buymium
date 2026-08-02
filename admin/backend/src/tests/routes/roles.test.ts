@@ -28,19 +28,24 @@ describe('GET /api/roles', () => {
     prismaInstance = new PrismaClient() as MockedObject<PrismaClient>
   })
 
-  it('returns 200 with list of roles (no auth required)', async () => {
+  it('returns 200 with list of roles for admin', async () => {
     prismaInstance.role.findMany.mockResolvedValueOnce([mockRole])
 
-    const res = await request(app).get('/api/roles')
+    const res = await request(app).get('/api/roles').set('Authorization', authHeader)
 
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body)).toBe(true)
   })
 
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/api/roles')
+    expect(res.status).toBe(401)
+  })
+
   it('returns empty array when no roles exist', async () => {
     prismaInstance.role.findMany.mockResolvedValueOnce([])
 
-    const res = await request(app).get('/api/roles')
+    const res = await request(app).get('/api/roles').set('Authorization', authHeader)
 
     expect(res.status).toBe(200)
     expect(res.body).toHaveLength(0)
@@ -49,7 +54,7 @@ describe('GET /api/roles', () => {
   it('returns roles with id, name, description, permissions', async () => {
     prismaInstance.role.findMany.mockResolvedValueOnce([mockRole])
 
-    const res = await request(app).get('/api/roles')
+    const res = await request(app).get('/api/roles').set('Authorization', authHeader)
 
     expect(res.status).toBe(200)
     expect(res.body[0]).toHaveProperty('id')
@@ -145,7 +150,9 @@ describe('GET /api/roles/users/:userId', () => {
   })
 })
 
-describe('PATCH /api/roles/users/:userId (superadmin only)', () => {
+// requireSuperAdmin is currently an alias for requireAdmin (see middleware/auth.ts),
+// so any admin-role token is authorized here — there is no separate superadmin tier.
+describe('PATCH /api/roles/users/:userId (admin access)', () => {
   let prismaInstance: MockedObject<PrismaClient>
 
   beforeEach(() => {
@@ -160,19 +167,18 @@ describe('PATCH /api/roles/users/:userId (superadmin only)', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns 403 for regular admin', async () => {
+  it('returns 403 for non-admin user', async () => {
     const res = await request(app)
       .patch('/api/roles/users/1')
-      .set('Authorization', authHeader)
+      .set('Authorization', userHeader)
       .send({ role: 'admin' })
     expect(res.status).toBe(403)
-    expect(res.body.error).toMatch(/superadmin/i)
   })
 
   it('returns 400 when role name is missing', async () => {
     const res = await request(app)
       .patch('/api/roles/users/1')
-      .set('Authorization', superAdminHeader)
+      .set('Authorization', authHeader)
       .send({})
 
     expect(res.status).toBe(400)
@@ -184,7 +190,7 @@ describe('PATCH /api/roles/users/:userId (superadmin only)', () => {
 
     const res = await request(app)
       .patch('/api/roles/users/1')
-      .set('Authorization', superAdminHeader)
+      .set('Authorization', authHeader)
       .send({ role: 'nonexistent' })
 
     expect(res.status).toBe(400)
@@ -203,11 +209,20 @@ describe('PATCH /api/roles/users/:userId (superadmin only)', () => {
 
     const res = await request(app)
       .patch('/api/roles/users/1')
-      .set('Authorization', superAdminHeader)
+      .set('Authorization', authHeader)
       .send({ role: 'admin' })
 
     expect(res.status).toBe(200)
     expect(res.body.message).toMatch(/updated successfully/i)
     expect(res.body.user).toHaveProperty('role')
+  })
+
+  it('returns 403 for a "superadmin" roleName token (requireSuperAdmin alias only accepts exact "admin")', async () => {
+    const res = await request(app)
+      .patch('/api/roles/users/1')
+      .set('Authorization', superAdminHeader)
+      .send({ role: 'admin' })
+
+    expect(res.status).toBe(403)
   })
 })

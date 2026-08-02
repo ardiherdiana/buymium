@@ -3,6 +3,7 @@ import { requireAdmin, requireSuperAdmin } from '../middleware/auth'
 import prisma from '../config/database'
 import { validate } from '../middleware/validate'
 import { UpdateUserRoleByNameSchema } from '../validators/auth'
+import { logger } from '../utils/logger'
 
 const router = express.Router()
 
@@ -50,7 +51,7 @@ router.get('/users', requireAdmin, async (req: Request, res: Response) => {
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     })
   } catch (err) {
-    console.error('Failed to fetch users:', err)
+    logger.error('Failed to fetch users:', err)
     res.status(500).json({ success: false, error: 'Failed to fetch users' })
   }
 })
@@ -90,7 +91,7 @@ router.patch('/users/:userId', requireSuperAdmin, validate(UpdateUserRoleByNameS
     if ((err as { code?: string }).code === 'P2025') {
       return res.status(404).json({ success: false, error: 'User not found' })
     }
-    console.error('Failed to update user role:', err)
+    logger.error('Failed to update user role:', err)
     res.status(500).json({ success: false, error: 'Failed to update user role' })
   }
 })
@@ -119,7 +120,7 @@ router.get('/users/:userId', requireAdmin, async (req: Request, res: Response) =
       createdAt: user.createdAt,
     })
   } catch (err) {
-    console.error('Failed to fetch user:', err)
+    logger.error('Failed to fetch user:', err)
     res.status(500).json({ success: false, error: 'Failed to fetch user' })
   }
 })

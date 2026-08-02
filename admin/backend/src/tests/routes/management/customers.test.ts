@@ -3,7 +3,7 @@ import type { MockedObject } from 'vitest'
 import request from 'supertest'
 import app from '../../../app'
 import { makeAdminToken } from '../../helpers'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 
 // customers.ts and CustomersController use `new PrismaClient()`.
 // The mock in setup.ts intercepts all PrismaClient construction.
@@ -38,8 +38,6 @@ describe('GET /api/management/customers', () => {
       { customerId: 1, _sum: { totalProfit: 50000 } },
     ])
 
-    prismaInstance.source.findMany.mockResolvedValueOnce([{ id: 1, name: 'Source A' }])
-
     const res = await request(app)
       .get('/api/management/customers')
       .set('Authorization', authHeader)
@@ -47,14 +45,12 @@ describe('GET /api/management/customers', () => {
     expect(res.status).toBe(200)
     expect(res.body).toHaveProperty('customers')
     expect(res.body).toHaveProperty('pagination')
-    expect(res.body).toHaveProperty('sources')
     expect(res.body).toHaveProperty('filters')
   })
 
   it('returns empty list when no customers exist', async () => {
     prismaInstance.customer.findMany.mockResolvedValue([])
     prismaInstance.sale.groupBy.mockResolvedValue([])
-    prismaInstance.source.findMany.mockResolvedValue([])
 
     const res = await request(app)
       .get('/api/management/customers')
@@ -72,7 +68,6 @@ describe('GET /api/management/customers', () => {
     prismaInstance.sale.groupBy.mockResolvedValueOnce([
       { customerId: 1, _sum: { totalProfit: 120000 } },
     ])
-    prismaInstance.source.findMany.mockResolvedValueOnce([])
 
     const res = await request(app)
       .get('/api/management/customers')
@@ -155,16 +150,18 @@ describe('POST /api/management/customers', () => {
     expect(res.status).toBe(201)
   })
 
-  it('returns 400 when customer with username already exists in same source', async () => {
-    prismaInstance.customer.findFirst.mockResolvedValueOnce({ id: 99 })
+  it('returns 409 when a customer with the same username_shopee already exists (unique constraint)', async () => {
+    prismaInstance.customer.create.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002' } as never)
+    )
 
     const res = await request(app)
       .post('/api/management/customers')
       .set('Authorization', authHeader)
-      .send({ username_shopee: 'existing_buyer', source_id: 1 })
+      .send({ username_shopee: 'existing_buyer' })
 
-    expect(res.status).toBe(400)
-    expect(res.body.error).toMatch(/already exists/i)
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatch(/sudah terdaftar/i)
   })
 
   it('returns 201 with created customer', async () => {

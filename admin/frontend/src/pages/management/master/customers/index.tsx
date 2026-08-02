@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Search, Pencil, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { Fab } from "@/components/ui/fab"
 import { useAlert } from "@/stores/alertStore"
 import api from "@/lib/api"
 import { formatIDR } from "@/lib/config"
+import { useDebounce } from "@/hooks/use-debounce"
 
 interface Customer {
   id: number
@@ -43,8 +44,7 @@ export default function CustomersPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState<CustomerForm>(emptyForm)
-  const [duplicate, setDuplicate] = useState<{ id: number; username_shopee: string } | null>(null)
-  const [checkingDuplicate, setCheckingDuplicate] = useState(false)
+  const debouncedUsername = useDebounce(form.username_shopee.trim(), 400)
 
   const { data, isLoading } = useQuery<CustomersResponse>({
     queryKey: ["management-customers", page, search],
@@ -79,23 +79,17 @@ export default function CustomersPage() {
     onError: () => alert.error("Gagal", "Gagal menghapus pelanggan"),
   })
 
-  useEffect(() => {
-    const username = form.username_shopee.trim()
-    if (!username) {
-      setDuplicate(null)
-      return
-    }
-    setCheckingDuplicate(true)
-    const timeout = setTimeout(() => {
+  const { data: duplicateData, isFetching: checkingDuplicate } = useQuery<{ id: number; username_shopee: string } | null>({
+    queryKey: ["customer-duplicate-check", debouncedUsername, editingId],
+    queryFn: () =>
       api.get("/management/customers/check-duplicate", {
-        params: { username_shopee: username, exclude_id: editingId ?? undefined },
+        params: { username_shopee: debouncedUsername, exclude_id: editingId ?? undefined },
       })
-        .then((r) => setDuplicate(r.data?.exists ? r.data.customer : null))
-        .catch(() => setDuplicate(null))
-        .finally(() => setCheckingDuplicate(false))
-    }, 400)
-    return () => clearTimeout(timeout)
-  }, [form.username_shopee, editingId])
+        .then((r) => (r.data?.exists ? r.data.customer : null))
+        .catch(() => null),
+    enabled: !!debouncedUsername,
+  })
+  const duplicate = debouncedUsername ? (duplicateData ?? null) : null
 
   const handleDelete = async (c: Customer) => {
     const ok = await alert.confirm("Hapus Pelanggan", `Hapus pelanggan "${c.username_shopee}"?`)
@@ -108,14 +102,12 @@ export default function CustomersPage() {
       username_shopee: c.username_shopee,
       nomor_hp: c.nomor_hp ?? "",
     })
-    setDuplicate(null)
     setModalOpen(true)
   }
 
   const handleAdd = () => {
     setEditingId(null)
     setForm(emptyForm)
-    setDuplicate(null)
     setModalOpen(true)
   }
 

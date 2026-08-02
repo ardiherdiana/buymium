@@ -20,13 +20,9 @@ const TestimonialsPage = lazy(() => import("@/pages/ecommerce/TestimonialsPage")
 const ManagementPage = lazy(() => import("@/pages/management/index"))
 
 // Stock
-const StockIndexPage = lazy(() => import("@/pages/management/stock/index"))
 const AccountsPage = lazy(() => import("@/pages/management/stock/accounts/index"))
 const AccountsPosPage = lazy(() => import("@/pages/management/stock/accounts/pos-page"))
 const AccountsSalesMobilePage = lazy(() => import("@/pages/management/stock/accounts/sales-mobile"))
-const AccsmarketPage = lazy(() => import("@/pages/management/stock/accsmarket/index"))
-const AccsmarketPosPage = lazy(() => import("@/pages/management/stock/accsmarket/pos-page"))
-const AccsmarketSalesMobilePage = lazy(() => import("@/pages/management/stock/accsmarket/sales-mobile"))
 
 // Finance
 const SalesPage = lazy(() => import("@/pages/management/finance/sales/index"))
@@ -83,13 +79,10 @@ export default function App() {
           {/* Management module */}
           <Route element={<ManagementShell />}>
             <Route path="/management" element={<S><ManagementPage /></S>} />
-            <Route path="/stock" element={<S><StockIndexPage /></S>} />
+            <Route path="/stock" element={<Navigate to="/stock/accounts" replace />} />
             <Route path="/stock/accounts" element={<S><AccountsPage /></S>} />
             <Route path="/stock/accounts/pos" element={<S><AccountsPosPage /></S>} />
             <Route path="/stock/accounts/sales-mobile" element={<S><AccountsSalesMobilePage /></S>} />
-            <Route path="/stock/accsmarket" element={<S><AccsmarketPage /></S>} />
-            <Route path="/stock/accsmarket/pos" element={<S><AccsmarketPosPage /></S>} />
-            <Route path="/stock/accsmarket/sales-mobile" element={<S><AccsmarketSalesMobilePage /></S>} />
             <Route path="/finance/sales" element={<S><SalesPage /></S>} />
             <Route path="/finance/sales/:id" element={<S><SaleDetailPage /></S>} />
             <Route path="/finance/analytics" element={<S><AnalyticsPage /></S>} />
