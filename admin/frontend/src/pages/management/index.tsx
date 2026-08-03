@@ -178,7 +178,7 @@ export default function ManagementDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {statCards.map((s) => (
           <StatCard key={s.title} title={s.title} value={s.value} icon={s.icon} color={s.color} loading={isLoading} />
         ))}

@@ -21,6 +21,7 @@ const ManagementPage = lazy(() => import("@/pages/management/index"))
 
 // Stock
 const AccountsPage = lazy(() => import("@/pages/management/stock/accounts/index"))
+const DevicesPage = lazy(() => import("@/pages/management/stock/devices/index"))
 const AccountsPosPage = lazy(() => import("@/pages/management/stock/accounts/pos-page"))
 const AccountsSalesMobilePage = lazy(() => import("@/pages/management/stock/accounts/sales-mobile"))
 
@@ -37,6 +38,8 @@ const SourcesPage = lazy(() => import("@/pages/management/master/sources/index")
 const UpfollVendorsPage = lazy(() => import("@/pages/management/upfoll/vendors/index"))
 const UpfollOrdersPage = lazy(() => import("@/pages/management/upfoll/orders/index"))
 const UpfollOrderFormPage = lazy(() => import("@/pages/management/upfoll/orders/form"))
+const JobAccountsPage = lazy(() => import("@/pages/management/job/index"))
+const JobSourcesPage = lazy(() => import("@/pages/management/job/sources/index"))
 
 // Autoposting
 const AutopostingPage = lazy(() => import("@/pages/autoposting/index"))
@@ -81,6 +84,7 @@ export default function App() {
             <Route path="/management" element={<S><ManagementPage /></S>} />
             <Route path="/stock" element={<Navigate to="/stock/accounts" replace />} />
             <Route path="/stock/accounts" element={<S><AccountsPage /></S>} />
+            <Route path="/stock/devices" element={<S><DevicesPage /></S>} />
             <Route path="/stock/accounts/pos" element={<S><AccountsPosPage /></S>} />
             <Route path="/stock/accounts/sales-mobile" element={<S><AccountsSalesMobilePage /></S>} />
             <Route path="/finance/sales" element={<S><SalesPage /></S>} />
@@ -91,6 +95,8 @@ export default function App() {
             <Route path="/upfoll/vendors" element={<S><UpfollVendorsPage /></S>} />
             <Route path="/upfoll/orders" element={<S><UpfollOrdersPage /></S>} />
             <Route path="/upfoll/orders/new" element={<S><UpfollOrderFormPage /></S>} />
+            <Route path="/job" element={<S><JobAccountsPage /></S>} />
+            <Route path="/job/sources" element={<S><JobSourcesPage /></S>} />
           </Route>
 
           {/* Autoposting module */}

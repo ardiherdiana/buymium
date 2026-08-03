@@ -37,6 +37,15 @@ export const CreateSourceSchema = z.object({
 
 export const UpdateSourceSchema = CreateSourceSchema
 
+// ─── Job Sources ──────────────────────────────────────────────────────────────
+
+export const CreateJobSourceSchema = z.object({
+  name: z.string().min(1, 'name is required'),
+  spreadsheet_id: z.string().min(1, 'spreadsheet_id is required'),
+})
+
+export const UpdateJobSourceSchema = CreateJobSourceSchema
+
 // ─── Customers ────────────────────────────────────────────────────────────────
 // Fields from CustomersController.store / .update
 

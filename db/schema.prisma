@@ -265,6 +265,57 @@ model Source {
   @@map("sources")
 }
 
+model JobSource {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique @db.VarChar(255)
+  spreadsheetId String   @db.VarChar(500) @map("spreadsheet_id")
+  createdAt     DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt     DateTime @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  accounts JobAccount[]
+
+  @@map("job_sources")
+}
+
+model JobAccount {
+  id               Int       @id @default(autoincrement())
+  orderIndex       Int?      @map("order_index")
+  jobSourceId      Int       @map("job_source_id")
+  employeeName     String    @db.VarChar(255) @map("employee_name")
+  email            String?   @db.VarChar(255)
+  passwordEmail    String?   @db.VarChar(255) @map("password_email")
+  username         String    @db.VarChar(255)
+  password         String?   @db.VarChar(255)
+  twoFactorAuth    String?   @db.VarChar(255) @map("two_factor_auth")
+  year             String?   @db.VarChar(255)
+  targetFollowers  Int?      @map("target_followers")
+  hp               String?   @db.VarChar(255)
+  aplikasi         String?   @db.VarChar(255)
+  capital          Float?
+  // 'login_only' when the row already has an email (just log in) vs
+  // 'email_replacement' when the row has no email and needs one assigned.
+  jobType          String    @db.VarChar(30) @map("job_type")
+  // Derived from the sheet cell color on the Username column: pending (white/none),
+  // success (green), failed (red - e.g. wrong password).
+  loginStatus      String    @default("pending") @db.VarChar(20) @map("login_status")
+  purchaseDate     DateTime? @db.Date @map("purchase_date")
+  // Only set for jobType = 'email_replacement': last day of the month after
+  // purchaseDate's month (e.g. bought Aug 2 -> due Sep 30).
+  dueDate          DateTime? @db.Date @map("due_date")
+  createdAt        DateTime  @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt        DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
+
+  jobSource JobSource @relation(fields: [jobSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([jobSourceId, username])
+  @@index([employeeName])
+  @@index([jobType])
+  @@index([loginStatus])
+  @@index([dueDate])
+  @@index([orderIndex])
+  @@map("job_accounts")
+}
+
 model Customer {
   id         Int      @id @default(autoincrement())
   usernameSh String?  @unique @db.VarChar(255) @map("username_shopee")

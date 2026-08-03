@@ -11,6 +11,8 @@ import sourcesRouter from './sources'
 import salesRouter from './sales'
 import upfollVendorsRouter from './upfollVendors'
 import upfollOrdersRouter from './upfollOrders'
+import jobSourcesRouter from './jobSources'
+import jobAccountsRouter from './jobAccounts'
 
 const router = express.Router()
 
@@ -27,5 +29,7 @@ router.use('/sources', sourcesRouter)
 router.use('/sales', salesRouter)
 router.use('/upfoll-vendors', upfollVendorsRouter)
 router.use('/upfoll-orders', upfollOrdersRouter)
+router.use('/job-sources', jobSourcesRouter)
+router.use('/job-accounts', jobAccountsRouter)
 
 export default router

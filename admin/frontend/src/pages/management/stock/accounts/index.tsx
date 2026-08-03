@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Search, RefreshCw, Sheet, Users, ArrowLeft, CheckCircle2, Trash2, Wallet } from "lucide-react"
+import { Search, RefreshCw, Sheet, Users, CheckCircle2, Trash2, Wallet } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,7 +22,9 @@ interface Account {
   id: number
   username?: string
   email?: string
+  passwordEmail?: string
   password?: string
+  twoFactorAuth?: string
   currentFollowers?: number
   targetFollowers?: number
   accountStatus: string
@@ -112,8 +114,10 @@ export default function AccountsPage() {
     const lines = accs.map((acc, i) => {
       const parts: string[] = []
       if (acc.email) parts.push(`Email: ${acc.email}`)
+      if (acc.passwordEmail) parts.push(`Password Email: ${acc.passwordEmail}`)
       if (acc.username) parts.push(`Username: ${acc.username}`)
       if (acc.password) parts.push(`Password: ${acc.password}`)
+      if (acc.twoFactorAuth) parts.push(`2FA: ${acc.twoFactorAuth}`)
       return `${i + 1}. ${parts.join("\n   ")}`
     })
     navigator.clipboard.writeText(lines.join("\n\n"))
@@ -139,15 +143,13 @@ export default function AccountsPage() {
   return (
     <div>
       <div className={`space-y-5 ${listing.selectedIds.length > 0 ? "pb-20 sm:pb-24" : ""}`}>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="size-8" onClick={() => navigate(-1)}>
-            <ArrowLeft className="size-4" />
-          </Button>
+        <div>
           <h1 className="text-xl font-semibold">Kelola Akun</h1>
+          <p className="text-sm text-muted-foreground mt-1">Stok akun hasil sync Google Sheets</p>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
           <StatCard title="Total Akun" value={totalCount.toLocaleString("id-ID")} description="Akun aktif" icon={Users} color="blue" />
           <StatCard title="Akun Selesai" value={completedCount.toLocaleString("id-ID")} description="Akun selesai" icon={CheckCircle2} color="emerald" />
           <StatCard title="Total Modal" value={formatIDR(stats?.total_capital ?? 0)} description="Total modal akun" icon={Wallet} color="amber" />

@@ -1,12 +1,13 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
-import { Trash2, RefreshCw } from "lucide-react"
+import { Trash2, RefreshCw, ShoppingCart, Users, TrendingUp, Wallet } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Pagination } from "@/components/ui/table-extras"
 import { Card, CardContent } from "@/components/ui/card"
+import { StatCard } from "@/components/ui/stat-card"
 import { Fab } from "@/components/ui/fab"
 import { useAlert } from "@/stores/alertStore"
 import api from "@/lib/api"
@@ -39,6 +40,7 @@ interface Order {
 interface OrdersResponse {
   orders: Order[]
   pagination: { page: number; limit: number; total: number; pages: number }
+  stats: { total_orders: number; total_usernames: number; total_followers: number; total_sale_price: number; total_profit: number }
 }
 
 function StatusBadge({ status }: { status: Item["status"] }) {
@@ -103,6 +105,14 @@ export default function UpfollOrdersPage() {
       <div>
         <h1 className="text-xl font-semibold">Pesanan Upfoll</h1>
         <p className="text-sm text-muted-foreground mt-1">Follow-for-tag organik</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+        <StatCard title="Total Pesanan" value={(data?.stats.total_orders ?? 0).toLocaleString("id-ID")} icon={ShoppingCart} color="blue" />
+        <StatCard title="Total Username" value={(data?.stats.total_usernames ?? 0).toLocaleString("id-ID")} icon={Users} color="violet" />
+        <StatCard title="Total Omset" value={formatIDR(data?.stats.total_sale_price ?? 0)} icon={Wallet} color="muted" />
+        <StatCard title="Total Profit" value={formatIDR(data?.stats.total_profit ?? 0)} icon={TrendingUp} valueClass="text-green-600" color="emerald" />
       </div>
 
       <Input

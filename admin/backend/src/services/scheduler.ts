@@ -3,6 +3,7 @@ import { db } from '../config/database'
 import { logger } from '../utils/logger'
 import { AccountsService } from './management/accountsService'
 import { UpfollService } from './management/upfollService'
+import { JobService } from './management/jobService'
 
 export function startScheduler() {
   cron.schedule('*/60 * * * * *', async () => {
@@ -107,12 +108,22 @@ async function scanUpfoll() {
   logger.info(`[Scheduler] Upfoll scan done - ${items.length} item(s) processed`)
 }
 
+async function syncJobs() {
+  try {
+    const result = await JobService.syncAll()
+    logger.info(`[Scheduler] Job accounts sync done - ${result.syncedCount} synced across ${result.totalSheets} sheet(s)`)
+  } catch (err) {
+    logger.error('[Scheduler] Error syncing job accounts:', err)
+  }
+}
+
 async function runMidnightSyncAndScan() {
   logger.info('[Scheduler] Midnight sync & scan started')
   try {
     await syncAccounts()
     await scanAccounts()
     await scanUpfoll()
+    await syncJobs()
     logger.info('[Scheduler] Midnight sync & scan finished')
   } catch (err) {
     logger.error('[Scheduler] Midnight sync & scan failed:', err)

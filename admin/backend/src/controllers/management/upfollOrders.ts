@@ -50,7 +50,7 @@ export const UpfollOrdersController = {
         ]
       }
 
-      const [orders, total] = await Promise.all([
+      const [orders, total, salesAgg, items] = await Promise.all([
         prisma.upfollOrder.findMany({
           where,
           include: {
@@ -62,6 +62,14 @@ export const UpfollOrdersController = {
           take: limit,
         }),
         prisma.upfollOrder.count({ where }),
+        prisma.upfollOrder.aggregate({
+          where,
+          _sum: { totalSalePrice: true, totalProfit: true },
+        }),
+        prisma.upfollItem.findMany({
+          where: { order: where },
+          select: { startingFollowers: true, vendorTier: { select: { targetFollowers: true } } },
+        }),
       ])
 
       const ordersWithMapping = orders.map((order) => ({
@@ -78,9 +86,18 @@ export const UpfollOrdersController = {
         items: order.items.map(mapItem),
       }))
 
+      const totalFollowers = items.reduce((sum, item) => sum + (item.startingFollowers ?? 0) + item.vendorTier.targetFollowers, 0)
+
       res.json({
         orders: ordersWithMapping,
         pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+        stats: {
+          total_orders: total,
+          total_usernames: items.length,
+          total_followers: totalFollowers,
+          total_sale_price: salesAgg._sum.totalSalePrice ?? 0,
+          total_profit: salesAgg._sum.totalProfit ?? 0,
+        },
       })
     } catch (error) {
       logger.error('Gagal mengambil data pesanan upfoll:', error)

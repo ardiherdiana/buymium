@@ -46,6 +46,10 @@ export class AccountsController {
         where.year = req.query.year as string
       }
 
+      if (req.query.phone_model && req.query.phone_model !== 'all') {
+        where.phoneModel = req.query.phone_model as string
+      }
+
       // Get accounts with pagination
       const [accounts, totalCount] = await Promise.all([
         prisma.account.findMany({
@@ -188,6 +192,26 @@ export class AccountsController {
     } catch (error) {
       logger.error('Error in AccountsController.index:', error)
       res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to get accounts' })
+    }
+  }
+
+  // Grid overview for the "Perangkat" page: one card per phone model with the
+  // count of currently active (unsold) accounts stocked on it.
+  public static async phoneModels(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const grouped = await prisma.account.groupBy({
+        by: ['phoneModel'],
+        where: { isSold: false, phoneModel: { not: null } },
+        _count: { _all: true },
+        orderBy: { phoneModel: 'asc' },
+      })
+
+      res.json({
+        devices: grouped.map((g) => ({ phone_model: g.phoneModel as string, count: g._count._all })),
+      })
+    } catch (error) {
+      logger.error('Error in AccountsController.phoneModels:', error)
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to get phone models' })
     }
   }
 

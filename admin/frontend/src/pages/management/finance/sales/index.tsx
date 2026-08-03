@@ -117,7 +117,7 @@ export default function SalesPage() {
         <p className="text-sm text-muted-foreground mt-1">Data penjualan management</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard title="Total Penjualan" value={(stats?.totalSales ?? 0).toLocaleString("id-ID")} icon={ShoppingCart} color="blue" loading={isLoading || isFetching} />
         <StatCard title="Total Modal" value={formatIDR(stats?.totalCapital ?? 0)} icon={Wallet} color="amber" loading={isLoading} />
         <StatCard title="Total Harga Jual" value={formatIDR(stats?.totalSalePrice ?? 0)} icon={BarChart2} color="violet" loading={isLoading} />

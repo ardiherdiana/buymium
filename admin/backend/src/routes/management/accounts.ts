@@ -22,6 +22,7 @@ router.use(requireAuth)
 // Special routes (must be before dynamic :id routes)
 router.get('/', AccountsController.index)
 router.get('/index', AccountsController.index)
+router.get('/phone-models', AccountsController.phoneModels)
 router.get('/sales-mobile', AccountsController.salesMobile)
 router.get('/export/completed', AccountsController.exportCompleted)
 router.get('/scan/list', async (req: Request, res: Response) => {
