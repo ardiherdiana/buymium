@@ -40,6 +40,8 @@ export const UpfollOrdersController = {
       const page = parseInt(req.query.page as string) || 1
       const limit = 15
       const searchQuery = req.query.search as string
+      const status = req.query.status as string
+      const vendorId = req.query.vendor_id ? parseInt(req.query.vendor_id as string) : undefined
 
       const where: Prisma.UpfollOrderWhereInput = {}
       if (searchQuery) {
@@ -48,6 +50,12 @@ export const UpfollOrdersController = {
           { customer: { usernameSh: { contains: searchQuery } } },
           { items: { some: { username: { contains: searchQuery } } } },
         ]
+      }
+      if ((status && status !== 'all') || vendorId) {
+        const itemFilter: Prisma.UpfollItemWhereInput = {}
+        if (status && status !== 'all') itemFilter.status = status
+        if (vendorId) itemFilter.vendorTier = { vendorId }
+        where.items = { some: itemFilter }
       }
 
       const [orders, total, salesAgg, items] = await Promise.all([

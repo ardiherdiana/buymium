@@ -131,6 +131,7 @@ export const SalesController = {
           customer: true,
           source: true,
           order: { include: { user: { select: { id: true, name: true, email: true } } } },
+          upfollOrder: { select: { id: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -150,7 +151,11 @@ export const SalesController = {
         totalSalePrice: sale.totalSalePrice,
         totalProfit: sale.totalProfit,
         isShopee: sale.isShopee,
-        source: sale.source ? { id: sale.source.id, name: sale.source.name } : undefined,
+        source: sale.source
+          ? { id: sale.source.id, name: sale.source.name }
+          : sale.upfollOrder
+            ? { id: 0, name: 'UPFOLL' }
+            : undefined,
         origin: sale.orderId ? 'storefront' : 'manual',
         createdAt: sale.createdAt,
         updatedAt: sale.updatedAt,
@@ -202,6 +207,9 @@ export const SalesController = {
               account: true,
             },
           },
+          upfollOrder: {
+            include: { items: { include: { vendorTier: { include: { vendor: true } } } } },
+          },
         },
       })
 
@@ -216,8 +224,25 @@ export const SalesController = {
         total_sale_price: sale.totalSalePrice,
         total_profit: sale.totalProfit,
         is_shopee: sale.isShopee,
-        source: sale.source ? { id: sale.source.id, name: sale.source.name } : undefined,
+        shopee_number: sale.shopeeNumber,
+        source: sale.source
+          ? { id: sale.source.id, name: sale.source.name }
+          : sale.upfollOrder
+            ? { id: 0, name: 'UPFOLL' }
+            : undefined,
         origin: sale.orderId ? 'storefront' : 'manual',
+        is_upfoll: !!sale.upfollOrder,
+        upfoll_items: sale.upfollOrder?.items.map((i) => ({
+          id: i.id,
+          username: i.username,
+          starting_followers: i.startingFollowers,
+          current_followers: i.currentFollowers,
+          target_followers: i.vendorTier?.targetFollowers,
+          vendor_name: i.vendorTier?.vendor?.name,
+          capital: i.capital,
+          unit_sale_price: i.unitSalePrice,
+          profit: i.profit,
+        })) ?? undefined,
         status: 'completed',
         created_at: sale.createdAt,
         updated_at: sale.updatedAt,
@@ -258,7 +283,7 @@ export const SalesController = {
 
   async store(req: Request, res: Response) {
     try {
-      const { sales_number, customer_id, total_sale_price, total_profit, is_shopee, source_id, items } = req.body
+      const { sales_number, customer_id, total_sale_price, total_profit, is_shopee, shopee_number, source_id, items } = req.body
 
       if (!sales_number || !customer_id || !total_sale_price || !total_profit) {
         return res.status(400).json({ error: 'Required fields missing' })
@@ -301,8 +326,8 @@ export const SalesController = {
           totalSalePrice: parseFloat(total_sale_price),
           totalProfit: parseFloat(total_profit),
           isShopee: is_shopee || false,
+          shopeeNumber: shopee_number || null,
           sourceId: sourceIdForSale,
-          sourceSheetName: itemsToUpdateSheets[0]?.sourceSheetName ?? null,
         },
         include: { customer: true, source: true },
       })
@@ -415,6 +440,23 @@ export const SalesController = {
     } catch (error) {
       logger.error('Error creating sale:', error)
       res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to create sale' })
+    }
+  },
+
+  async update(req: Request, res: Response) {
+    try {
+      const { id } = req.params
+      const { shopee_number } = req.body
+
+      const sale = await prisma.sale.update({
+        where: { id: parseInt(id) },
+        data: { shopeeNumber: shopee_number ?? null },
+      })
+
+      res.json({ success: true, sale: { id: sale.id, shopee_number: sale.shopeeNumber } })
+    } catch (error) {
+      logger.error('Error updating sale:', error)
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to update sale' })
     }
   },
 

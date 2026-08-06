@@ -27,9 +27,21 @@ export type NavGroup = {
   items: { label: string; href: string; icon: LucideIcon }[]
 }
 
-function NavItem({ href, icon: Icon, label }: { href: string; icon: LucideIcon; label: string }) {
+function NavItem({
+  href,
+  icon: Icon,
+  label,
+  allHrefs,
+}: {
+  href: string
+  icon: LucideIcon
+  label: string
+  allHrefs: string[]
+}) {
   const { pathname } = useLocation()
-  const active = pathname === href || (href !== "/" && pathname.startsWith(href))
+  const matches = allHrefs.filter((h) => pathname === h || (h !== "/" && pathname.startsWith(h + "/")))
+  const bestMatch = matches.sort((a, b) => b.length - a.length)[0]
+  const active = bestMatch === href
 
   return (
     <SidebarMenuItem>
@@ -47,6 +59,7 @@ export function AppSidebar({ navGroups }: { navGroups: NavGroup[] }) {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
+  const allHrefs = navGroups.flatMap((g) => g.items.map((i) => i.href))
 
   return (
     <Sidebar collapsible="icon">
@@ -70,7 +83,7 @@ export function AppSidebar({ navGroups }: { navGroups: NavGroup[] }) {
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => (
-                  <NavItem key={item.href} {...item} />
+                  <NavItem key={item.href} {...item} allHrefs={allHrefs} />
                 ))}
               </SidebarMenu>
             </SidebarGroupContent>

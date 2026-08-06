@@ -80,8 +80,13 @@ export const CreateSaleSchema = z.object({
   total_sale_price: z.union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/)]),
   total_profit: z.union([z.number(), z.string().regex(/^-?\d+(\.\d+)?$/)]),
   is_shopee: z.boolean().optional(),
+  shopee_number: z.string().optional().nullable(),
   source_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional().nullable(),
   items: z.array(SaleItemSchema).optional(),
+})
+
+export const UpdateSaleSchema = z.object({
+  shopee_number: z.string().optional().nullable(),
 })
 
 // ─── Upfoll Vendors ───────────────────────────────────────────────────────────

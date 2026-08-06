@@ -45,7 +45,6 @@ async function fulfillFromInventory(order: { id: number; quantity: number; total
       salesNumber: generateSalesNumber(),
       orderId: order.id,
       sourceId,
-      sourceSheetName: reserved[0]?.sourceSheetName ?? null,
       totalSalePrice: order.totalPrice,
       totalProfit,
     },

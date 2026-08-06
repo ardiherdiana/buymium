@@ -1,9 +1,12 @@
 import { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import { logger } from '../../utils/logger'
+import { safeDecrypt } from '../../utils/encrypt'
 import db from '../../config/database'
 
 const prisma = db
+
+export const SALARY_PER_ACCOUNT = 4000
 
 const mapAccount = (a: {
   id: number
@@ -11,6 +14,7 @@ const mapAccount = (a: {
   employeeName: string
   email: string | null
   username: string
+  password: string | null
   year: string | null
   targetFollowers: number | null
   hp: string | null
@@ -20,12 +24,16 @@ const mapAccount = (a: {
   loginStatus: string
   purchaseDate: Date | null
   dueDate: Date | null
+  salaryPaid: boolean
+  salaryProofUrl: string | null
+  salaryPaidAt: Date | null
   jobSource: { id: number; name: string }
 }) => ({
   id: a.id,
   employee_name: a.employeeName,
   email: a.email,
   username: a.username,
+  password: safeDecrypt(a.password),
   year: a.year,
   target_followers: a.targetFollowers,
   hp: a.hp,
@@ -35,6 +43,10 @@ const mapAccount = (a: {
   login_status: a.loginStatus,
   purchase_date: a.purchaseDate,
   due_date: a.dueDate,
+  salary: a.loginStatus === 'success' ? SALARY_PER_ACCOUNT : 0,
+  salary_paid: a.salaryPaid,
+  salary_proof_url: a.salaryProofUrl,
+  salary_paid_at: a.salaryPaidAt,
   job_source: a.jobSource,
 })
 
@@ -48,6 +60,7 @@ export const JobAccountsController = {
       const jobType = req.query.job_type as string
       const loginStatus = req.query.login_status as string
       const overdue = req.query.overdue === 'true'
+      const hp = req.query.hp as string
 
       const where: Prisma.JobAccountWhereInput = {}
       if (search) {
@@ -58,7 +71,9 @@ export const JobAccountsController = {
       }
       if (employeeName && employeeName !== 'all') where.employeeName = employeeName
       if (jobType && jobType !== 'all') where.jobType = jobType
-      if (loginStatus && loginStatus !== 'all') where.loginStatus = loginStatus
+      if (loginStatus === 'not_success') where.loginStatus = { not: 'success' }
+      else if (loginStatus && loginStatus !== 'all') where.loginStatus = loginStatus
+      if (hp) where.hp = hp
       if (overdue) {
         where.jobType = 'email_replacement'
         where.dueDate = { lt: new Date() }
@@ -76,7 +91,7 @@ export const JobAccountsController = {
       }
       if (employeeName && employeeName !== 'all') statsWhere.employeeName = employeeName
 
-      const [accounts, total, employees, totalAccounts, loginOnlyCount, emailReplacementCount, selesaiCount] = await Promise.all([
+      const [accounts, total, employees, totalAccounts, loginOnlyCount, emailReplacementCount, selesaiCount, unpaidCount] = await Promise.all([
         prisma.jobAccount.findMany({
           where,
           include: { jobSource: { select: { id: true, name: true } } },
@@ -90,6 +105,7 @@ export const JobAccountsController = {
         prisma.jobAccount.count({ where: { ...statsWhere, jobType: 'login_only' } }),
         prisma.jobAccount.count({ where: { ...statsWhere, jobType: 'email_replacement' } }),
         prisma.jobAccount.count({ where: { ...statsWhere, loginStatus: 'success' } }),
+        prisma.jobAccount.count({ where: { ...statsWhere, loginStatus: 'success', salaryPaid: false } }),
       ])
 
       res.json({
@@ -101,11 +117,49 @@ export const JobAccountsController = {
           login_only: loginOnlyCount,
           email_replacement: emailReplacementCount,
           selesai: selesaiCount,
+          estimasi_gaji: unpaidCount * SALARY_PER_ACCOUNT,
+          unpaid_count: unpaidCount,
         },
       })
     } catch (error) {
       logger.error('Error fetching job accounts:', error)
       res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to fetch job accounts' })
+    }
+  },
+
+  async hpCounts(req: Request, res: Response) {
+    try {
+      const grouped = await prisma.jobAccount.groupBy({
+        by: ['hp'],
+        where: { loginStatus: { not: 'success' }, hp: { not: null } },
+        _count: { _all: true },
+      })
+
+      res.json({ devices: grouped.map((g) => ({ hp: g.hp as string, count: g._count._all })) })
+    } catch (error) {
+      logger.error('Error fetching job account hp counts:', error)
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to fetch counts' })
+    }
+  },
+
+  async pay(req: Request, res: Response) {
+    try {
+      const { ids, proof_url } = req.body as { ids: number[]; proof_url?: string }
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        res.status(400).json({ error: 'ids wajib diisi' })
+        return
+      }
+
+      const result = await prisma.jobAccount.updateMany({
+        where: { id: { in: ids.map(Number) }, loginStatus: 'success', salaryPaid: false },
+        data: { salaryPaid: true, salaryProofUrl: proof_url ?? null, salaryPaidAt: new Date() },
+      })
+
+      res.json({ success: true, updated: result.count })
+    } catch (error) {
+      logger.error('Error marking job account salary as paid:', error)
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to mark salary as paid' })
     }
   },
 }

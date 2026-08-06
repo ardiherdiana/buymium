@@ -306,6 +306,9 @@ model JobAccount {
   loginStatus      String    @default("pending") @db.VarChar(20) @map("login_status")
   purchaseDate     DateTime? @db.Date @map("purchase_date")
   dueDate          DateTime? @db.Date @map("due_date")
+  salaryPaid       Boolean   @default(false) @map("salary_paid")
+  salaryProofUrl   String?   @db.VarChar(255) @map("salary_proof_url")
+  salaryPaidAt     DateTime? @db.DateTime(3) @map("salary_paid_at")
   createdAt        DateTime  @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt        DateTime  @db.DateTime(3) @default(now()) @updatedAt @map("updated_at")
 
@@ -317,6 +320,7 @@ model JobAccount {
   @@index([loginStatus])
   @@index([dueDate])
   @@index([orderIndex])
+  @@index([salaryPaid])
   @@map("job_accounts")
 }
 
@@ -433,7 +437,7 @@ model Sale {
   totalSalePrice  Float     @map("total_sale_price")
   totalProfit     Float     @map("total_profit")
   isShopee        Boolean   @default(false) @map("is_shopee")
-  sourceSheetName String?   @db.VarChar(255) @map("source_sheet_name")
+  shopeeNumber    String?   @db.VarChar(255) @map("shopee_number")
   sourceId        Int?      @map("source_id")
   orderId         Int?      @unique @map("order_id")
   createdAt       DateTime  @db.DateTime(3) @default(now()) @map("created_at")
@@ -446,7 +450,6 @@ model Sale {
   upfollOrder UpfollOrder?
 
   @@index([customerId])
-  @@index([sourceSheetName])
   @@index([sourceId])
   @@index([createdAt])
   @@index([isShopee])

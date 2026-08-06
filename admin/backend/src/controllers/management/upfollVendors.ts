@@ -8,7 +8,7 @@ export const UpfollVendorsController = {
   async index(req: Request, res: Response) {
     try {
       const vendors = await prisma.upfollVendor.findMany({
-        include: { tiers: true },
+        include: { tiers: { orderBy: { targetFollowers: 'asc' } } },
         orderBy: { name: 'asc' },
       })
 
@@ -37,7 +37,7 @@ export const UpfollVendorsController = {
       const { id } = req.params
       const vendor = await prisma.upfollVendor.findUnique({
         where: { id: parseInt(id) },
-        include: { tiers: true },
+        include: { tiers: { orderBy: { targetFollowers: 'asc' } } },
       })
       if (!vendor) return res.status(404).json({ error: 'Vendor tidak ditemukan' })
       res.json({ vendor })

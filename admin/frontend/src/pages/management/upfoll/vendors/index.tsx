@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Pencil, Trash2, Plus, X } from "lucide-react"
+import { Pencil, Trash2, Plus, X, Trophy } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -222,12 +222,48 @@ export default function UpfollVendorsPage() {
   // Keep the modal's tier list live as the vendors query refetches after mutations
   const liveVendor = currentVendor ? vendors.find((v) => v.id === currentVendor.id) ?? currentVendor : null
 
+  // Cheapest price per target-follower tier across all active vendors, so it's obvious
+  // at a glance where to buy for a given follower count.
+  const cheapestByTier = useMemo(() => {
+    const map = new Map<number, { targetFollowers: number; price: number; vendorName: string }>()
+    for (const v of vendors) {
+      if (!v.is_active) continue
+      for (const t of v.tiers) {
+        const existing = map.get(t.target_followers)
+        if (!existing || t.price < existing.price) {
+          map.set(t.target_followers, { targetFollowers: t.target_followers, price: t.price, vendorName: v.name })
+        }
+      }
+    }
+    return [...map.values()].sort((a, b) => a.targetFollowers - b.targetFollowers)
+  }, [vendors])
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-semibold">Vendor Upfoll</h1>
         <p className="text-sm text-muted-foreground mt-1">Master vendor upfoll — tiap vendor punya tier &amp; harga sendiri</p>
       </div>
+
+      {cheapestByTier.length > 0 && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Trophy className="size-4 text-amber-600" />
+              <p className="text-sm font-medium">Harga Termurah per Tier</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {cheapestByTier.map((c) => (
+                <div key={c.targetFollowers} className="rounded-md border px-3 py-2">
+                  <p className="text-xs text-muted-foreground">{c.targetFollowers.toLocaleString("id-ID")} Followers</p>
+                  <p className="text-sm font-semibold">{formatIDR(c.price)}</p>
+                  <p className="text-[11px] text-emerald-600 font-medium truncate">{c.vendorName}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-col gap-3">
         {isLoading ? (
@@ -254,15 +290,19 @@ export default function UpfollVendorsPage() {
                 <p className="text-xs text-muted-foreground">Belum ada tier</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {v.tiers.map((t) => (
+                  {v.tiers.map((t) => {
+                    const isCheapest = v.is_active && cheapestByTier.find((c) => c.targetFollowers === t.target_followers)?.vendorName === v.name
+                    return (
                     <span
                       key={t.id}
-                      className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs"
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${isCheapest ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20" : ""}`}
                     >
                       <span className="font-medium">{t.name}</span>
                       <span className="text-muted-foreground">{formatIDR(t.price)}</span>
+                      {isCheapest && <Trophy className="size-3 text-amber-600" />}
                     </span>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>

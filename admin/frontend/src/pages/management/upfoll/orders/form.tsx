@@ -29,12 +29,11 @@ interface Vendor {
 interface Row {
   key: number
   username: string
-  vendorId: string
   vendorTierId: string
 }
 
 let rowKeySeq = 0
-const newRow = (): Row => ({ key: rowKeySeq++, username: "", vendorId: "", vendorTierId: "" })
+const newRow = (): Row => ({ key: rowKeySeq++, username: "", vendorTierId: "" })
 
 export default function UpfollOrderFormPage() {
   const navigate = useNavigate()
@@ -57,6 +56,24 @@ export default function UpfollOrderFormPage() {
   })
   const vendors = vendorsData?.vendors ?? []
 
+  // Cheapest tier per follower target across all active vendors — orders pick
+  // directly from this list, no vendor selection step needed.
+  const bestTiers = useMemo(() => {
+    const map = new Map<number, { tierId: number; targetFollowers: number; price: number; vendorName: string }>()
+    for (const v of vendors) {
+      if (!v.is_active) continue
+      for (const t of v.tiers) {
+        const existing = map.get(t.target_followers)
+        if (!existing || t.price < existing.price) {
+          map.set(t.target_followers, { tierId: t.id, targetFollowers: t.target_followers, price: t.price, vendorName: v.name })
+        }
+      }
+    }
+    return [...map.values()].sort((a, b) => a.targetFollowers - b.targetFollowers)
+  }, [vendors])
+
+  const allTiers = useMemo(() => vendors.flatMap((v) => v.tiers.map((t) => ({ ...t, vendorId: v.id }))), [vendors])
+
   const validRows = rows.filter((r) => r.username.trim() && r.vendorTierId)
   const totalSalePrice = parseInt(totalSalesInput.replace(/\D/g, "") || "0")
   const unitPrice = useMemo(() => {
@@ -64,8 +81,8 @@ export default function UpfollOrderFormPage() {
     return Math.floor(totalSalePrice / validRows.length)
   }, [totalSalePrice, validRows.length, totalSalesInput])
 
-  const capitalFor = (vendorId: string, vendorTierId: string) =>
-    vendors.find((v) => String(v.id) === vendorId)?.tiers.find((t) => String(t.id) === vendorTierId)?.price ?? null
+  const capitalFor = (vendorTierId: string) =>
+    allTiers.find((t) => String(t.id) === vendorTierId)?.price ?? null
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -78,10 +95,6 @@ export default function UpfollOrderFormPage() {
 
   const updateRow = (key: number, patch: Partial<Row>) => {
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)))
-  }
-  // Changing vendor invalidates a previously picked tier that belonged to the old vendor
-  const updateRowVendor = (key: number, vendorId: string) => {
-    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, vendorId, vendorTierId: "" } : r)))
   }
   const removeRow = (key: number) => setRows((rs) => rs.filter((r) => r.key !== key))
   const addRow = () => setRows((rs) => [...rs, newRow()])
@@ -134,8 +147,7 @@ export default function UpfollOrderFormPage() {
           </div>
           <div className="flex-1 overflow-y-auto space-y-2 pr-1">
             {rows.map((row) => {
-              const vendor = vendors.find((v) => String(v.id) === row.vendorId)
-              const capital = row.vendorId && row.vendorTierId ? capitalFor(row.vendorId, row.vendorTierId) : null
+              const capital = row.vendorTierId ? capitalFor(row.vendorTierId) : null
               const profit = capital != null && totalSalesInput ? unitPrice - capital : null
               return (
                 <div key={row.key} className="rounded-lg border bg-card p-4 flex items-start gap-3">
@@ -145,26 +157,16 @@ export default function UpfollOrderFormPage() {
                       value={row.username}
                       onChange={(e) => updateRow(row.key, { username: e.target.value })}
                     />
-                    <Select value={row.vendorId} onValueChange={(v) => updateRowVendor(row.key, v)}>
+                    <Select value={row.vendorTierId} onValueChange={(v) => updateRow(row.key, { vendorTierId: v })}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Pilih vendor" />
+                        <SelectValue placeholder="Pilih tier (termurah)" />
                       </SelectTrigger>
                       <SelectContent>
-                        {vendors.map((v) => (
-                          <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={row.vendorTierId} onValueChange={(v) => updateRow(row.key, { vendorTierId: v })} disabled={!row.vendorId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={row.vendorId ? "Pilih tier" : "Pilih vendor dulu"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {!vendor?.tiers.length ? (
-                          <div className="px-3 py-2 text-xs text-muted-foreground">Vendor ini belum punya tier</div>
-                        ) : vendor.tiers.map((t) => (
-                          <SelectItem key={t.id} value={String(t.id)}>
-                            {t.target_followers.toLocaleString("id-ID")} followers — {formatIDR(t.price)}
+                        {!bestTiers.length ? (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">Belum ada vendor/tier aktif</div>
+                        ) : bestTiers.map((t) => (
+                          <SelectItem key={t.tierId} value={String(t.tierId)}>
+                            {t.targetFollowers.toLocaleString("id-ID")} followers — {formatIDR(t.price)} ({t.vendorName})
                           </SelectItem>
                         ))}
                       </SelectContent>
